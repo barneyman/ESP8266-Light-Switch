@@ -2,7 +2,6 @@
 #include <WiFiClient.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
-#include <DNSServer.h>
 #include <EEPROM.h>
 
 extern "C" {
@@ -11,6 +10,7 @@ extern "C" {
 
 }
 
+// we run MDNS so we can be found by "esp8266_<last 3 bytes of MAC address>.local" by the RPI
 MDNSResponder mdns;
 
 // store network credentials in eeprom
@@ -29,7 +29,6 @@ bool runningAP = false;
 bool resetWIFI = false;
 
 ESP8266WebServer server(80);
-DNSServer dnsServer;
 
 String webPageSTA = "";
 String webPageAP = "";
@@ -49,19 +48,24 @@ long debounceThresholdms = 250;
 
 #define RESET_DELAY	(3000 * 1000)
 #define RESET_ARRAY_SIZE 6
-
 long lastSwitchesSeen[RESET_ARRAY_SIZE];
+
+// don't attempt to join the hosting WIFI for x seconds, because the router hasn't booted
+#define WAIT_FOR_HOST_WIFI_TO_BOOT_SECS 60
 
 void OnSwitchISR()
 {
-
+	// gate against messy tactile/physical switches
 	if ((long)(micros() - last_micros) >= debounceThresholdms * 1000) 
 	{
 		// move the last seens along
 		memmove(&lastSwitchesSeen[0], &lastSwitchesSeen[1], sizeof(long)*RESET_ARRAY_SIZE -1 );
 
+		// do the toggle
 		ToggleSwitch();
 
+
+		// remember the last 6 - i'm assuming we won't wrap
 		lastSwitchesSeen[RESET_ARRAY_SIZE - 1] = last_micros = micros();
 
 		if (lastSwitchesSeen[RESET_ARRAY_SIZE - 1] - lastSwitchesSeen[0] < RESET_DELAY)
@@ -98,6 +102,7 @@ void DoSwitch(bool on)
 
 }
 
+// disjoin and rejoin, optionally force a STA attempt
 void ConnectWifi(bool forceSTAattempt=false)
 {
 	Serial.println("ConnectWifi");
@@ -127,6 +132,7 @@ void ConnectWifi(bool forceSTAattempt=false)
 			if (WiFi.status() != WL_CONNECTED) 
 			{
 				delay(1000);
+				// flash the light, simply as feedback
 				ToggleSwitch();
 				Serial.print(".");
 			}
@@ -204,11 +210,13 @@ void setup(void)
 	sprintf(idstr,"%0x", system_get_chip_id());
 	esphostname += idstr;
 
+	// clean up the switch times
 	memset(&lastSwitchesSeen, 0, sizeof(lastSwitchesSeen));
 
 	// start eeprom library
 	EEPROM.begin(512);
 
+	// sure, this could be prettier
 	webPageAPtry = webPageAP = webPageSTA = "<h1>"+ esphostname +"</h1>";
 
 	webPageSTA += "<p>Socket<a href=\"socket2On\"><button>ON</button></a>&nbsp;<a href=\"socket2Off\"><button>OFF</button></a></p>";
@@ -217,7 +225,8 @@ void setup(void)
 
 	webPageAPtry += "trying";
 
-	delay(5000);
+	// mandatory "let it settle" delay
+	delay(1000);
 	Serial.begin(115200);
 	Serial.println("starting");
 	Serial.println(esphostname);
@@ -252,8 +261,8 @@ void setup(void)
 	// default on
 	DoSwitch(true);
 
-	// wait 60 seconds for wifi ost to come up
-	delay(60 * 1000);
+	// wait 60 seconds for wifi network to come up
+	delay(WAIT_FOR_HOST_WIFI_TO_BOOT_SECS * 1000);
 
 	// try to connect to the wifi
 	ConnectWifi();
