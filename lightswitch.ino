@@ -19,14 +19,22 @@ struct
 	char ssid[128];
 	char password[128];
 	char marker;
+
 } wifiDetails;
+
+volatile bool busyDoingSomethingIgnoreSwitch = false;
 
 
 String esphostname = "esp8266_";
 
 
-bool runningAP = false;
+enum wifiMode { modeAP, modeSTA, modeUnknown } ;
+wifiMode currentMode = modeUnknown;
+
 bool resetWIFI = false;
+
+void ConnectWifi(wifiMode intent);
+
 
 ESP8266WebServer server(80);
 
@@ -55,6 +63,9 @@ long lastSwitchesSeen[RESET_ARRAY_SIZE];
 
 void OnSwitchISR()
 {
+	if (busyDoingSomethingIgnoreSwitch)
+		return;
+
 	// gate against messy tactile/physical switches
 	if ((long)(micros() - last_micros) >= debounceThresholdms * 1000) 
 	{
@@ -103,21 +114,34 @@ void DoSwitch(bool on)
 }
 
 // disjoin and rejoin, optionally force a STA attempt
-void ConnectWifi(bool forceSTAattempt=false)
+void ConnectWifi(wifiMode intent)
 {
+	busyDoingSomethingIgnoreSwitch = true;
+
 	Serial.println("ConnectWifi");
 
 	// turn off wifi
-	WiFi.disconnect(); 
-	WiFi.softAPdisconnect();
+	switch (currentMode)
+	{
+	case wifiMode::modeAP:
+		WiFi.softAPdisconnect();
+		break;
+	case wifiMode::modeSTA:
+		WiFi.setAutoReconnect(false);
+		WiFi.disconnect();
+		break;
+	case wifiMode::modeUnknown:
+		break;
+	}
 
 	delay(1000);
 
 	Serial.println("disconnected");
 
 
-	if (!runningAP || forceSTAattempt)
+	if (intent == wifiMode::modeSTA)
 	{
+		currentMode = wifiMode::modeSTA;
 
 		// turn bonjour off??
 		Serial.print("Attempting connect to ");
@@ -133,53 +157,56 @@ void ConnectWifi(bool forceSTAattempt=false)
 			{
 				delay(1000);
 				// flash the light, simply as feedback
-				ToggleSwitch();
+				// ToggleSwitch();
 				Serial.print(".");
 			}
 			else
 				break;
 		}
+
+		if (WiFi.status() == WL_CONNECTED)
+		{
+
+			Serial.println("");
+			Serial.print("Connected to ");
+			Serial.println(wifiDetails.ssid);
+			Serial.print("IP address: ");
+			Serial.println(WiFi.localIP());
+
+			if (mdns.begin(esphostname.c_str(), WiFi.localIP()))
+			{
+				Serial.println("MDNS responder started");
+			}
+
+			// special marker
+			wifiDetails.marker = 0xbf;
+
+			// and scribble to the eeprom
+			EEPROM.put(0, wifiDetails);
+			EEPROM.commit();
+
+			WiFi.setAutoReconnect(true);
+		}
 	}
 
-	if (WiFi.status() != WL_CONNECTED)
+	if (intent == wifiMode::modeAP)
 	{
 		// defaults to 192.168.4.1
 		Serial.println("Attempting to start AP");
 
 		// we were unable to connect, so start our own access point
-		WiFi.disconnect();
 		WiFi.mode(WIFI_AP);
 		WiFi.softAP(esphostname.c_str());
 
 		Serial.println("Started hostname AP");
 		Serial.println(WiFi.softAPIP().toString());
 	
-		runningAP = true;
+		currentMode = wifiMode::modeAP;
 
-	}
-	else
-	{
-		runningAP = false;
-		Serial.println("");
-		Serial.print("Connected to ");
-		Serial.println(wifiDetails.ssid);
-		Serial.print("IP address: ");
-		Serial.println(WiFi.localIP());
-
-		if (mdns.begin(esphostname.c_str(), WiFi.localIP())) 
-		{
-			Serial.println("MDNS responder started");
-		}
-
-		// special marker
-		wifiDetails.marker = 0xbf;
-
-		// and scribble to the eeprom
-		EEPROM.put(0, wifiDetails);
-		EEPROM.commit();
 
 	}
 
+	busyDoingSomethingIgnoreSwitch = false;
 
 }
 
@@ -196,10 +223,8 @@ void ResetMe()
 	EEPROM.put(0, wifiDetails);
 	EEPROM.commit();
 
-	// turn AP on
-	runningAP = true;
-	// and reconnect
-	ConnectWifi();
+	// and reconnect as an AP
+	ConnectWifi(wifiMode::modeAP);
 
 }
 
@@ -235,19 +260,36 @@ void setup(void)
 	// the marker is to spot virgin EEPROM (can i vape it on a build?)
 	EEPROM.get(0, wifiDetails);
 
+	enum wifiMode intent = wifiMode::modeUnknown;
+
 	if (wifiDetails.marker == 0xbf)
 	{
 		Serial.println("credentials found");
 		Serial.println(wifiDetails.ssid);
 		Serial.println(wifiDetails.password);
-		runningAP = false;
+		intent = wifiMode::modeSTA;
 	}
 	else
 	{
 		Serial.println("no stored credentials");
-		runningAP = true;
+		intent = wifiMode::modeAP;
+
 	}
 
+	// set callbacks for wifi
+	WiFi.onStationModeConnected([](const WiFiEventStationModeConnected&c) {
+	
+		Serial.print("EVENT connected ");
+		Serial.println(c.ssid);
+
+	});
+
+	WiFi.onStationModeDisconnected([](const WiFiEventStationModeDisconnected &c) {
+	
+		Serial.print("EVENT disconnected ");
+		Serial.println(c.ssid);
+
+	});
 
 
 	// preparing GPIOs
@@ -262,10 +304,10 @@ void setup(void)
 	DoSwitch(true);
 
 	// wait 60 seconds for wifi network to come up
-	delay(WAIT_FOR_HOST_WIFI_TO_BOOT_SECS * 1000);
+	// delay(WAIT_FOR_HOST_WIFI_TO_BOOT_SECS * 1000);
 
 	// try to connect to the wifi
-	ConnectWifi();
+	ConnectWifi(intent);
 
 	// default off
 	DoSwitch(false);
@@ -283,11 +325,18 @@ void setup(void)
 
 	// handlers can't be replaced
 	server.on("/", []() {
-
-		if (runningAP)
+		switch (currentMode)
+		{
+		case wifiMode::modeAP:
 			server.send(200, "text/html", webPageAP);
-		else
+			break;
+		case wifiMode::modeSTA:
 			server.send(200, "text/html", webPageSTA);
+			break;
+		case wifiMode::modeUnknown:
+			break;
+
+		}
 
 	});
 
@@ -300,7 +349,7 @@ void setup(void)
 		server.send(200, "text/html", webPageAPtry);
 
 		// get the args
-		if (runningAP && server.args() > 0) {
+		if (currentMode==wifiMode::modeAP && server.args() > 0) {
 			for (uint8_t i = 0; i < server.args(); i++) 
 			{
 				if (server.argName(i) == "ssid") 
@@ -315,7 +364,7 @@ void setup(void)
 		} 
 
 		// force attempt
-		ConnectWifi(true);
+		ConnectWifi(wifiMode::modeSTA);
 
 		delay(1000);
 	});
@@ -330,10 +379,10 @@ void loop(void)
 	if (resetWIFI)
 		ResetMe();
 
-	if (!runningAP && WiFi.status() != WL_CONNECTED)
-	{
-		ConnectWifi();
-	}
+	//if (currentMode==wifiMode::modeSTA && WiFi.status() != WL_CONNECTED)
+	//{
+	//	ConnectWifi(currentMode);
+	//}
 
 	server.handleClient();
 }
