@@ -22,6 +22,11 @@ struct
 
 } wifiDetails;
 
+
+// needs to be persisted or the event is unsubscribed
+WiFiEventHandler onConnect, onDisconnect;
+
+
 volatile bool busyDoingSomethingIgnoreSwitch = false;
 
 
@@ -117,6 +122,8 @@ void DoSwitch(bool on)
 void ConnectWifi(wifiMode intent)
 {
 	busyDoingSomethingIgnoreSwitch = true;
+
+	WiFi.persistent(false);
 
 	Serial.println("ConnectWifi");
 
@@ -276,18 +283,19 @@ void setup(void)
 
 	}
 
+
 	// set callbacks for wifi
-	WiFi.onStationModeConnected([](const WiFiEventStationModeConnected&c) {
+	onConnect=WiFi.onStationModeConnected([](const WiFiEventStationModeConnected&c) {
 	
 		Serial.print("EVENT connected ");
-		Serial.println(c.ssid);
+		//Serial.println(c.ssid);
 
 	});
 
-	WiFi.onStationModeDisconnected([](const WiFiEventStationModeDisconnected &c) {
+	onDisconnect=WiFi.onStationModeDisconnected([](const WiFiEventStationModeDisconnected &c) {
 	
 		Serial.print("EVENT disconnected ");
-		Serial.println(c.ssid);
+		//Serial.println(c.ssid);
 
 	});
 
