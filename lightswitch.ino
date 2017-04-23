@@ -70,7 +70,7 @@ long last_micros = 0;
 long lastSwitchesSeen[RESET_ARRAY_SIZE];
 
 // don't attempt to join the hosting WIFI for x seconds, because the router hasn't booted
-#define WAIT_FOR_HOST_WIFI_TO_BOOT_SECS 60
+//#define WAIT_FOR_HOST_WIFI_TO_BOOT_SECS 60
 
 void OnSwitchISR()
 {
@@ -78,7 +78,7 @@ void OnSwitchISR()
 		return;
 
 	// gate against messy tactile/physical switches
-	if ((long)(micros() - last_micros) >= Details.debounceThresholdms * 1000) 
+	if ((long)(micros() - last_micros) >= (Details.debounceThresholdms * 1000))
 	{
 		// move the last seens along
 		memmove(&lastSwitchesSeen[0], &lastSwitchesSeen[1], sizeof(long)*RESET_ARRAY_SIZE -1 );
@@ -127,6 +127,11 @@ void DoSwitch(bool on)
 
 void WriteEeprom(bool apset,const char *ssid,const char *pwd, long bounce, long reset)
 {
+	Serial.println("Writing EEPROM");
+	Serial.println(bounce);
+	Serial.println(reset);
+
+
 	if(Details.wifi.configured = apset)
 	{
 		strcpy(Details.wifi.ssid, ssid);
@@ -272,6 +277,12 @@ void setup(void)
 	WriteEeprom(false, NULL, NULL, 250,3000);
 #endif
 
+	// try reading the eeprom
+	// the marker is to spot virgin EEPROM (can i vape it on a build?)
+	EEPROM.get(0, Details);
+
+
+
 
 	// sure, this could be prettier
 	webPageAPtry = webPageAP = webPageSTA = "<h1>"+ esphostname +"</h1>";
@@ -295,10 +306,8 @@ void setup(void)
 	Serial.begin(115200);
 	Serial.println("starting");
 	Serial.println(esphostname);
-
-	// try reading the eeprom
-	// the marker is to spot virgin EEPROM (can i vape it on a build?)
-	EEPROM.get(0, Details);
+	Serial.print("bounce "); Serial.println(Details.debounceThresholdms);
+	Serial.print("reset "); Serial.println(Details.resetWindowms);
 
 	enum wifiMode intent = wifiMode::modeUnknown;
 
@@ -406,10 +415,10 @@ void setup(void)
 				}
 
 				if (server.argName(i) == "bounce")
-					bounce = atol(server.argName(i).c_str());
+					bounce = atol(server.arg(i).c_str());
 
 				if (server.argName(i) == "reset")
-					reset = atol(server.argName(i).c_str());
+					reset = atol(server.arg(i).c_str());
 
 			}
 		} 
