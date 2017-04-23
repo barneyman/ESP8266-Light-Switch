@@ -13,22 +13,30 @@ extern "C" {
 // we run MDNS so we can be found by "esp8266_<last 3 bytes of MAC address>.local" by the RPI
 MDNSResponder mdns;
 
-// store network credentials in eeprom
 struct
 {
-	char ssid[128];
-	char password[128];
-	char marker;
+	// store network credentials in eeprom
+	struct
+	{
+		char ssid[128];
+		char password[128];
+		bool configured;
 
-} wifiDetails;
+	} wifi;
 
+	// how long to wait for the light switch to settle
+	long debounceThresholdms;
+
+	// 6 switches in this time force an AP reset
+	long resetWindowms;
+
+} Details;
 
 // needs to be persisted or the event is unsubscribed
 WiFiEventHandler onConnect, onDisconnect;
 
 
 volatile bool busyDoingSomethingIgnoreSwitch = false;
-
 
 String esphostname = "esp8266_";
 
@@ -57,9 +65,7 @@ int gpio2_pin = 2;
 bool switchState = false;
 
 long last_micros = 0;
-long debounceThresholdms = 250;
 
-#define RESET_DELAY	(3000 * 1000)
 #define RESET_ARRAY_SIZE 6
 long lastSwitchesSeen[RESET_ARRAY_SIZE];
 
@@ -72,7 +78,7 @@ void OnSwitchISR()
 		return;
 
 	// gate against messy tactile/physical switches
-	if ((long)(micros() - last_micros) >= debounceThresholdms * 1000) 
+	if ((long)(micros() - last_micros) >= Details.debounceThresholdms * 1000) 
 	{
 		// move the last seens along
 		memmove(&lastSwitchesSeen[0], &lastSwitchesSeen[1], sizeof(long)*RESET_ARRAY_SIZE -1 );
@@ -84,7 +90,7 @@ void OnSwitchISR()
 		// remember the last 6 - i'm assuming we won't wrap
 		lastSwitchesSeen[RESET_ARRAY_SIZE - 1] = last_micros = micros();
 
-		if (lastSwitchesSeen[RESET_ARRAY_SIZE - 1] - lastSwitchesSeen[0] < RESET_DELAY)
+		if (lastSwitchesSeen[RESET_ARRAY_SIZE - 1] - lastSwitchesSeen[0] < Details.resetWindowms*1000)
 		{
 			resetWIFI = true;
 		}
@@ -115,6 +121,28 @@ void DoSwitch(bool on)
 	}
 
 	switchState = on;
+
+}
+
+
+void WriteEeprom(bool apset,const char *ssid,const char *pwd, long bounce, long reset)
+{
+	if(Details.wifi.configured = apset)
+	{
+		strcpy(Details.wifi.ssid, ssid);
+		strcpy(Details.wifi.password, pwd);
+	}
+	else
+	{
+		memset(Details.wifi.ssid, 0, sizeof(Details.wifi.ssid));
+		memset(Details.wifi.password, 0, sizeof(Details.wifi.password));
+	}
+
+	Details.debounceThresholdms = bounce;
+	Details.resetWindowms = reset;
+
+	EEPROM.put(0, Details);
+	EEPROM.commit();
 
 }
 
@@ -152,10 +180,10 @@ void ConnectWifi(wifiMode intent)
 
 		// turn bonjour off??
 		Serial.print("Attempting connect to ");
-		Serial.println(wifiDetails.ssid);
+		Serial.println(Details.wifi.ssid);
 
 		WiFi.mode(WIFI_STA);
-		WiFi.begin(wifiDetails.ssid, wifiDetails.password);
+		WiFi.begin(Details.wifi.ssid, Details.wifi.password);
 
 		// Wait for connection
 		for(int attempts=0;attempts<15;attempts++)
@@ -176,7 +204,7 @@ void ConnectWifi(wifiMode intent)
 
 			Serial.println("");
 			Serial.print("Connected to ");
-			Serial.println(wifiDetails.ssid);
+			Serial.println(Details.wifi.ssid);
 			Serial.print("IP address: ");
 			Serial.println(WiFi.localIP());
 
@@ -184,13 +212,6 @@ void ConnectWifi(wifiMode intent)
 			{
 				Serial.println("MDNS responder started");
 			}
-
-			// special marker
-			wifiDetails.marker = 0xbf;
-
-			// and scribble to the eeprom
-			EEPROM.put(0, wifiDetails);
-			EEPROM.commit();
 
 			WiFi.setAutoReconnect(true);
 		}
@@ -225,16 +246,15 @@ void ResetMe()
 
 	resetWIFI = false;
 	// clear the credentials
-	memset(&wifiDetails, 0, sizeof(wifiDetails));
-	// and scribble to the eeprom
-	EEPROM.put(0, wifiDetails);
-	EEPROM.commit();
+	WriteEeprom(false, NULL, NULL, Details.debounceThresholdms, Details.resetWindowms);
 
 	// and reconnect as an AP
 	ConnectWifi(wifiMode::modeAP);
 
 }
 
+// run it ONCE with this flag set, just to write sane values into the EEPROM
+#define _INITIALISE_EEPROM
 
 void setup(void) 
 {
@@ -248,12 +268,25 @@ void setup(void)
 	// start eeprom library
 	EEPROM.begin(512);
 
+#ifdef _INITIALISE_EEPROM
+	WriteEeprom(false, NULL, NULL, 250,3000);
+#endif
+
+
 	// sure, this could be prettier
 	webPageAPtry = webPageAP = webPageSTA = "<h1>"+ esphostname +"</h1>";
 
 	webPageSTA += "<p>Socket<a href=\"socket2On\"><button>ON</button></a>&nbsp;<a href=\"socket2Off\"><button>OFF</button></a></p>";
 
-	webPageAP += "<form action = \"associate\">SSID:<input name = ssid size = 15 type = text / ><br / >PWD : <input name = psk size = 15 type = text / ><br / ><hr / ><input name = Submit type = submit value = \"join\" /></form>";
+	char noise[25];
+	webPageAP += "<form action = \"associate\">SSID:<input name = ssid size = 15 type = text /><br/>PWD : <input name = psk size = 15 type = text / ><br/><hr/>";
+	webPageAP += "Bounce : <input name = bounce size = 15 type =number value="+String(ltoa(Details.debounceThresholdms, noise, 10))+" />ms<br/>";
+	webPageAP += "Reset : <input name = reset size = 15 type =number value="+String(ltoa(Details.resetWindowms, noise, 10))+" />ms<br/>";
+	webPageAP += "<input name=Submit type = submit value = \"join\" /></form>";
+
+
+	;
+	ltoa(Details.resetWindowms, noise, 10);
 
 	webPageAPtry += "trying";
 
@@ -265,15 +298,15 @@ void setup(void)
 
 	// try reading the eeprom
 	// the marker is to spot virgin EEPROM (can i vape it on a build?)
-	EEPROM.get(0, wifiDetails);
+	EEPROM.get(0, Details);
 
 	enum wifiMode intent = wifiMode::modeUnknown;
 
-	if (wifiDetails.marker == 0xbf)
+	if (Details.wifi.configured)
 	{
 		Serial.println("credentials found");
-		Serial.println(wifiDetails.ssid);
-		Serial.println(wifiDetails.password);
+		Serial.println(Details.wifi.ssid);
+		Serial.println(Details.wifi.password);
 		intent = wifiMode::modeSTA;
 	}
 	else
@@ -356,20 +389,32 @@ void setup(void)
 	server.on("/associate", []() {
 		server.send(200, "text/html", webPageAPtry);
 
+		String ssid, pwd;
+		long bounce = 250, reset = 3000;
+
 		// get the args
 		if (currentMode==wifiMode::modeAP && server.args() > 0) {
 			for (uint8_t i = 0; i < server.args(); i++) 
 			{
 				if (server.argName(i) == "ssid") 
 				{
-					strcpy(wifiDetails.ssid, server.arg(i).c_str());
+					ssid= server.arg(i).c_str();
 				}
 				if (server.argName(i) == "psk")
 				{
-					strcpy(wifiDetails.password, server.arg(i).c_str());
+					pwd=server.arg(i).c_str();
 				}
+
+				if (server.argName(i) == "bounce")
+					bounce = atol(server.argName(i).c_str());
+
+				if (server.argName(i) == "reset")
+					reset = atol(server.argName(i).c_str());
+
 			}
 		} 
+
+		WriteEeprom(true, ssid.c_str(), pwd.c_str(), bounce, reset);
 
 		// force attempt
 		ConnectWifi(wifiMode::modeSTA);
