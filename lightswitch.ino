@@ -56,10 +56,10 @@ String webPageAP = "";
 String webPageAPtry = "";
 
 // light manual trigger IN
-int gpio0_pin = 0;
+int inputSwitchPin = 4;
 
 // relay trigger OUT
-int gpio2_pin = 2;
+int outputRelayPin = 5;
 
 // current switch state
 bool switchState = false;
@@ -110,13 +110,13 @@ void DoSwitch(bool on)
 	if (on)
 	{
 		// pin low is relay ON
-		digitalWrite(gpio2_pin, LOW);
+		digitalWrite(outputRelayPin, LOW);
 		Serial.println("switch on");
 	}
 	else
 	{
 		// pin high is relay OFF
-		digitalWrite(gpio2_pin, HIGH);
+		digitalWrite(outputRelayPin, HIGH);
 		Serial.println("switch off");
 	}
 
@@ -259,7 +259,7 @@ void ResetMe()
 }
 
 // run it ONCE with this flag set, just to write sane values into the EEPROM
-#define _INITIALISE_EEPROM
+#define _INITIALISE_EEPROM//
 
 void setup(void) 
 {
@@ -343,12 +343,12 @@ void setup(void)
 
 
 	// preparing GPIOs
-	pinMode(gpio0_pin, INPUT_PULLUP);
-	attachInterrupt((gpio0_pin), OnSwitchISR, CHANGE);
+	pinMode(inputSwitchPin, INPUT_PULLUP);
+	attachInterrupt((inputSwitchPin), OnSwitchISR, CHANGE);
 
 	// output
-	pinMode(gpio2_pin, OUTPUT);
-	digitalWrite(gpio2_pin, LOW);
+	pinMode(outputRelayPin, OUTPUT);
+	digitalWrite(outputRelayPin, LOW);
 
 	// default on
 	DoSwitch(true);
