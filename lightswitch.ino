@@ -4,6 +4,7 @@
 #include <ESP8266mDNS.h>
 #include <EEPROM.h>
 
+
 extern "C" {
 
 #include <user_interface.h>		// for system_get_chip_id();
@@ -259,7 +260,7 @@ void ResetMe()
 }
 
 // run it ONCE with this flag set, just to write sane values into the EEPROM
-#define _INITIALISE_EEPROM//
+//#define _INITIALISE_EEPROM
 
 void setup(void) 
 {
@@ -441,10 +442,6 @@ void loop(void)
 	if (resetWIFI)
 		ResetMe();
 
-	//if (currentMode==wifiMode::modeSTA && WiFi.status() != WL_CONNECTED)
-	//{
-	//	ConnectWifi(currentMode);
-	//}
-
+	
 	server.handleClient();
 }
