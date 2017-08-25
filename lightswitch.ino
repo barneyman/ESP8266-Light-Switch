@@ -132,14 +132,19 @@ void WriteEeprom(bool apset,const char *ssid,const char *pwd, long bounce, long 
 	Serial.println(bounce);
 	Serial.println(reset);
 
-
-	if(Details.wifi.configured = apset)
+	// remember
+	Details.wifi.configured = apset;
+	
+	// if setting ...
+	if(Details.wifi.configured)
 	{
+		// set
 		strcpy(Details.wifi.ssid, ssid);
 		strcpy(Details.wifi.password, pwd);
 	}
 	else
 	{
+		// or clear
 		memset(Details.wifi.ssid, 0, sizeof(Details.wifi.ssid));
 		memset(Details.wifi.password, 0, sizeof(Details.wifi.password));
 	}
