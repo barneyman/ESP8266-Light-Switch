@@ -1,8 +1,10 @@
 #include <ESP8266WiFi.h>
-#include <WiFiClient.h>
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
+#include <WiFiClient.h>
 #include <EEPROM.h>
+// for the mcp23017
+#include <Wire.h>
 
 
 extern "C" {
@@ -13,6 +15,7 @@ extern "C" {
 
 // we run MDNS so we can be found by "esp8266_<last 3 bytes of MAC address>.local" by the RPI
 MDNSResponder mdns;
+
 
 struct
 {
@@ -57,26 +60,69 @@ String webPageAP = "";
 String webPageAPtry = "";
 
 // light manual trigger IN
-int inputSwitchPin = 4;
+int inputSwitchPin = 14; // D5
 
 // relay trigger OUT
-int outputRelayPin = 5;
+//int outputRelayPin = 5;
+
+// the address of the MCP
+#define MCPADDR	0x20
+
+// number of relays
+#define NUM_SOCKETS	6
 
 // current switch state
-bool switchState = false;
+//bool switchState = false;
 
 long last_micros = 0;
 
 #define RESET_ARRAY_SIZE 6
 long lastSwitchesSeen[RESET_ARRAY_SIZE];
 
-// don't attempt to join the hosting WIFI for x seconds, because the router hasn't booted
-//#define WAIT_FOR_HOST_WIFI_TO_BOOT_SECS 60
+#define MCP_IODIR_A		0x00
+#define MCP_IODIR_B		0x01
+#define MCP_GPINTE_A	0x04
+#define MCP_GPINTE_B	0x05
+#define MCP_INTCON_A	0x08
+#define MCP_IOCAN_A		0x0a
+#define MCP_GPPU_A		0x0C
+#define MCP_INTF_A		0x0e
+#define MCP_INTCAP_A	0x10
+#define MCP_GPIO_A		0x12
+#define MCP_GPIO_B		0x13
+
+
+
+
+#define _IGNORE_BOUNCE_LOGIC	
 
 void OnSwitchISR()
 {
+	// if we're up to our neck in something else (normally WIFI negotiation) ignore this
 	if (busyDoingSomethingIgnoreSwitch)
+	{
+		Serial.println("	OnSwitchISR redundant");
+		// ask what changed, clear interrupt
+		readMCP23017_InterruptCauseAndState(true);
 		return;
+	}
+
+	Serial.println("	OnSwitchISR in");
+
+#ifdef _IGNORE_BOUNCE_LOGIC
+
+	// ask what changed, clear interrupt
+	int causeAndState = readMCP23017_InterruptCauseAndState(false);
+
+	for (unsigned port = 0; port < 8; port++)
+	{
+		Serial.printf("Checking %04x\r\n", (1 << (port + 8)));
+		// +8 to get HIBYTE
+		if (causeAndState & (1 << (port + 8)))
+			DoSwitch(port, (causeAndState & (1 << port)) ? true : false, false);
+	}
+
+#else
 
 	// gate against messy tactile/physical switches
 	if ((long)(micros() - last_micros) >= (Details.debounceThresholdms * 1000))
@@ -84,9 +130,15 @@ void OnSwitchISR()
 		// move the last seens along
 		memmove(&lastSwitchesSeen[0], &lastSwitchesSeen[1], sizeof(long)*RESET_ARRAY_SIZE -1 );
 
-		// do the toggle
-		ToggleSwitch();
+		// ask what changed
+		int causeAndState = readMCP23017_InterruptCauseAndState();
 
+		for (unsigned port = 0; port < 8; port++)
+		{
+			// +8 to get HIBYTE
+			if (causeAndState & (1 << (port+8)))
+				DoSwitch(port, (causeAndState & (1 << port))?true:false, false);
+		}
 
 		// remember the last 6 - i'm assuming we won't wrap
 		lastSwitchesSeen[RESET_ARRAY_SIZE - 1] = last_micros = micros();
@@ -95,33 +147,33 @@ void OnSwitchISR()
 		{
 			resetWIFI = true;
 		}
-
 	}
+#endif
+
+	Serial.println("	OnSwitchISR out");
+
 }
 
-/// just toggle
-void ToggleSwitch()
+void DoAllSwitch(bool state)
 {
-	DoSwitch(!switchState);
+	for (int port = 0; port < NUM_SOCKETS; port++)
+		DoSwitch(port, state, false);
 }
 
-// do, and remember
-void DoSwitch(bool on)
+// do, portNumber is 0 thru 7
+void DoSwitch(int portNumber, bool on, bool inisr)
 {
-	if (on)
-	{
-		// pin low is relay ON
-		digitalWrite(outputRelayPin, LOW);
-		Serial.println("switch on");
-	}
-	else
-	{
-		// pin high is relay OFF
-		digitalWrite(outputRelayPin, HIGH);
-		Serial.println("switch off");
-	}
+	if (portNumber > 7 || portNumber < 0)
+		return;
 
-	switchState = on;
+	Serial.println("DoSwitch IN");
+
+	if(!inisr)
+		Serial.printf("DoSwitch: port %d %s\r\n", portNumber, on?"ON":"off");
+
+	writeMCP23017_OutputState(portNumber, on, inisr);
+
+	Serial.println("DoSwitch OUT");
 
 }
 
@@ -150,6 +202,13 @@ void WriteEeprom(bool apset,const char *ssid,const char *pwd, long bounce, long 
 	EEPROM.put(0, Details);
 	EEPROM.commit();
 
+}
+
+
+void BeginWebServer()
+{
+	server.begin();
+	Serial.println("HTTP server started");
 }
 
 // disjoin and rejoin, optionally force a STA attempt
@@ -220,6 +279,8 @@ void ConnectWifi(wifiMode intent)
 			}
 
 			WiFi.setAutoReconnect(true);
+
+			BeginWebServer();
 		}
 	}
 
@@ -259,6 +320,156 @@ void ResetMe()
 
 }
 
+// A is in, B is out
+// return cause mask and state - mask is HIBYTE
+int readMCP23017_InterruptCauseAndState(bool justClearInterrupt)
+{
+	if (justClearInterrupt)
+	{
+		// then get current interrupt states
+		Wire.beginTransmission(MCPADDR);
+		Wire.write(MCP_GPIO_A); // GPIOA register
+		Wire.endTransmission();
+
+		Wire.requestFrom(MCPADDR, 1); // request one byte of data
+		byte state = Wire.read();
+
+		return 0;
+
+	}
+	// work out what pin(s) caused the interrupt - this is essentially the mask
+	Wire.beginTransmission(MCPADDR);
+	Wire.write(MCP_INTF_A); // INTFA register
+	Wire.endTransmission();
+
+	Wire.requestFrom(MCPADDR, 1); // request one byte of data
+	int cause = Wire.read();
+
+	// then get current interrupt states
+	Wire.beginTransmission(MCPADDR);
+	Wire.write(MCP_INTCAP_A); // INTCAPA register
+	Wire.endTransmission();
+
+	Wire.requestFrom(MCPADDR, 1); // request one byte of data
+	int state = Wire.read();
+
+	Serial.printf("MCPInt cause %02x state %02x [%04x]\n\r", cause, state, (int)((cause & 0xff) << 8) | (state & 0xff));
+
+	// then send that back
+	return (int)((cause&0xff) << 8) | (state&0xff);
+}
+
+
+// A is in, B is out
+void writeMCP23017_OutputState(unsigned portNumber, bool portstate, bool inisr)
+{
+
+	Wire.beginTransmission(MCPADDR);
+	Wire.write(MCP_GPIO_B); // GPIOB register
+	Wire.endTransmission();
+
+	Wire.requestFrom(MCPADDR, 1); // request one byte of data
+	byte state = Wire.read();
+
+	// get the existing state, mask out the bit we want
+	state = ((state& (~(1 << portNumber)))) & 0xff;
+
+	// then set the bit we're after (hi os OFF)
+	if(!portstate)
+		state = state | (1 << portNumber);
+
+	Wire.beginTransmission(MCPADDR);
+	Wire.write(MCP_GPIO_B); // GPIOB register
+	Wire.write(state);
+	Wire.endTransmission();
+
+}
+
+// port num = 0 thru 7
+bool readMCP23017_InputState(unsigned portNumber)
+{
+	Wire.beginTransmission(MCPADDR);
+	//Wire.write(0x0e); // INTFA register
+	Wire.write(MCP_GPIO_A); // GPIOA register
+	Wire.endTransmission();
+
+	Wire.requestFrom(MCPADDR, 1); // request one byte of data
+	byte state = Wire.read();
+
+	return state & (1<<portNumber) ? true : false;
+}
+
+//#define MCP_BASIC
+
+// A is in, B is out
+void SetupMCP23017()
+{
+
+	// set up state
+	Wire.beginTransmission(MCPADDR);
+	Wire.write(MCP_IOCAN_A); // IOCON register
+	Wire.write(0x20 | 0x8); // BANK0(0) MIRROR0(0) SEQOPoff(20) DISSLWoff(0) HAENoff(8) ODRoff(0) INTPOLoff(0)
+	Wire.endTransmission();
+
+	// we are going to use A as INs, pullup
+	{
+		Wire.beginTransmission(MCPADDR);
+		Wire.write(MCP_IODIR_A); // IODIRA register
+		Wire.write(0xff); // set all of port A to inputs
+		Wire.endTransmission();
+
+		Wire.beginTransmission(MCPADDR);
+		Wire.write(MCP_GPPU_A); // GPPUA register
+		Wire.write(0xff); // set all of port A to pullup
+		Wire.endTransmission();
+
+#ifndef MCP_BASIC
+
+		// set interrupt to spot A changing
+		{
+
+			Wire.beginTransmission(MCPADDR);
+			Wire.write(0x06); // DEFVALA register
+			Wire.write(0x00); // intcona makes this redundant
+			Wire.endTransmission();
+
+			Wire.beginTransmission(MCPADDR);
+			Wire.write(MCP_INTCON_A); // INTCONA register
+			Wire.write(0x00); // change from previous state
+			Wire.endTransmission();
+
+			Wire.beginTransmission(MCPADDR);
+			Wire.write(MCP_GPINTE_A); // GPINTENA register
+			Wire.write(0xff); // all signal interrupt
+			Wire.endTransmission();
+
+		}
+
+#else
+
+
+
+#endif
+
+	}
+	
+	Wire.beginTransmission(MCPADDR);
+	Wire.write(MCP_IODIR_B); // IODIRB register
+	Wire.write(0x00); // set all of port B to outputs
+	Wire.endTransmission();
+
+	Wire.beginTransmission(MCPADDR);
+	Wire.write(MCP_GPINTE_B); // GPINTENA register
+	Wire.write(0x0); // NO signal interrupt
+	Wire.endTransmission();
+
+
+
+
+}
+
+
+
 // run it ONCE with this flag set, just to write sane values into the EEPROM
 //#define _INITIALISE_EEPROM
 
@@ -271,6 +482,10 @@ void setup(void)
 	// clean up the switch times
 	memset(&lastSwitchesSeen, 0, sizeof(lastSwitchesSeen));
 
+	// start wire
+	Wire.begin(4, 5);
+
+
 	// start eeprom library
 	EEPROM.begin(512);
 
@@ -282,13 +497,28 @@ void setup(void)
 	// the marker is to spot virgin EEPROM (can i vape it on a build?)
 	EEPROM.get(0, Details);
 
+	String boilerPlate("<html><head><style type=\"text/css\">$$$STYLE$$$</style></head><body>$$BODY$$</body></html>");
+	String style("body {font: Arial; font-size: 2.5em;}");
 
+	boilerPlate.replace("$$$STYLE$$$", style);
 
 
 	// sure, this could be prettier
-	webPageAPtry = webPageAP = webPageSTA = "<h1>"+ esphostname +"</h1>";
+	webPageAPtry = webPageAP = "<h1>"+ esphostname +"</h1>";
 
-	webPageSTA += "<p>Socket<a href=\"socket2On\"><button>ON</button></a>&nbsp;<a href=\"socket2Off\"><button>OFF</button></a></p>";
+	// set the handler string up
+	String webPageSTAbody(webPageAPtry);
+
+	for (int socket = 0; socket < NUM_SOCKETS; socket++)
+	{
+		webPageSTAbody += String("<p>Socket ")+String(socket)+String("<a href=\"button?action=on&port=") +String(socket)+ String("\"><button>ON</button></a>&nbsp;<a href=\"button?action=off&port=") + String(socket) + String("\"><button>OFF</button></a></p>");
+	}
+
+	String webPageSTA = boilerPlate;
+	webPageSTA.replace("$$BODY$$", webPageSTAbody);
+
+
+//	webPageSTA += "<p>Socket<a href=\"socket2On\"><button>ON</button></a>&nbsp;<a href=\"socket2Off\"><button>OFF</button></a></p>";
 
 	char noise[25];
 	webPageAP += "<form action = \"associate\">SSID:<input name = ssid size = 15 type = text /><br/>PWD : <input name = psk size = 15 type = text / ><br/><hr/>";
@@ -296,8 +526,6 @@ void setup(void)
 	webPageAP += "Reset : <input name = reset size = 15 type =number value="+String(ltoa(Details.resetWindowms, noise, 10))+" />ms<br/>";
 	webPageAP += "<input name=Submit type = submit value = \"join\" /></form>";
 
-
-	;
 	ltoa(Details.resetWindowms, noise, 10);
 
 	webPageAPtry += "trying";
@@ -345,37 +573,48 @@ void setup(void)
 
 	// preparing GPIOs
 	pinMode(inputSwitchPin, INPUT_PULLUP);
-	attachInterrupt((inputSwitchPin), OnSwitchISR, CHANGE);
+	attachInterrupt((inputSwitchPin), OnSwitchISR, ONLOW);
 
-	// output
-	pinMode(outputRelayPin, OUTPUT);
-	digitalWrite(outputRelayPin, LOW);
+	// initialise the MCP
+	SetupMCP23017();
 
 	// default on
-	DoSwitch(true);
-
-	// wait 60 seconds for wifi network to come up
-	// delay(WAIT_FOR_HOST_WIFI_TO_BOOT_SECS * 1000);
+	DoAllSwitch(true);
 
 	// try to connect to the wifi
 	ConnectWifi(intent);
 
 	// default off
-	DoSwitch(false);
+	DoAllSwitch(false);
 
-	server.on("/socket2On", []() {
+	server.on("/button", [webPageSTA]() {
 		server.send(200, "text/html", webPageSTA);
-		DoSwitch(true);
-		delay(1000);
+
+		String action, port;
+
+		for (uint8_t i = 0; i < server.args(); i++)
+		{
+			if (server.argName(i) == "port")
+			{
+				port = server.arg(i).c_str();
+			}
+			if (server.argName(i) == "action")
+			{
+				action = server.arg(i).c_str();
+			}
+
+		}
+
+		if (action.length() && port.length())
+		{
+			DoSwitch(port.toInt(), action == "on" ? true : false, false);
+		}
+
 	});
-	server.on("/socket2Off", []() {
-		server.send(200, "text/html", webPageSTA);
-		DoSwitch(false);
-		delay(1000);
-	});
+
 
 	// handlers can't be replaced
-	server.on("/", []() {
+	server.on("/", [webPageSTA]() {
 		switch (currentMode)
 		{
 		case wifiMode::modeAP:
@@ -432,9 +671,6 @@ void setup(void)
 		delay(1000);
 	});
 
-
-	server.begin();
-	Serial.println("HTTP server started");
 }
 
 void loop(void) 
