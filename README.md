@@ -1,6 +1,8 @@
 # ESP8266-Light-Switch
 an ESP01 that switches a relay, and also handles the switch wire
 
+**There is am additional branch - 6switch - that looks after 6 (up to 8) relays, using an MCP23017**
+
 using an ESP8266-ESP01, and a 240v 5v switching relay, this is a simple sketch that honours the manual switch 
 and can also be remotely fired, using a simple HTTP get
 
