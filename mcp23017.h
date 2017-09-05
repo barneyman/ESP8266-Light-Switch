@@ -30,13 +30,13 @@ public:
 	mcp23017(int sdaPin, int sclPin, int resetPin):
 		m_resetAvailable(true), m_sdaPin(sdaPin), m_sclPin(sclPin), m_resetPin(resetPin)
 	{
-		Wire.begin(sdaPin, sclPin);
+		m_wire.begin(sdaPin, sclPin);
 	}
 
 	mcp23017(int sdaPin, int sclPin) :
 		m_resetAvailable(false), m_sdaPin(sdaPin), m_sclPin(sclPin), m_resetPin(0)
 	{
-		Wire.begin(sdaPin, sclPin);
+		m_wire.begin(sdaPin, sclPin);
 	}
 
 	// spin it up
@@ -54,6 +54,10 @@ protected:
 
 	bool m_resetAvailable;
 	int m_sdaPin, m_sclPin, m_resetPin;
+
+private:
+
+	TwoWire m_wire;
 };
 
 
