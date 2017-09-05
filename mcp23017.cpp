@@ -50,7 +50,7 @@ void mcp23017::Initialise()
 		{
 
 			// turn polarity off
-			writeOneRegister(MCP_IOPOL_A, 0);// set all of port A to 1:1
+			writeOneRegister(MCP_IPOL_A, 0);// set all of port A to 1:1
 
 			writeOneRegister(MCP_DEFVAL_A, 0);// intcona makes this redundant
 
@@ -108,17 +108,20 @@ void mcp23017::SetRelay(unsigned relayNumber, bool relayState, bool forceSwitchT
 			Serial.println("switch does NOT reflect request - asked to alter");
 
 			// get polarity of A
-			byte polarity = readOneRegister(MCP_IOPOL_A);
+			byte polarity = readOneRegister(MCP_IPOL_A);
 
 			Serial.printf("%02x -> ", polarity);
 
 			// flip the polarity bit for that switch
 			polarity ^= (1 << relayNumber);
 
-			Serial.printf("%02x\n\r", polarity);
+			Serial.printf("%02x ", polarity);
+			
+			// enabling this line causes an ISR storm
+			//writeOneRegister(MCP_IPOL_A, polarity);
 
-			writeOneRegister(MCP_IOPOL_A, polarity);
 
+			Serial.println("written");
 		}
 	}
 

@@ -11,7 +11,7 @@
 
 #define MCP_IODIR_A		0x00
 #define MCP_IODIR_B		0x01
-#define MCP_IOPOL_A		0x02
+#define MCP_IPOL_A		0x02
 #define MCP_GPINTE_A	0x04
 #define MCP_GPINTE_B	0x05
 #define MCP_DEFVAL_A	0x06
