@@ -74,7 +74,11 @@
     </None>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="mcp23017.h" />
     <ClInclude Include="__vm\.lightswitch.vsarduino.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="mcp23017.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

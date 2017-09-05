@@ -1,0 +1,189 @@
+// 
+// 
+// 
+
+#include "mcp23017.h"
+
+
+void mcp23017::Initialise()
+{
+	if(m_resetAvailable)
+	{
+		// hold the reset pin down (0v reset)
+		pinMode(m_resetPin, OUTPUT);
+		digitalWrite(m_resetPin, LOW);
+		delay(100);
+		// high - fires the xistor
+		digitalWrite(m_resetPin, HIGH);
+		delay(100);
+	}
+
+
+	// set up state
+	Wire.beginTransmission(MCPADDR);
+	Wire.write(MCP_IOCAN_A); // IOCON register
+	Wire.write(0x20 | 0x8); // BANK0(0) MIRROR0(0) SEQOPoff(20) DISSLWoff(0) HAENoff(8) ODRoff(0) INTPOLoff(0)
+	Wire.endTransmission();
+
+	// we are going to use A as INs, pullup
+	{
+		Wire.beginTransmission(MCPADDR);
+		Wire.write(MCP_IODIR_A); // IODIRA register
+		Wire.write(0xff); // set all of port A to inputs
+		Wire.endTransmission();
+
+		Wire.beginTransmission(MCPADDR);
+		Wire.write(MCP_GPPU_A); // GPPUA register
+		Wire.write(0xff); // set all of port A to pullup
+		Wire.endTransmission();
+
+		// set interrupt to spot A changing
+		{
+
+			// turn polarity off
+			Wire.beginTransmission(MCPADDR);
+			Wire.write(MCP_IOPOL_A); // IPOLA register
+			Wire.write(0x00); // set all of port A to 1:1
+			Wire.endTransmission();
+
+			Wire.beginTransmission(MCPADDR);
+			Wire.write(MCP_DEFVAL_A); // DEFVALA register
+			Wire.write(0x00); // intcona makes this redundant
+			Wire.endTransmission();
+
+			Wire.beginTransmission(MCPADDR);
+			Wire.write(MCP_INTCON_A); // INTCONA register
+			Wire.write(0x00); // change from previous state
+			Wire.endTransmission();
+
+			Wire.beginTransmission(MCPADDR);
+			Wire.write(MCP_GPINTE_A); // GPINTENA register
+			Wire.write(0xff); // all signal interrupt
+			Wire.endTransmission();
+
+		}
+
+	}
+
+	Wire.beginTransmission(MCPADDR);
+	Wire.write(MCP_IODIR_B); // IODIRB register
+	Wire.write(0x00); // set all of port B to outputs
+	Wire.endTransmission();
+
+	Wire.beginTransmission(MCPADDR);
+	Wire.write(MCP_GPINTE_B); // GPINTENA register
+	Wire.write(0x0); // NO signal interrupt
+	Wire.endTransmission();
+
+
+}
+
+
+bool mcp23017::readSwitch(unsigned switchNumber)
+{
+	Wire.beginTransmission(MCPADDR);
+	//Wire.write(0x0e); // INTFA register
+	Wire.write(MCP_GPIO_A); // GPIOA register
+	Wire.endTransmission();
+
+	Wire.requestFrom(MCPADDR, 1); // request one byte of data
+	byte state = Wire.read();
+
+	return state & (1 << switchNumber) ? true : false;
+
+}
+
+void mcp23017::SetRelay(unsigned relayNumber, bool relayState, bool forceSwitchToReflect)
+{
+	Wire.beginTransmission(MCPADDR);
+	Wire.write(MCP_GPIO_B); // GPIOB register
+	Wire.endTransmission();
+
+	Wire.requestFrom(MCPADDR, 1); // request one byte of data
+	byte state = Wire.read();
+
+	// get the existing state *of the relay*, mask out the bit we want
+	state = ((state& (~(1 << relayNumber)))) & 0xff;
+
+	// then set the bit we're after (hi is OFF)
+	if (!relayState)
+		state = state | (1 << relayNumber);
+
+	// if we have to force the switch to relect the current decision
+	if (forceSwitchToReflect)
+	{
+		// get the switch state for this port
+		bool switchState = readSwitch(relayNumber);
+
+		// thw switch does NOT mirror the request state
+		if (switchState != relayState)
+		{
+			Serial.println("switch does NOT reflect request - asked to alter");
+
+			// get polarity of A
+			Wire.beginTransmission(MCPADDR);
+			Wire.write(MCP_IOPOL_A); // IOPOLA register
+			Wire.endTransmission();
+
+			Wire.requestFrom(MCPADDR, 1); // request one byte of data
+			byte polarity = Wire.read();
+
+			Serial.printf("%02x -> ", polarity);
+
+			// flip the polarity bit for that switch
+			polarity ^= (1 << relayNumber);
+
+			Serial.printf("%02x\n\r", polarity);
+
+			//Wire.beginTransmission(MCPADDR);
+			//Wire.write(MCP_IOPOL_A); // IOPOLA register
+			//Wire.write(polarity);
+			//Wire.endTransmission();
+
+		}
+
+
+	}
+
+	Wire.beginTransmission(MCPADDR);
+	Wire.write(MCP_GPIO_B); // GPIOB register
+	Wire.write(state);
+	Wire.endTransmission();
+}
+
+int mcp23017::InterruptCauseAndCurrentState(bool justClearInterrupt)
+{
+	if (justClearInterrupt)
+	{
+		// then get current interrupt states
+		Wire.beginTransmission(MCPADDR);
+		Wire.write(MCP_GPIO_A); // GPIOA register
+		Wire.endTransmission();
+
+		Wire.requestFrom(MCPADDR, 1); // request one byte of data
+		byte state = Wire.read();
+
+		return 0;
+
+	}
+	// work out what pin(s) caused the interrupt - this is essentially the mask
+	Wire.beginTransmission(MCPADDR);
+	Wire.write(MCP_INTF_A); // INTFA register
+	Wire.endTransmission();
+
+	Wire.requestFrom(MCPADDR, 1); // request one byte of data
+	int cause = Wire.read();
+
+	// then get current interrupt states
+	Wire.beginTransmission(MCPADDR);
+	Wire.write(MCP_INTCAP_A); // INTCAPA register
+	Wire.endTransmission();
+
+	Wire.requestFrom(MCPADDR, 1); // request one byte of data
+	int state = Wire.read();
+
+	Serial.printf("MCPInt cause %02x state %02x [%04x]\n\r", cause, state, (int)((cause & 0xff) << 8) | (state & 0xff));
+
+	// then send that back
+	return (int)((cause & 0xff) << 8) | (state & 0xff);
+}
