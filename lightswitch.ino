@@ -61,6 +61,7 @@ String webPageAPtry = "";
 
 // light manual trigger IN
 int inputSwitchPin = 14; // D5
+int resetMCPpin = 16;// D0;
 
 // relay trigger OUT
 //int outputRelayPin = 5;
@@ -68,21 +69,20 @@ int inputSwitchPin = 14; // D5
 // the address of the MCP
 #define MCPADDR	0x20
 
-// number of relays
+// number of relays & switches
 #define NUM_SOCKETS	6
 
-// current switch state
-//bool switchState = false;
-
-long last_micros = 0;
+long last_micros[NUM_SOCKETS];
 
 #define RESET_ARRAY_SIZE 6
-long lastSwitchesSeen[RESET_ARRAY_SIZE];
+long lastSwitchesSeen[NUM_SOCKETS][RESET_ARRAY_SIZE];
 
 #define MCP_IODIR_A		0x00
 #define MCP_IODIR_B		0x01
+#define MCP_IOPOL_A		0x02
 #define MCP_GPINTE_A	0x04
 #define MCP_GPINTE_B	0x05
+#define MCP_DEFVAL_A	0x06
 #define MCP_INTCON_A	0x08
 #define MCP_IOCAN_A		0x0a
 #define MCP_GPPU_A		0x0C
@@ -109,51 +109,73 @@ void OnSwitchISR()
 
 	Serial.println("	OnSwitchISR in");
 
-#ifdef _IGNORE_BOUNCE_LOGIC
 
 	// ask what changed, clear interrupt
 	int causeAndState = readMCP23017_InterruptCauseAndState(false);
 
-	for (unsigned port = 0; port < 8; port++)
+	for (unsigned port = 0; port < NUM_SOCKETS; port++)
 	{
-		Serial.printf("Checking %04x\r\n", (1 << (port + 8)));
-		// +8 to get HIBYTE
+		Serial.printf("Checking port %d\r\n",port);
+		// +8 to get HIBYTE to see if this port CAUSED the interrupt
 		if (causeAndState & (1 << (port + 8)))
-			DoSwitch(port, (causeAndState & (1 << port)) ? true : false, false);
-	}
+		{
+
+#ifndef _IGNORE_BOUNCE_LOGIC
+			// gate against messy tactile/physical switches
+			if ((long)(micros() - last_micros[port]) >= (Details.debounceThresholdms * 1000))
+			{
+				// move the last seens along
+				memmove(&lastSwitchesSeen[port][0], &lastSwitchesSeen[port][1], sizeof(long)*RESET_ARRAY_SIZE - 1);
+
+				Serial.printf("lastSwitchesSeen ");
+
+				for (int each = 0; each < NUM_SOCKETS; each++)
+				{
+					Serial.printf("%lx ", lastSwitchesSeen[port][each]);
+				}
+
+				Serial.printf("\n\r");
+
 
 #else
+				// having CAUSED the interrupt, reflect its STATE in the DoSwitch call
+				DoSwitch(port, (causeAndState & (1 << port)) ? true : false, false);
 
-	// gate against messy tactile/physical switches
-	if ((long)(micros() - last_micros) >= (Details.debounceThresholdms * 1000))
-	{
-		// move the last seens along
-		memmove(&lastSwitchesSeen[0], &lastSwitchesSeen[1], sizeof(long)*RESET_ARRAY_SIZE -1 );
+#endif
 
-		// ask what changed
-		int causeAndState = readMCP23017_InterruptCauseAndState();
+#ifndef _IGNORE_BOUNCE_LOGIC
 
-		for (unsigned port = 0; port < 8; port++)
-		{
-			// +8 to get HIBYTE
-			if (causeAndState & (1 << (port+8)))
-				DoSwitch(port, (causeAndState & (1 << port))?true:false, false);
-		}
+				// remember the last 6 - i'm assuming we won't wrap
+				lastSwitchesSeen[port][RESET_ARRAY_SIZE - 1] = last_micros[port] = micros();
 
-		// remember the last 6 - i'm assuming we won't wrap
-		lastSwitchesSeen[RESET_ARRAY_SIZE - 1] = last_micros = micros();
-
-		if (lastSwitchesSeen[RESET_ARRAY_SIZE - 1] - lastSwitchesSeen[0] < Details.resetWindowms*1000)
-		{
-			resetWIFI = true;
+				if (lastSwitchesSeen[port][RESET_ARRAY_SIZE - 1] - lastSwitchesSeen[port][0] < Details.resetWindowms * 1000)
+				{
+					Serial.println("RESETTING WIFI!\n\r");
+					resetWIFI = true;
+				}
+			}
+#endif
 		}
 	}
-#endif
+
+
+
 
 	Serial.println("	OnSwitchISR out");
 
 }
 
+// honour current switch state
+void RevertAllSwitch()
+{
+	// get the switch state
+	for (int port = 0; port < NUM_SOCKETS; port++)
+	{
+		DoSwitch(port, readMCP23017_InputState(port), false);
+	}
+}
+
+// override switch state
 void DoAllSwitch(bool state)
 {
 	for (int port = 0; port < NUM_SOCKETS; port++)
@@ -161,19 +183,15 @@ void DoAllSwitch(bool state)
 }
 
 // do, portNumber is 0 thru 7
-void DoSwitch(int portNumber, bool on, bool inisr)
+// if forceSwitchToReflect change polarity of input switch if necessary to reflect this request
+void DoSwitch(int portNumber, bool on, bool forceSwitchToReflect)
 {
 	if (portNumber > 7 || portNumber < 0)
 		return;
 
-	Serial.println("DoSwitch IN");
+	Serial.printf("DoSwitch: port %d %s\r\n", portNumber, on?"ON":"off");
 
-	if(!inisr)
-		Serial.printf("DoSwitch: port %d %s\r\n", portNumber, on?"ON":"off");
-
-	writeMCP23017_OutputState(portNumber, on, inisr);
-
-	Serial.println("DoSwitch OUT");
+	writeMCP23017_OutputState(portNumber, on, forceSwitchToReflect);
 
 }
 
@@ -361,7 +379,8 @@ int readMCP23017_InterruptCauseAndState(bool justClearInterrupt)
 
 
 // A is in, B is out
-void writeMCP23017_OutputState(unsigned portNumber, bool portstate, bool inisr)
+// if forceSwitchToReflect change polarity of switch to reflect this call
+void writeMCP23017_OutputState(unsigned portNumber, bool portstate, bool forceSwitchToReflect)
 {
 
 	Wire.beginTransmission(MCPADDR);
@@ -371,12 +390,48 @@ void writeMCP23017_OutputState(unsigned portNumber, bool portstate, bool inisr)
 	Wire.requestFrom(MCPADDR, 1); // request one byte of data
 	byte state = Wire.read();
 
-	// get the existing state, mask out the bit we want
+	// get the existing state *of the relay*, mask out the bit we want
 	state = ((state& (~(1 << portNumber)))) & 0xff;
 
-	// then set the bit we're after (hi os OFF)
+	// then set the bit we're after (hi is OFF)
 	if(!portstate)
 		state = state | (1 << portNumber);
+
+	// if we have to force the switch to relect the current decision
+	if (forceSwitchToReflect)
+	{
+		// get the switch state for this port
+		bool switchState = readMCP23017_InputState(portNumber);
+
+		// thw switch does NOT mirror the request state
+		if(switchState != portstate)
+		{
+			Serial.println("switch does NOT reflect request - asked to alter");
+
+			// get polarity of A
+			Wire.beginTransmission(MCPADDR);
+			Wire.write(MCP_IOPOL_A); // IOPOLA register
+			Wire.endTransmission();
+
+			Wire.requestFrom(MCPADDR, 1); // request one byte of data
+			byte polarity = Wire.read();
+
+			Serial.printf("%02x -> ", polarity);
+
+			// flip the polarity bit for that switch
+			polarity ^= (1 << portNumber);
+
+			Serial.printf("%02x\n\r", polarity);
+
+			//Wire.beginTransmission(MCPADDR);
+			//Wire.write(MCP_IOPOL_A); // IOPOLA register
+			//Wire.write(polarity);
+			//Wire.endTransmission();
+
+		}
+
+
+	}
 
 	Wire.beginTransmission(MCPADDR);
 	Wire.write(MCP_GPIO_B); // GPIOB register
@@ -399,11 +454,19 @@ bool readMCP23017_InputState(unsigned portNumber)
 	return state & (1<<portNumber) ? true : false;
 }
 
-//#define MCP_BASIC
+
 
 // A is in, B is out
 void SetupMCP23017()
 {
+	// hold the reset pin down (0v reset)
+	pinMode(resetMCPpin, OUTPUT);
+	digitalWrite(resetMCPpin, LOW);
+	delay(100);
+	// high - fires the xistor
+	digitalWrite(resetMCPpin, HIGH);
+	delay(100);
+
 
 	// set up state
 	Wire.beginTransmission(MCPADDR);
@@ -423,13 +486,19 @@ void SetupMCP23017()
 		Wire.write(0xff); // set all of port A to pullup
 		Wire.endTransmission();
 
-#ifndef MCP_BASIC
+
 
 		// set interrupt to spot A changing
 		{
 
+			// turn polarity off
 			Wire.beginTransmission(MCPADDR);
-			Wire.write(0x06); // DEFVALA register
+			Wire.write(MCP_IOPOL_A); // IPOLA register
+			Wire.write(0x00); // set all of port A to 1:1
+			Wire.endTransmission();
+
+			Wire.beginTransmission(MCPADDR);
+			Wire.write(MCP_DEFVAL_A); // DEFVALA register
 			Wire.write(0x00); // intcona makes this redundant
 			Wire.endTransmission();
 
@@ -444,12 +513,6 @@ void SetupMCP23017()
 			Wire.endTransmission();
 
 		}
-
-#else
-
-
-
-#endif
 
 	}
 	
@@ -482,9 +545,14 @@ void setup(void)
 	// clean up the switch times
 	memset(&lastSwitchesSeen, 0, sizeof(lastSwitchesSeen));
 
+	// reset the bounce thresh-holds
+	for (int eachSwitch = 0; eachSwitch < NUM_SOCKETS; eachSwitch++)
+	{
+		last_micros[eachSwitch] = 0;
+	}
+
 	// start wire
 	Wire.begin(4, 5);
-
 
 	// start eeprom library
 	EEPROM.begin(512);
@@ -498,7 +566,7 @@ void setup(void)
 	EEPROM.get(0, Details);
 
 	String boilerPlate("<html><head><style type=\"text/css\">$$$STYLE$$$</style></head><body>$$BODY$$</body></html>");
-	String style("body {font: Arial; font-size: 2.5em;}");
+	String style("body {font: Arial; font-size: 20px;} .big{height:20px;width:100px;}");
 
 	boilerPlate.replace("$$$STYLE$$$", style);
 
@@ -511,8 +579,12 @@ void setup(void)
 
 	for (int socket = 0; socket < NUM_SOCKETS; socket++)
 	{
-		webPageSTAbody += String("<p>Socket ")+String(socket)+String("<a href=\"button?action=on&port=") +String(socket)+ String("\"><button>ON</button></a>&nbsp;<a href=\"button?action=off&port=") + String(socket) + String("\"><button>OFF</button></a></p>");
+		webPageSTAbody += String("<p>Socket ")+String(socket)+String("<a href=\"button?action=on&port=") +String(socket)+ String("\"><button class='big'>ON</button></a>&nbsp;<a href=\"button?action=off&port=") + String(socket) + String("\"><button  class='big'>OFF</button></a></p>");
 	}
+
+	webPageSTAbody += String("<p><a href='revert'>Revert All</a></p>");
+	webPageSTAbody += String("<p><a href='all?action=off'>All OFF</a></p>");
+	webPageSTAbody += String("<p><a href='all?action=on'>All ON</a></p>");
 
 	String webPageSTA = boilerPlate;
 	webPageSTA.replace("$$BODY$$", webPageSTAbody);
@@ -570,13 +642,14 @@ void setup(void)
 
 	});
 
+	// initialise the MCP
+	SetupMCP23017();
+
 
 	// preparing GPIOs
 	pinMode(inputSwitchPin, INPUT_PULLUP);
 	attachInterrupt((inputSwitchPin), OnSwitchISR, ONLOW);
 
-	// initialise the MCP
-	SetupMCP23017();
 
 	// default on
 	DoAllSwitch(true);
@@ -584,11 +657,32 @@ void setup(void)
 	// try to connect to the wifi
 	ConnectWifi(intent);
 
-	// default off
-	DoAllSwitch(false);
+	// honour current switch state
+	RevertAllSwitch();
+
+	server.on("/revert", [webPageSTA]() {
+
+		RevertAllSwitch();
+
+ 		server.send(200, "text/html", webPageSTA);
+	});
+
+	server.on("/all", [webPageSTA]() {
+
+		for (uint8_t i = 0; i < server.args(); i++)
+		{
+			if (server.argName(i) == "action")
+			{
+				DoAllSwitch(server.arg(i) == "on"?true:false);
+			}
+		}
+
+		server.send(200, "text/html", webPageSTA);
+	});
+
+
 
 	server.on("/button", [webPageSTA]() {
-		server.send(200, "text/html", webPageSTA);
 
 		String action, port;
 
@@ -609,6 +703,8 @@ void setup(void)
 		{
 			DoSwitch(port.toInt(), action == "on" ? true : false, false);
 		}
+
+		server.send(200, "text/html", webPageSTA);
 
 	});
 
