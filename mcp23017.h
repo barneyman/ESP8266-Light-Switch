@@ -48,9 +48,13 @@ public:
 	void SetRelay(unsigned relayNumber, bool relayState, bool forceSwitchToReflect);
 	// find out what caused the isr
 	int InterruptCauseAndCurrentState(bool justClearInterrupt);
+	// get all the switches
+	byte readAllSwitches();
 
 
 protected:
+	byte readOneRegister(byte command);
+	void writeOneRegister(byte command, byte theByte);
 
 	bool m_resetAvailable;
 	int m_sdaPin, m_sclPin, m_resetPin;

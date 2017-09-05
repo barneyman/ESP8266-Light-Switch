@@ -4,11 +4,6 @@
 #include <WiFiClient.h>
 #include <EEPROM.h>
 
-#define _USE_MCP_CLASS
-
-
-
-
 #include "mcp23017.h"
 
 
@@ -179,7 +174,7 @@ void DoSwitch(int portNumber, bool on, bool forceSwitchToReflect)
 	if (portNumber > 7 || portNumber < 0)
 		return;
 
-	Serial.printf("DoSwitch: port %d %s\r\n", portNumber, on?"ON":"off");
+	Serial.printf("DoSwitch: port %d %s %s\r\n", portNumber, on?"ON":"off", forceSwitchToReflect?"FORCE":"");
 
 	mcp.SetRelay(portNumber, on, forceSwitchToReflect);
 
@@ -349,11 +344,6 @@ void setup(void)
 		last_micros[eachSwitch] = 0;
 	}
 
-#ifndef _USE_MCP_CLASS
-	// start wire
-	Wire.begin(4, 5);
-#endif
-
 	// start eeprom library
 	EEPROM.begin(512);
 
@@ -443,20 +433,17 @@ void setup(void)
 	});
 
 	// initialise the MCP
-#ifdef _USE_MCP_CLASS
 	mcp.Initialise();
-#else
-	SetupMCP23017();
-#endif
 
 
 	// preparing GPIOs
 	pinMode(inputSwitchPin, INPUT_PULLUP);
-	attachInterrupt((inputSwitchPin), OnSwitchISR, ONLOW);
+	// the MCP interrupt is configured to fire on change, and goes LOW when fired
+	attachInterrupt(inputSwitchPin, OnSwitchISR, ONLOW);
 
 
 	// default on
-	DoAllSwitch(true);
+	DoAllSwitch(false);
 
 	// try to connect to the wifi
 	ConnectWifi(intent);
@@ -505,7 +492,7 @@ void setup(void)
 
 		if (action.length() && port.length())
 		{
-			DoSwitch(port.toInt(), action == "on" ? true : false, false);
+			DoSwitch(port.toInt(), action == "on" ? true : false, true);
 		}
 
 		server.send(200, "text/html", webPageSTA);
