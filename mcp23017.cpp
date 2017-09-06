@@ -69,9 +69,46 @@ void mcp23017::Initialise()
 	writeOneRegister(MCP_GPINTE_B, 0);// NO signal interrupt
 }
 
+void mcp23017::flipPolarityPort(int port)
+{
+#ifdef _IPOL_IN_SOFTWARE
+	Serial.printf("%02x -> ", m_polarity);
+	m_polarity ^= ((1 << port));
+	Serial.printf("%02x ", m_polarity);
+#else
+	// get polarity of A
+	byte polarity = readOneRegister(MCP_IPOL_A);
+
+	Serial.printf("%02x -> ", polarity);
+
+	// flip the polarity bit for that switch
+	polarity ^= (1 << port);
+
+	// enabling this line causes an ISR storm
+	writeOneRegister(MCP_IPOL_A, polarity);
+
+	Serial.printf("%02x ", polarity);
+
+#endif
+	Serial.println("written");
+
+}
+
+
 byte mcp23017::readAllSwitches()
 {
 	byte state = readOneRegister(MCP_GPIO_A);
+
+#ifdef _IPOL_IN_SOFTWARE
+
+	// flip the bits according to the polarity
+	for (int bits = 0; bits < 8; bits++)
+	{
+		if (m_polarity & (1 << bits))
+			state ^= ((1 << bits));
+	}
+
+#endif
 
 	return state;
 }
@@ -105,23 +142,7 @@ void mcp23017::SetRelay(unsigned relayNumber, bool relayState, bool forceSwitchT
 		// thw switch does NOT mirror the request state
 		if (switchState != relayState)
 		{
-			Serial.println("switch does NOT reflect request - asked to alter");
-
-			// get polarity of A
-			byte polarity = readOneRegister(MCP_IPOL_A);
-
-			Serial.printf("%02x -> ", polarity);
-
-			// flip the polarity bit for that switch
-			polarity ^= (1 << relayNumber);
-
-			Serial.printf("%02x ", polarity);
-			
-			// enabling this line causes an ISR storm
-			//writeOneRegister(MCP_IPOL_A, polarity);
-
-
-			Serial.println("written");
+			flipPolarityPort(relayNumber);
 		}
 	}
 

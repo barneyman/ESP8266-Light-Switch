@@ -164,7 +164,7 @@ void RevertAllSwitch()
 void DoAllSwitch(bool state)
 {
 	for (int port = 0; port < NUM_SOCKETS; port++)
-		DoSwitch(port, state, false);
+		DoSwitch(port, state, true);
 }
 
 // do, portNumber is 0 thru 7
