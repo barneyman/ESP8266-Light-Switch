@@ -17,6 +17,12 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
+# eagle tmp files
+*.b#?
+*.s#?
+
+
+
 # =========================
 # Operating System Files
 # =========================
