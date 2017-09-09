@@ -2,12 +2,26 @@
 #include <ESP8266WebServer.h>
 #include <ESP8266mDNS.h>
 #include <WiFiClient.h>
-#include <EEPROM.h>
 
 #include "mcp23017.h"
 
+// use eiher the flash or SIFFS
+// if you use FLASH, you'll have to build/upload with _INITIALISE_EEPROM set once, then upload WITHOUT it set (or the eeprom will be erased every boot = BAD)
+// if you use SIFFS you'll have to upload the config.json file in the data directory
+
+#define _USE_JSON_NOT_EEPROM
+
+#ifdef _USE_JSON_NOT_EEPROM
+#include <ArduinoJson.h>
+#include <FS.h>
+//#define _ERASE_JSON_CONFIG
+#define _JSON_CONFIG_FILE "/config.json"
+#else
 // run it ONCE with this flag set, just to write sane values into the EEPROM
 //#define _INITIALISE_EEPROM
+#include <EEPROM.h>
+#endif
+
 
 
 extern "C" {
@@ -30,17 +44,22 @@ struct
 	// store network credentials in eeprom
 	struct
 	{
+#ifdef _USE_JSON_NOT_EEPROM
+		String ssid;
+		String password;
+#else
 		char ssid[128];
 		char password[128];
+#endif
 		bool configured;
 
 	} wifi;
 
 	// how long to wait for the light switch to settle
-	long debounceThresholdms;
+	unsigned long debounceThresholdms;
 
 	// 6 switches in this time force an AP reset
-	long resetWindowms;
+	unsigned long resetWindowms;
 
 } Details;
 
@@ -179,7 +198,7 @@ void OnSwitchISR()
 		}
 	}
 
-	DEBUG(DEBUG_VERBOSE, Serial.println("	OnSwitchISR out"));
+	DEBUG(DEBUG_VERBOSE, Serial.println("OnSwitchISR out"));
 
 }
 
@@ -216,6 +235,109 @@ void DoSwitch(int portNumber, bool on, bool forceSwitchToReflect)
 
 }
 
+#ifdef _USE_JSON_NOT_EEPROM
+
+void WriteJSON(bool apset, const char *ssid, const char *pwd, long bounce, long reset)
+{
+	DEBUG(DEBUG_INFO, Serial.println("WriteJSON"));
+
+	Details.debounceThresholdms = bounce;
+	Details.resetWindowms = reset;
+	Details.wifi.configured = apset;
+
+	Details.wifi.password = pwd?pwd:String();
+	Details.wifi.ssid = ssid?ssid:String();
+
+	// first - see if the file is there
+	fs::File json = SPIFFS.open("/config.json", "w");
+
+	if (!json)
+	{
+		DEBUG(DEBUG_ERROR, Serial.println("failed to create json"));
+		return;
+	}
+
+	StaticJsonBuffer<1024> jsonBuffer;
+
+	JsonObject &root=jsonBuffer.createObject();
+
+	root["debounceThresholdms"]= Details.debounceThresholdms;
+	root["resetWindowms"]=Details.resetWindowms;
+
+	JsonObject &wifi = root.createNestedObject("wifi");
+
+	wifi["configured"]=Details.wifi.configured;
+	if (Details.wifi.configured)
+	{
+		wifi["password"]=Details.wifi.password;
+		wifi["ssid"]=Details.wifi.ssid;
+	}
+
+	String jsonText;
+	root.prettyPrintTo(jsonText);
+
+	DEBUG(DEBUG_VERBOSE, Serial.printf("JSON : %s\n\r",jsonText.c_str()));
+
+	json.write((byte*)jsonText.c_str(),jsonText.length());
+	
+	json.close();
+}
+
+void ReadJSON()
+{
+	DEBUG(DEBUG_IMPORTANT, Serial.println("ReadJSON"));
+
+#ifdef _ERASE_JSON_CONFIG
+	SPIFFS.remove(_JSON_CONFIG_FILE);
+#endif
+
+	if (!SPIFFS.exists(_JSON_CONFIG_FILE))
+	{
+		DEBUG(DEBUG_IMPORTANT, Serial.println("Config.json does not exist"));
+		// file does not exist
+		WriteJSON(false, NULL, NULL, BOUNCE_TIMEOUT_DEFAULT, QUICK_SWITCH_TIMEOUT_DEFAULT);
+
+		return;
+
+	}
+	// first - see if the file is there
+	fs::File json = SPIFFS.open(_JSON_CONFIG_FILE, "r");
+
+	String jsonString=json.readString();
+
+	DEBUG(DEBUG_INFO, Serial.printf("JSON: %s\n\r",jsonString.c_str()));
+
+	StaticJsonBuffer<1024> jsonBuffer;
+
+	JsonObject& root = jsonBuffer.parseObject(jsonString);
+	
+	if (!root.success())
+	{
+		DEBUG(DEBUG_ERROR, Serial.println("JSON parse failed"));
+		WriteJSON(false, NULL, NULL, Details.debounceThresholdms, Details.resetWindowms);
+	}
+
+	Details.debounceThresholdms=root["debounceThresholdms"];
+	Details.resetWindowms=root["resetWindowms"];
+
+	JsonObject &wifi = root["wifi"];
+
+	Details.wifi.configured = wifi["configured"];
+	if (Details.wifi.configured)
+	{
+		Details.wifi.password = (const char*)(wifi["password"]);
+		Details.wifi.ssid = (const char*)(wifi["ssid"]);
+	}
+	else
+	{
+		Details.wifi.password = String();
+		Details.wifi.ssid = String();
+	}
+
+}
+
+
+#else
 
 void WriteEeprom(bool apset,const char *ssid,const char *pwd, long bounce, long reset)
 {
@@ -242,6 +364,8 @@ void WriteEeprom(bool apset,const char *ssid,const char *pwd, long bounce, long 
 	EEPROM.commit();
 
 }
+
+#endif
 
 
 void BeginWebServer()
@@ -287,7 +411,12 @@ void ConnectWifi(wifiMode intent)
 		DEBUG(DEBUG_VERBOSE, Serial.println(Details.wifi.ssid));
 
 		WiFi.mode(WIFI_STA);
+
+#ifdef _USE_JSON_NOT_EEPROM
+		WiFi.begin(Details.wifi.ssid.c_str(), Details.wifi.password.c_str());
+#else
 		WiFi.begin(Details.wifi.ssid, Details.wifi.password);
+#endif
 
 		// Wait for connection
 		for(int attempts=0;attempts<15;attempts++)
@@ -305,10 +434,8 @@ void ConnectWifi(wifiMode intent)
 		{
 
 			DEBUG(DEBUG_INFO, Serial.println(""));
-			DEBUG(DEBUG_INFO, Serial.print("Connected to "));
-			DEBUG(DEBUG_INFO, Serial.println(Details.wifi.ssid));
-			DEBUG(DEBUG_INFO, Serial.print("IP address: "));
-			DEBUG(DEBUG_IMPORTANT, Serial.println(WiFi.localIP()));
+			DEBUG(DEBUG_INFO, Serial.printf("Connected to %s\n\r", Details.wifi.ssid.c_str()));
+			DEBUG(DEBUG_INFO, Serial.printf("IP address: %s\n\r", WiFi.localIP().toString().c_str()));
 
 			WiFi.setAutoReconnect(true);
 
@@ -324,7 +451,7 @@ void ConnectWifi(wifiMode intent)
 		WiFi.mode(WIFI_AP);
 		WiFi.softAP(esphostname.c_str());
 
-		DEBUG(DEBUG_IMPORTANT, Serial.printf("Started AP %s", WiFi.softAPIP().toString().c_str()));
+		DEBUG(DEBUG_IMPORTANT, Serial.printf("Started AP %s\n\r", WiFi.softAPIP().toString().c_str()));
 	
 		currentMode = wifiMode::modeAP;
 
@@ -362,8 +489,11 @@ void ResetMe()
 
 	resetWIFI = false;
 	// clear the credentials
+#ifdef _USE_JSON_NOT_EEPROM
+	WriteJSON(false, NULL, NULL, Details.debounceThresholdms, Details.resetWindowms);
+#else
 	WriteEeprom(false, NULL, NULL, Details.debounceThresholdms, Details.resetWindowms);
-
+#endif
 	// and reconnect as an AP
 	ConnectWifi(wifiMode::modeAP);
 
@@ -393,6 +523,17 @@ void setup(void)
 	}
 #endif
 
+	// mandatory "let it settle" delay
+	delay(1000);
+	Serial.begin(115200);
+
+#ifdef _USE_JSON_NOT_EEPROM
+
+	SPIFFS.begin();
+
+	ReadJSON();
+
+#else
 	// start eeprom library
 	EEPROM.begin(512);
 
@@ -403,6 +544,9 @@ void setup(void)
 	// try reading the eeprom
 	// the marker is to spot virgin EEPROM (can i vape it on a build?)
 	EEPROM.get(0, Details);
+
+#endif
+
 
 	String boilerPlate("<html><head><style type=\"text/css\">$$$STYLE$$$</style></head><body>$$BODY$$</body></html>");
 	String style("body {font: Arial; font-size: 20px;} .big{height:20px;width:100px;}");
@@ -441,14 +585,11 @@ void setup(void)
 
 	webPageAPtry += "trying";
 
-	// mandatory "let it settle" delay
-	delay(1000);
-	Serial.begin(115200);
 
 	DEBUG(DEBUG_VERBOSE, Serial.println("starting"));
 	DEBUG(DEBUG_IMPORTANT, Serial.println(esphostname));
-	DEBUG(DEBUG_VERBOSE, Serial.print("bounce "); Serial.println(Details.debounceThresholdms));
-	DEBUG(DEBUG_VERBOSE, Serial.print("reset "); Serial.println(Details.resetWindowms));
+	DEBUG(DEBUG_VERBOSE, Serial.printf("bounce %lu\n\r",Details.debounceThresholdms));
+	DEBUG(DEBUG_VERBOSE, Serial.printf("reset %lu\n\r",Details.resetWindowms));
 
 	enum wifiMode intent = wifiMode::modeUnknown;
 
@@ -599,8 +740,11 @@ void setup(void)
 
 			}
 		} 
-
+#ifdef _USE_JSON_NOT_EEPROM
+		WriteJSON(true, ssid.c_str(), pwd.c_str(), bounce, reset);
+#else
 		WriteEeprom(true, ssid.c_str(), pwd.c_str(), bounce, reset);
+#endif
 
 		// force attempt
 		ConnectWifi(wifiMode::modeSTA);
