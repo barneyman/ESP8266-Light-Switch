@@ -77,7 +77,7 @@ mcp23017 mcp(4, 5, resetMCPpin);
 #define NUM_SOCKETS	6
 
 
-//#define _RESET_VIA_QUICK_SWITCH
+#define _RESET_VIA_QUICK_SWITCH
 //#define _IGNORE_BOUNCE_LOGIC	
 
 #ifndef _IGNORE_BOUNCE_LOGIC
@@ -92,7 +92,7 @@ mcp23017 mcp(4, 5, resetMCPpin);
 
 	// millis timeouts
 #define QUICK_SWITCH_TIMEOUT_DEFAULT	3000
-#define BOUNCE_TIMEOUT_DEFAULT			250
+#define BOUNCE_TIMEOUT_DEFAULT			100
 
 
 
@@ -122,9 +122,12 @@ void OnSwitchISR()
 		if (causeAndState & (1 << (port + 8)))
 		{
 
+#if defined(_RESET_VIA_QUICK_SWITCH) || !defined(_IGNORE_BOUNCE_LOGIC)
+			unsigned long now = micros(), interval=0;
+#endif
+
 #ifndef _IGNORE_BOUNCE_LOGIC
 			// gate against messy tactile/physical switches
-			unsigned long now = micros(), interval=0;
 			interval = now - last_micros[port];
 
 			DEBUG(DEBUG_WARN, Serial.printf("%lu ms ", interval / 1000UL));
@@ -135,12 +138,13 @@ void OnSwitchISR()
 #ifdef _RESET_VIA_QUICK_SWITCH
 				// move the last seens along
 				memmove(&lastSwitchesSeen[port][0], &lastSwitchesSeen[port][1], sizeof(lastSwitchesSeen[port][1])*RESET_ARRAY_SIZE - 1);
+				lastSwitchesSeen[port][RESET_ARRAY_SIZE - 1] =now/1000;
 
 				DEBUG(DEBUG_INFO, Serial.printf("lastSwitchesSeen "));
 
 				for (int each = 0; each < NUM_SOCKETS; each++)
 				{
-					DEBUG(DEBUG_INFO, Serial.printf("%lx ", lastSwitchesSeen[port][each]));
+					DEBUG(DEBUG_INFO, Serial.printf("%lu ", lastSwitchesSeen[port][each]));
 				}
 
 				DEBUG(DEBUG_INFO, Serial.printf("\n\r"));
@@ -154,12 +158,14 @@ void OnSwitchISR()
 #ifdef _RESET_VIA_QUICK_SWITCH
 
 				// remember the last 6 - i'm assuming we won't wrap
-				lastSwitchesSeen[port][RESET_ARRAY_SIZE - 1] = micros();
-
-				if (lastSwitchesSeen[port][RESET_ARRAY_SIZE - 1] - lastSwitchesSeen[port][0] < Details.resetWindowms * 1000)
+				// only reset if we're currently STA
+				if (currentMode == wifiMode::modeSTA)
 				{
-					DEBUG(DEBUG_WARN, Serial.println("RESETTING WIFI!\n\r"));
-					resetWIFI = true;
+					if (lastSwitchesSeen[port][RESET_ARRAY_SIZE - 1] - lastSwitchesSeen[port][0] < (Details.resetWindowms))
+					{
+						DEBUG(DEBUG_WARN, Serial.println("RESETTING WIFI!\n\r"));
+						resetWIFI = true;
+					}
 				}
 #endif
 			}
@@ -302,18 +308,7 @@ void ConnectWifi(wifiMode intent)
 			DEBUG(DEBUG_INFO, Serial.print("Connected to "));
 			DEBUG(DEBUG_INFO, Serial.println(Details.wifi.ssid));
 			DEBUG(DEBUG_INFO, Serial.print("IP address: "));
-			DEBUG(DEBUG_INFO, Serial.println(WiFi.localIP()));
-
-//todo does this work!
-
-			if (mdns.begin(esphostname.c_str(), WiFi.localIP()))
-			{
-				DEBUG(DEBUG_INFO, Serial.println("MDNS responder started"));
-			}
-			else
-			{
-				DEBUG(DEBUG_ERROR, Serial.println("MDNS responder failed"));
-			}
+			DEBUG(DEBUG_IMPORTANT, Serial.println(WiFi.localIP()));
 
 			WiFi.setAutoReconnect(true);
 
@@ -329,13 +324,14 @@ void ConnectWifi(wifiMode intent)
 		WiFi.mode(WIFI_AP);
 		WiFi.softAP(esphostname.c_str());
 
-		DEBUG(DEBUG_INFO, Serial.println("Started hostname AP"));
-		DEBUG(DEBUG_INFO, Serial.println(WiFi.softAPIP().toString()));
+		DEBUG(DEBUG_IMPORTANT, Serial.printf("Started AP %s", WiFi.softAPIP().toString().c_str()));
 	
 		currentMode = wifiMode::modeAP;
 
 
 	}
+
+	BeginMDNSServer();
 
 	BeginWebServer();
 
@@ -345,6 +341,19 @@ void ConnectWifi(wifiMode intent)
 
 // if we see more than x switches in y time, we reset the flash and enter AP mode (so we can be joined to another wifi network)
 
+void BeginMDNSServer()
+{
+	if (mdns.begin(esphostname.c_str()))
+	{
+		mdns.addService("http", "tcp", 80);
+		DEBUG(DEBUG_IMPORTANT, Serial.printf("MDNS responder started http://%s.local/\n\r", esphostname.c_str()));
+	}
+	else
+	{
+		DEBUG(DEBUG_ERROR, Serial.println("MDNS responder failed"));
+	}
+
+}
 
 #ifdef _RESET_VIA_QUICK_SWITCH
 void ResetMe()
