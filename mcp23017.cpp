@@ -10,7 +10,7 @@
 byte mcp23017::readOneRegister(byte command)
 {
 	m_wire.beginTransmission(MCPADDR);
-	m_wire.write(command); // GPIOB register
+	m_wire.write(command); // register
 	m_wire.endTransmission();
 
 	m_wire.requestFrom(MCPADDR, 1); // request one byte of data
@@ -22,7 +22,7 @@ byte mcp23017::readOneRegister(byte command)
 void mcp23017::writeOneRegister(byte command, byte theByte)
 {
 	m_wire.beginTransmission(MCPADDR);
-	m_wire.write(command); // GPIOB register
+	m_wire.write(command); // register
 	m_wire.write(theByte);
 	m_wire.endTransmission();
 
@@ -42,6 +42,16 @@ void mcp23017::Initialise()
 	}
 
 	writeOneRegister(MCP_IOCAN_A, 0x20 | 0x8); // BANK0(0) MIRROR0(0) SEQOPoff(20) DISSLWoff(0) HAENoff(8) ODRoff(0) INTPOLoff(0)
+
+	// make all B ports output
+	{
+		writeOneRegister(MCP_GPIO_B, 0xff);// set all B ports (hi is off)
+
+		writeOneRegister(MCP_IODIR_B, 0);// set all of port B to outputs
+
+		writeOneRegister(MCP_GPINTE_B, 0);// NO signal interrupt
+	}
+
 
 	// we are going to use A as INs, pullup
 	{
@@ -66,10 +76,6 @@ void mcp23017::Initialise()
 		}
 
 	}
-
-	writeOneRegister(MCP_IODIR_B, 0);// set all of port B to outputs
-
-	writeOneRegister(MCP_GPINTE_B, 0);// NO signal interrupt
 }
 
 void mcp23017::flipPolarityPort(int port)
