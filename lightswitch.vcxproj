@@ -74,6 +74,7 @@
     </None>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="debug_defines.h" />
     <ClInclude Include="mcp23017.h" />
     <ClInclude Include="__vm\.lightswitch.vsarduino.h" />
   </ItemGroup>

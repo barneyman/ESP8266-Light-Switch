@@ -62,7 +62,7 @@ public:
 	// find out what caused the isr
 	int InterruptCauseAndCurrentState(bool justClearInterrupt);
 	// get all the switches
-	byte readAllSwitches();
+	byte readAllSwitches(bool readInterrupt=false);
 
 
 protected:

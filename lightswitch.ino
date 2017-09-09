@@ -6,12 +6,20 @@
 
 #include "mcp23017.h"
 
+// run it ONCE with this flag set, just to write sane values into the EEPROM
+//#define _INITIALISE_EEPROM
+
 
 extern "C" {
 
 #include <user_interface.h>		// for system_get_chip_id();
 
 }
+
+
+#include "debug_defines.h"
+
+
 
 // we run MDNS so we can be found by "esp8266_<last 3 bytes of MAC address>.local" by the RPI
 MDNSResponder mdns;
@@ -48,7 +56,6 @@ String esphostname = "esp8266_";
 enum wifiMode { modeAP, modeSTA, modeUnknown } ;
 wifiMode currentMode = modeUnknown;
 
-bool resetWIFI = false;
 
 void ConnectWifi(wifiMode intent);
 
@@ -69,26 +76,38 @@ mcp23017 mcp(4, 5, resetMCPpin);
 // number of relays & switches
 #define NUM_SOCKETS	6
 
-long last_micros[NUM_SOCKETS];
 
-#define RESET_ARRAY_SIZE 6
-long lastSwitchesSeen[NUM_SOCKETS][RESET_ARRAY_SIZE];
+//#define _RESET_VIA_QUICK_SWITCH
+//#define _IGNORE_BOUNCE_LOGIC	
+
+#ifndef _IGNORE_BOUNCE_LOGIC
+	unsigned long last_micros[NUM_SOCKETS];
+#endif
+
+#ifdef _RESET_VIA_QUICK_SWITCH
+	#define RESET_ARRAY_SIZE 6
+	unsigned long lastSwitchesSeen[NUM_SOCKETS][RESET_ARRAY_SIZE];
+	bool resetWIFI = false;
+#endif
+
+	// millis timeouts
+#define QUICK_SWITCH_TIMEOUT_DEFAULT	3000
+#define BOUNCE_TIMEOUT_DEFAULT			250
 
 
-#define _IGNORE_BOUNCE_LOGIC	
 
 void OnSwitchISR()
 {
 	// if we're up to our neck in something else (normally WIFI negotiation) ignore this
 	if (busyDoingSomethingIgnoreSwitch)
 	{
-		Serial.println("	OnSwitchISR redundant");
+		DEBUG(DEBUG_WARN, Serial.println("	OnSwitchISR redundant"));
 		// ask what changed, clear interrupt
 		mcp.InterruptCauseAndCurrentState(true);
 		return;
 	}
 
-	Serial.println("	OnSwitchISR in");
+	DEBUG(DEBUG_VERBOSE, Serial.println("	OnSwitchISR in"));
 
 
 	// ask what changed, clear interrupt
@@ -97,53 +116,64 @@ void OnSwitchISR()
 
 	for (unsigned port = 0; port < NUM_SOCKETS; port++)
 	{
-		Serial.printf("Checking port %d\r\n",port);
+		DEBUG(DEBUG_VERBOSE,Serial.printf("Checking port %d\r\n",port));
+
 		// +8 to get HIBYTE to see if this port CAUSED the interrupt
 		if (causeAndState & (1 << (port + 8)))
 		{
 
 #ifndef _IGNORE_BOUNCE_LOGIC
 			// gate against messy tactile/physical switches
-			if ((long)(micros() - last_micros[port]) >= (Details.debounceThresholdms * 1000))
-			{
-				// move the last seens along
-				memmove(&lastSwitchesSeen[port][0], &lastSwitchesSeen[port][1], sizeof(long)*RESET_ARRAY_SIZE - 1);
+			unsigned long now = micros(), interval=0;
+			interval = now - last_micros[port];
 
-				Serial.printf("lastSwitchesSeen ");
+			DEBUG(DEBUG_WARN, Serial.printf("%lu ms ", interval / 1000UL));
+
+			if (interval >= (unsigned long)(Details.debounceThresholdms * 1000))
+#endif
+			{
+#ifdef _RESET_VIA_QUICK_SWITCH
+				// move the last seens along
+				memmove(&lastSwitchesSeen[port][0], &lastSwitchesSeen[port][1], sizeof(lastSwitchesSeen[port][1])*RESET_ARRAY_SIZE - 1);
+
+				DEBUG(DEBUG_INFO, Serial.printf("lastSwitchesSeen "));
 
 				for (int each = 0; each < NUM_SOCKETS; each++)
 				{
-					Serial.printf("%lx ", lastSwitchesSeen[port][each]);
+					DEBUG(DEBUG_INFO, Serial.printf("%lx ", lastSwitchesSeen[port][each]));
 				}
 
-				Serial.printf("\n\r");
+				DEBUG(DEBUG_INFO, Serial.printf("\n\r"));
+#endif
 
-
-#else
 				// having CAUSED the interrupt, reflect its STATE in the DoSwitch call
 				DoSwitch(port, (causeAndState & (1 << port)) ? true : false, false);
 
-#endif
 
-#ifndef _IGNORE_BOUNCE_LOGIC
+
+#ifdef _RESET_VIA_QUICK_SWITCH
 
 				// remember the last 6 - i'm assuming we won't wrap
-				lastSwitchesSeen[port][RESET_ARRAY_SIZE - 1] = last_micros[port] = micros();
+				lastSwitchesSeen[port][RESET_ARRAY_SIZE - 1] = micros();
 
 				if (lastSwitchesSeen[port][RESET_ARRAY_SIZE - 1] - lastSwitchesSeen[port][0] < Details.resetWindowms * 1000)
 				{
-					Serial.println("RESETTING WIFI!\n\r");
+					DEBUG(DEBUG_WARN, Serial.println("RESETTING WIFI!\n\r"));
 					resetWIFI = true;
 				}
+#endif
 			}
+#ifndef _IGNORE_BOUNCE_LOGIC
+			else
+			{
+				DEBUG(DEBUG_WARN, Serial.printf("bounce ignored\n\r"));
+			}
+			last_micros[port] = now;
 #endif
 		}
 	}
 
-
-
-
-	Serial.println("	OnSwitchISR out");
+	DEBUG(DEBUG_VERBOSE, Serial.println("	OnSwitchISR out"));
 
 }
 
@@ -161,10 +191,10 @@ void RevertAllSwitch()
 }
 
 // override switch state
-void DoAllSwitch(bool state)
+void DoAllSwitch(bool state, bool force)
 {
 	for (int port = 0; port < NUM_SOCKETS; port++)
-		DoSwitch(port, state, true);
+		DoSwitch(port, state, force);
 }
 
 // do, portNumber is 0 thru 7
@@ -174,7 +204,7 @@ void DoSwitch(int portNumber, bool on, bool forceSwitchToReflect)
 	if (portNumber > 7 || portNumber < 0)
 		return;
 
-	Serial.printf("DoSwitch: port %d %s %s\r\n", portNumber, on?"ON":"off", forceSwitchToReflect?"FORCE":"");
+	DEBUG(DEBUG_IMPORTANT, Serial.printf("DoSwitch: port %d %s %s\r\n", portNumber, on?"ON":"off", forceSwitchToReflect?"FORCE":""));
 
 	mcp.SetRelay(portNumber, on, forceSwitchToReflect);
 
@@ -183,9 +213,9 @@ void DoSwitch(int portNumber, bool on, bool forceSwitchToReflect)
 
 void WriteEeprom(bool apset,const char *ssid,const char *pwd, long bounce, long reset)
 {
-	Serial.println("Writing EEPROM");
-	Serial.println(bounce);
-	Serial.println(reset);
+	DEBUG(DEBUG_VERBOSE, Serial.println("Writing EEPROM"));
+	DEBUG(DEBUG_VERBOSE, Serial.println(bounce));
+	DEBUG(DEBUG_VERBOSE, Serial.println(reset));
 
 	Details.wifi.configured = apset;
 	if(apset)
@@ -211,7 +241,7 @@ void WriteEeprom(bool apset,const char *ssid,const char *pwd, long bounce, long 
 void BeginWebServer()
 {
 	server.begin();
-	Serial.println("HTTP server started");
+	DEBUG(DEBUG_INFO, Serial.println("HTTP server started"));
 }
 
 // disjoin and rejoin, optionally force a STA attempt
@@ -221,7 +251,7 @@ void ConnectWifi(wifiMode intent)
 
 	WiFi.persistent(false);
 
-	Serial.println("ConnectWifi");
+	DEBUG(DEBUG_INFO, Serial.println("ConnectWifi"));
 
 	// turn off wifi
 	switch (currentMode)
@@ -239,7 +269,7 @@ void ConnectWifi(wifiMode intent)
 
 	delay(1000);
 
-	Serial.println("disconnected");
+	DEBUG(DEBUG_WARN, Serial.println("wifi disconnected"));
 
 
 	if (intent == wifiMode::modeSTA)
@@ -247,8 +277,8 @@ void ConnectWifi(wifiMode intent)
 		currentMode = wifiMode::modeSTA;
 
 		// turn bonjour off??
-		Serial.print("Attempting connect to ");
-		Serial.println(Details.wifi.ssid);
+		DEBUG(DEBUG_VERBOSE, Serial.print("Attempting connect to "));
+		DEBUG(DEBUG_VERBOSE, Serial.println(Details.wifi.ssid));
 
 		WiFi.mode(WIFI_STA);
 		WiFi.begin(Details.wifi.ssid, Details.wifi.password);
@@ -259,9 +289,7 @@ void ConnectWifi(wifiMode intent)
 			if (WiFi.status() != WL_CONNECTED) 
 			{
 				delay(1000);
-				// flash the light, simply as feedback
-				// ToggleSwitch();
-				Serial.print(".");
+				DEBUG(DEBUG_VERBOSE, Serial.print("."));
 			}
 			else
 				break;
@@ -270,39 +298,46 @@ void ConnectWifi(wifiMode intent)
 		if (WiFi.status() == WL_CONNECTED)
 		{
 
-			Serial.println("");
-			Serial.print("Connected to ");
-			Serial.println(Details.wifi.ssid);
-			Serial.print("IP address: ");
-			Serial.println(WiFi.localIP());
+			DEBUG(DEBUG_INFO, Serial.println(""));
+			DEBUG(DEBUG_INFO, Serial.print("Connected to "));
+			DEBUG(DEBUG_INFO, Serial.println(Details.wifi.ssid));
+			DEBUG(DEBUG_INFO, Serial.print("IP address: "));
+			DEBUG(DEBUG_INFO, Serial.println(WiFi.localIP()));
+
+//todo does this work!
 
 			if (mdns.begin(esphostname.c_str(), WiFi.localIP()))
 			{
-				Serial.println("MDNS responder started");
+				DEBUG(DEBUG_INFO, Serial.println("MDNS responder started"));
+			}
+			else
+			{
+				DEBUG(DEBUG_ERROR, Serial.println("MDNS responder failed"));
 			}
 
 			WiFi.setAutoReconnect(true);
 
-			BeginWebServer();
 		}
 	}
 
 	if (intent == wifiMode::modeAP)
 	{
 		// defaults to 192.168.4.1
-		Serial.println("Attempting to start AP");
+		DEBUG(DEBUG_INFO, Serial.println("Attempting to start AP"));
 
 		// we were unable to connect, so start our own access point
 		WiFi.mode(WIFI_AP);
 		WiFi.softAP(esphostname.c_str());
 
-		Serial.println("Started hostname AP");
-		Serial.println(WiFi.softAPIP().toString());
+		DEBUG(DEBUG_INFO, Serial.println("Started hostname AP"));
+		DEBUG(DEBUG_INFO, Serial.println(WiFi.softAPIP().toString()));
 	
 		currentMode = wifiMode::modeAP;
 
 
 	}
+
+	BeginWebServer();
 
 	busyDoingSomethingIgnoreSwitch = false;
 
@@ -310,9 +345,11 @@ void ConnectWifi(wifiMode intent)
 
 // if we see more than x switches in y time, we reset the flash and enter AP mode (so we can be joined to another wifi network)
 
+
+#ifdef _RESET_VIA_QUICK_SWITCH
 void ResetMe()
 {
-	Serial.println("resetting");
+	DEBUG(DEBUG_WARN, Serial.println("Resetting"));
 
 	resetWIFI = false;
 	// clear the credentials
@@ -323,11 +360,10 @@ void ResetMe()
 
 }
 
+#endif
 
 
 
-// run it ONCE with this flag set, just to write sane values into the EEPROM
-//#define _INITIALISE_EEPROM
 
 void setup(void) 
 {
@@ -335,20 +371,24 @@ void setup(void)
 	sprintf(idstr,"%0x", system_get_chip_id());
 	esphostname += idstr;
 
+#ifdef _RESET_VIA_QUICK_SWITCH
 	// clean up the switch times
 	memset(&lastSwitchesSeen, 0, sizeof(lastSwitchesSeen));
+#endif
 
 	// reset the bounce thresh-holds
+#ifndef _IGNORE_BOUNCE_LOGIC
 	for (int eachSwitch = 0; eachSwitch < NUM_SOCKETS; eachSwitch++)
 	{
 		last_micros[eachSwitch] = 0;
 	}
+#endif
 
 	// start eeprom library
 	EEPROM.begin(512);
 
 #ifdef _INITIALISE_EEPROM
-	WriteEeprom(false, NULL, NULL, 250,3000);
+	WriteEeprom(false, NULL, NULL, BOUNCE_TIMEOUT_DEFAULT, QUICK_SWITCH_TIMEOUT_DEFAULT);
 #endif
 
 	// try reading the eeprom
@@ -395,23 +435,24 @@ void setup(void)
 	// mandatory "let it settle" delay
 	delay(1000);
 	Serial.begin(115200);
-	Serial.println("starting");
-	Serial.println(esphostname);
-	Serial.print("bounce "); Serial.println(Details.debounceThresholdms);
-	Serial.print("reset "); Serial.println(Details.resetWindowms);
+
+	DEBUG(DEBUG_VERBOSE, Serial.println("starting"));
+	DEBUG(DEBUG_IMPORTANT, Serial.println(esphostname));
+	DEBUG(DEBUG_VERBOSE, Serial.print("bounce "); Serial.println(Details.debounceThresholdms));
+	DEBUG(DEBUG_VERBOSE, Serial.print("reset "); Serial.println(Details.resetWindowms));
 
 	enum wifiMode intent = wifiMode::modeUnknown;
 
 	if (Details.wifi.configured)
 	{
-		Serial.println("credentials found");
-		Serial.println(Details.wifi.ssid);
-		Serial.println(Details.wifi.password);
+		DEBUG(DEBUG_INFO, Serial.println("credentials found"));
+		DEBUG(DEBUG_VERBOSE, Serial.println(Details.wifi.ssid));
+		DEBUG(DEBUG_VERBOSE, Serial.println(Details.wifi.password));
 		intent = wifiMode::modeSTA;
 	}
 	else
 	{
-		Serial.println("no stored credentials");
+		DEBUG(DEBUG_WARN, Serial.println("no stored credentials"));
 		intent = wifiMode::modeAP;
 
 	}
@@ -420,14 +461,14 @@ void setup(void)
 	// set callbacks for wifi
 	onConnect=WiFi.onStationModeConnected([](const WiFiEventStationModeConnected&c) {
 	
-		Serial.print("EVENT connected ");
+		DEBUG(DEBUG_IMPORTANT, Serial.println("EVENT wifi connected"));
 		//Serial.println(c.ssid);
 
 	});
 
 	onDisconnect=WiFi.onStationModeDisconnected([](const WiFiEventStationModeDisconnected &c) {
 	
-		Serial.print("EVENT disconnected ");
+		DEBUG(DEBUG_WARN, Serial.println("EVENT disconnected "));
 		//Serial.println(c.ssid);
 
 	});
@@ -442,8 +483,8 @@ void setup(void)
 	attachInterrupt(inputSwitchPin, OnSwitchISR, ONLOW);
 
 
-	// default on
-	DoAllSwitch(false);
+	// default off, and don't force switches
+	DoAllSwitch(false,false);
 
 	// try to connect to the wifi
 	ConnectWifi(intent);
@@ -464,7 +505,7 @@ void setup(void)
 		{
 			if (server.argName(i) == "action")
 			{
-				DoAllSwitch(server.arg(i) == "on"?true:false);
+				DoAllSwitch(server.arg(i) == "on"?true:false,true);
 			}
 		}
 
@@ -562,8 +603,10 @@ void setup(void)
 
 void loop(void) 
 {
+#ifdef _RESET_VIA_QUICK_SWITCH
 	if (resetWIFI)
 		ResetMe();
+#endif
 
 	
 	server.handleClient();

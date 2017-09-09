@@ -4,6 +4,9 @@
 
 #include "mcp23017.h"
 
+#include "debug_defines.h"
+
+
 byte mcp23017::readOneRegister(byte command)
 {
 	m_wire.beginTransmission(MCPADDR);
@@ -72,14 +75,14 @@ void mcp23017::Initialise()
 void mcp23017::flipPolarityPort(int port)
 {
 #ifdef _IPOL_IN_SOFTWARE
-	Serial.printf("%02x -> ", m_polarity);
+	DEBUG(DEBUG_VERBOSE, Serial.printf("%02x -> ", m_polarity));
 	m_polarity ^= ((1 << port));
-	Serial.printf("%02x ", m_polarity);
+	DEBUG(DEBUG_VERBOSE, Serial.printf("%02x ", m_polarity));
 #else
 	// get polarity of A
 	byte polarity = readOneRegister(MCP_IPOL_A);
 
-	Serial.printf("%02x -> ", polarity);
+	DEBUG(DEBUG_IMPORTANT, Serial.printf("%02x -> ", polarity));
 
 	// flip the polarity bit for that switch
 	polarity ^= (1 << port);
@@ -87,17 +90,17 @@ void mcp23017::flipPolarityPort(int port)
 	// enabling this line causes an ISR storm
 	writeOneRegister(MCP_IPOL_A, polarity);
 
-	Serial.printf("%02x ", polarity);
+	DEBUG(DEBUG_IMPORTANT, Serial.printf("%02x ", polarity));
 
 #endif
-	Serial.println("written");
+	DEBUG(DEBUG_VERBOSE, Serial.println("written"));
 
 }
 
 
-byte mcp23017::readAllSwitches()
+byte mcp23017::readAllSwitches(bool readInterrupt)
 {
-	byte state = readOneRegister(MCP_GPIO_A);
+	byte state = readInterrupt? readOneRegister(MCP_INTCAP_A) :readOneRegister(MCP_GPIO_A);
 
 #ifdef _IPOL_IN_SOFTWARE
 
@@ -137,7 +140,7 @@ void mcp23017::SetRelay(unsigned relayNumber, bool relayState, bool forceSwitchT
 		// get the switch state for this port
 		bool switchState = readSwitch(relayNumber);
 
-		Serial.printf("port %d switchState = %02x\n\r",relayNumber,switchState);
+		DEBUG(DEBUG_VERBOSE, Serial.printf("port %d switchState = %02x\n\r",relayNumber,switchState));
 
 		// thw switch does NOT mirror the request state
 		if (switchState != relayState)
@@ -153,15 +156,15 @@ int mcp23017::InterruptCauseAndCurrentState(bool justClearInterrupt)
 {
 	if (justClearInterrupt)
 	{
-		return readAllSwitches();
+		return readAllSwitches(true);
 	}
 
 	byte cause = readOneRegister(MCP_INTF_A);
 
 	// then get current states
-	byte state= readAllSwitches();
+	byte state= readAllSwitches(true);
 
-	Serial.printf("MCPInt cause %02x state %02x [%04x]\n\r", cause, state, (int)((cause & 0xff) << 8) | (state & 0xff));
+	DEBUG(DEBUG_VERBOSE, Serial.printf("MCPInt cause %02x state %02x [%04x]\n\r", cause, state, (int)((cause & 0xff) << 8) | (state & 0xff)));
 
 	// then send that back
 	return (int)((cause & 0xff) << 8) | (state & 0xff);
