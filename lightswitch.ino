@@ -64,7 +64,7 @@ struct
 } Details;
 
 // needs to be persisted or the event is unsubscribed
-WiFiEventHandler onConnect, onDisconnect;
+WiFiEventHandler onConnect, onDisconnect, onIPgranted;
 
 
 volatile bool busyDoingSomethingIgnoreSwitch = false;
@@ -104,13 +104,13 @@ mcp23017 mcp(4, 5, resetMCPpin);
 #endif
 
 #ifdef _RESET_VIA_QUICK_SWITCH
-	#define RESET_ARRAY_SIZE 6
+	#define RESET_ARRAY_SIZE 12
 	unsigned long lastSwitchesSeen[NUM_SOCKETS][RESET_ARRAY_SIZE];
 	bool resetWIFI = false;
 #endif
 
 	// millis timeouts
-#define QUICK_SWITCH_TIMEOUT_DEFAULT	3000
+#define QUICK_SWITCH_TIMEOUT_DEFAULT	6000
 #define BOUNCE_TIMEOUT_DEFAULT			100
 
 
@@ -285,9 +285,10 @@ void WriteJSON(bool apset, const char *ssid, const char *pwd, long bounce, long 
 
 void ReadJSON()
 {
-	DEBUG(DEBUG_IMPORTANT, Serial.println("ReadJSON"));
+	DEBUG(DEBUG_INFO, Serial.println("ReadJSON"));
 
 #ifdef _ERASE_JSON_CONFIG
+	DEBUG(DEBUG_IMPORTANT, Serial.println("erasing JSON file"));
 	SPIFFS.remove(_JSON_CONFIG_FILE);
 #endif
 
@@ -611,9 +612,14 @@ void setup(void)
 	// set callbacks for wifi
 	onConnect=WiFi.onStationModeConnected([](const WiFiEventStationModeConnected&c) {
 	
-		DEBUG(DEBUG_IMPORTANT, Serial.println("EVENT wifi connected"));
+		DEBUG(DEBUG_IMPORTANT, Serial.printf("EVENT wifi connected %s\n\r", c.ssid.c_str()));
 		//Serial.println(c.ssid);
 
+	});
+
+	onIPgranted=WiFi.onStationModeGotIP([](const WiFiEventStationModeGotIP& event) {
+		IPAddress copy = event.ip;
+		DEBUG(DEBUG_IMPORTANT, Serial.printf("EVENT IP granted %s\n\r", copy.toString().c_str()));
 	});
 
 	onDisconnect=WiFi.onStationModeDisconnected([](const WiFiEventStationModeDisconnected &c) {
