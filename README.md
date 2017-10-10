@@ -1,7 +1,7 @@
 # ESP8266-Light-Switch
 an ESP01 that switches 6 relays, and also handles the switch wires
 
-using an NodeMCU, MCP23017 and 6 gang 240v 5v switching relay, this is a simple sketch that honours the manual switchs 
+using an NodeMCU, MCP23017 and 6 gang 240v 5v switching relay, this is a simple sketch that honours the manual switches 
 and can also be remotely fired, using a simple HTTP get
 
 When it starts it has no AP credentials to join your LAN, so offers up its own AP, which you can surf to
