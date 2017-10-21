@@ -78,8 +78,15 @@ void mcp23017::Initialise()
 	}
 }
 
-void mcp23017::flipPolarityPort(int port)
+void mcp23017::flipPolarityPort(unsigned port)
 {
+	if (port > 7 || port < 0)
+	{
+		DEBUG(DEBUG_ERROR, Serial.printf("flipPolarityPort called out of bounds %u\n\r", port));
+		return;
+	}
+
+
 #ifdef _IPOL_IN_SOFTWARE
 	DEBUG(DEBUG_VERBOSE, Serial.printf("%02x -> ", m_polarity));
 	m_polarity ^= ((1 << port));
@@ -125,12 +132,37 @@ byte mcp23017::readAllSwitches(bool readInterrupt)
 
 bool mcp23017::readSwitch(unsigned switchNumber)
 {
+	if (switchNumber > 7 || switchNumber < 0)
+	{
+		DEBUG(DEBUG_ERROR, Serial.printf("readSwitch called out of bounds %u\n\r", switchNumber));
+		return false;
+	}
+
+
 	byte state = readAllSwitches();
 	return state & (1 << switchNumber) ? true : false;
 }
 
+#define _MIN_TIME_BETWEEN_SWITCHES (100*1000)
+
 void mcp23017::SetRelay(unsigned relayNumber, bool relayState, bool forceSwitchToReflect)
 {
+	if (relayNumber > 7 || relayNumber < 0)
+	{
+		DEBUG(DEBUG_ERROR, Serial.printf("SetRelay called out of bounds %u\n\r", relayNumber));
+		return;
+	}
+
+	// first, let's insure we haven't been here, for this switch, too soon
+	unsigned long timediff = micros()-m_lastRelayMicros[relayNumber];
+	if (timediff < _MIN_TIME_BETWEEN_SWITCHES)
+	{
+		DEBUG(DEBUG_ERROR, Serial.printf("SetRelay called too soon for switch %u\n\r", relayNumber));
+		return;
+	}
+
+	m_lastRelayMicros[relayNumber] = micros();
+
 	byte state = readOneRegister(MCP_GPIO_B);
 
 	// get the existing state *of the relay*, mask out the bit we want

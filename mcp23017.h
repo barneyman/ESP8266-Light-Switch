@@ -36,6 +36,7 @@ public:
 		m_resetAvailable(true), m_sdaPin(sdaPin), m_sclPin(sclPin), m_resetPin(resetPin)
 	{
 		m_wire.begin(sdaPin, sclPin);
+		memset(&m_lastRelayMicros,0,sizeof(m_lastRelayMicros));
 
 #ifdef _IPOL_IN_SOFTWARE
 		m_polarity = 0;
@@ -50,10 +51,11 @@ public:
 #ifdef _IPOL_IN_SOFTWARE
 		m_polarity = 0;
 #endif
+		memset(&m_lastRelayMicros, 0, sizeof(m_lastRelayMicros));
 	}
 
 	// spin it up
-	void Initialise();
+	virtual void Initialise();
 
 	// read switch state
 	bool readSwitch(unsigned switchNumber);
@@ -68,7 +70,7 @@ public:
 protected:
 	byte readOneRegister(byte command);
 	void writeOneRegister(byte command, byte theByte);
-	void flipPolarityPort(int port);
+	void flipPolarityPort(unsigned port);
 
 	bool m_resetAvailable;
 	int m_sdaPin, m_sclPin, m_resetPin;
@@ -80,8 +82,43 @@ private:
 #endif
 
 	TwoWire m_wire;
+
+	unsigned long m_lastRelayMicros[8];
 };
 
+
+// controls the mcp and the relay
+class mcp23017AndRelay: public mcp23017
+{
+public:
+	mcp23017AndRelay(int sdaPin, int sclPin, int resetPin, int powerHubNPN):mcp23017(sdaPin, sclPin, resetPin),m_powerHubNPN(powerHubNPN)
+	{
+	
+		// set up the xistor that looks after the relay
+		pinMode(m_powerHubNPN, OUTPUT);
+		// ensure relay is off
+		digitalWrite(m_powerHubNPN, 0);
+
+	}
+
+
+	virtual void Initialise()
+	{
+		// ensure relay is off
+		digitalWrite(m_powerHubNPN, 0);
+
+		// initialise
+		mcp23017::Initialise();
+
+		// then turn the relay on
+		digitalWrite(m_powerHubNPN, 255);
+	}
+
+private:
+
+	int m_powerHubNPN;
+
+};
 
 #endif
 

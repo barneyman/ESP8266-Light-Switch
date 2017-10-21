@@ -88,13 +88,17 @@ String webPageAPtry = "";
 // light manual trigger IN
 int inputSwitchPin = 14; // D5
 int resetMCPpin = 16;// D0;
+int powerRelayBoardNPN = 0; // d3
 
-mcp23017 mcp(4, 5, resetMCPpin);
+//mcp23017 mcp(4, 5, resetMCPpin);
+mcp23017AndRelay mcp(4, 5, resetMCPpin, powerRelayBoardNPN);
 
 
 // number of relays & switches
 #define NUM_SOCKETS	6
 
+// how long we slow the web hots down for (millis)
+#define _WEB_TAR_PIT_DELAY 200
 
 #define _RESET_VIA_QUICK_SWITCH
 //#define _IGNORE_BOUNCE_LOGIC	
@@ -224,10 +228,14 @@ void DoAllSwitch(bool state, bool force)
 
 // do, portNumber is 0 thru 7
 // if forceSwitchToReflect change polarity of input switch if necessary to reflect this request
-void DoSwitch(int portNumber, bool on, bool forceSwitchToReflect)
+void DoSwitch(unsigned portNumber, bool on, bool forceSwitchToReflect)
 {
 	if (portNumber > 7 || portNumber < 0)
+	{
+		DEBUG(DEBUG_ERROR, Serial.printf("DoSwitch called out of bounds %u\n\r", portNumber));
 		return;
+	}
+
 
 	DEBUG(DEBUG_IMPORTANT, Serial.printf("DoSwitch: port %d %s %s\r\n", portNumber, on?"ON":"off", forceSwitchToReflect?"FORCE":""));
 
@@ -504,7 +512,6 @@ void ResetMe()
 
 
 
-
 void setup(void) 
 {
 	char idstr[20];
@@ -629,6 +636,7 @@ void setup(void)
 
 	});
 
+
 	// initialise the MCP
 	mcp.Initialise();
 
@@ -652,6 +660,8 @@ void setup(void)
 
 		RevertAllSwitch();
 
+		delay(_WEB_TAR_PIT_DELAY);
+
  		server.send(200, "text/html", webPageSTA);
 	});
 
@@ -665,6 +675,8 @@ void setup(void)
 			}
 		}
 
+		delay(_WEB_TAR_PIT_DELAY);
+
 		server.send(200, "text/html", webPageSTA);
 	});
 
@@ -672,25 +684,34 @@ void setup(void)
 
 	server.on("/button", [webPageSTA]() {
 
-		String action, port;
-
-		for (uint8_t i = 0; i < server.args(); i++)
+		// these have to be in port/action pairs
+		if (server.args() % 2)
 		{
-			if (server.argName(i) == "port")
-			{
-				port = server.arg(i).c_str();
-			}
-			if (server.argName(i) == "action")
-			{
-				action = server.arg(i).c_str();
-			}
-
+			return;
 		}
 
-		if (action.length() && port.length())
+
+		for (uint8_t i = 0; i < server.args(); i += 2)
 		{
-			DoSwitch(port.toInt(), action == "on" ? true : false, true);
+			int port = -1; bool action = false;
+			if(server.argName(i)=="port" && server.argName(i+1)=="action")
+			{ 
+				port = server.arg(i).toInt();
+				server.arg(i + 1).toLowerCase();
+				action = server.arg(i + 1) == "on" ? true: false;
+			}
+			else if (server.argName(i) == "action" && server.argName(i + 1) == "port")
+			{
+				port = server.arg(i+1).toInt();
+				server.arg(i).toLowerCase();
+				action = server.arg(i) == "on" ? true : false;
+			}
+
+			if(port!=-1)
+				DoSwitch(port, action, true);
 		}
+
+		delay(_WEB_TAR_PIT_DELAY);
 
 		server.send(200, "text/html", webPageSTA);
 
@@ -699,6 +720,9 @@ void setup(void)
 
 	// handlers can't be replaced
 	server.on("/", [webPageSTA]() {
+
+		delay(_WEB_TAR_PIT_DELAY);
+
 		switch (currentMode)
 		{
 		case wifiMode::modeAP:
@@ -716,11 +740,11 @@ void setup(void)
 
 
 	server.on("/join", []() {
+		delay(_WEB_TAR_PIT_DELAY);
 		server.send(200, "text/html", webPageAP);
 	});
 
 	server.on("/associate", []() {
-		server.send(200, "text/html", webPageAPtry);
 
 		String ssid, pwd;
 		long bounce = 250, reset = 3000;
@@ -751,11 +775,12 @@ void setup(void)
 #else
 		WriteEeprom(true, ssid.c_str(), pwd.c_str(), bounce, reset);
 #endif
+		delay(_WEB_TAR_PIT_DELAY);
 
 		// force attempt
 		ConnectWifi(wifiMode::modeSTA);
-
 		delay(1000);
+		server.send(200, "text/html", webPageAPtry);
 	});
 
 }
