@@ -22,6 +22,12 @@
 #include <EEPROM.h>
 #endif
 
+#define _USING_OLED
+
+#ifdef _USING_OLED
+#include <ACROBOTIC_SSD1306.h>
+#endif
+
 
 
 extern "C" {
@@ -117,7 +123,46 @@ mcp23017AndRelay mcp(4, 5, resetMCPpin, powerRelayBoardNPN);
 #define QUICK_SWITCH_TIMEOUT_DEFAULT	6000
 #define BOUNCE_TIMEOUT_DEFAULT			100
 
+#define _BOARD_VER_1_1
 
+unsigned MapSwitchToRelay(unsigned switchNumber)
+{
+	unsigned relayNumber = switchNumber;
+#ifdef _BOARD_VER_1_1
+	// if you're a complete numpty and you wire the board up wrong
+	// this is the place you put the smoke and mirrors
+	switch (switchNumber)
+	{
+	case 0:
+	case 3:
+		break;
+	case 1:
+		relayNumber=5;
+		break;
+	case 2:
+		relayNumber = 4;
+		break;
+	case 4:
+		relayNumber = 2;
+		break;
+	case 5:
+		relayNumber = 1;
+		break;
+	default:
+		// 1 - 5
+		// 2 - 4
+		// 3 - 3
+		// 4 - 2
+		// 5 - 1
+		break;
+	}
+
+	DEBUG(DEBUG_WARN, Serial.printf("	MapSwitchToRelay %u -> %u\r\n", switchNumber, relayNumber));
+
+#endif
+	return relayNumber;
+
+}
 
 void OnSwitchISR()
 {
@@ -173,8 +218,11 @@ void OnSwitchISR()
 				DEBUG(DEBUG_INFO, Serial.printf("\n\r"));
 #endif
 
+				// remap switches to ports
+				unsigned relay = MapSwitchToRelay(port);
+
 				// having CAUSED the interrupt, reflect its STATE in the DoSwitch call
-				DoSwitch(port, (causeAndState & (1 << port)) ? true : false, false);
+				DoSwitch(relay, (causeAndState & (1 << port)) ? true : false, false);
 
 
 
@@ -517,6 +565,17 @@ void setup(void)
 	char idstr[20];
 	sprintf(idstr,"%0x", system_get_chip_id());
 	esphostname += idstr;
+
+
+#ifdef _USING_OLED
+	oled.init();                      // Initialze SSD1306 OLED display
+	//oled.setFont(font5x7);            // Set font type (default 8x8)
+	oled.clearDisplay();              // Clear screen
+	oled.setTextXY(0, 0);              // Set cursor position, start of line 0
+	oled.putString(esphostname);
+#endif
+
+
 
 #ifdef _RESET_VIA_QUICK_SWITCH
 	// clean up the switch times
