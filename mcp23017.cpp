@@ -145,7 +145,23 @@ bool mcp23017::readSwitch(unsigned switchNumber)
 
 #define _MIN_TIME_BETWEEN_SWITCHES (100*1000)
 
-void mcp23017::SetRelay(unsigned relayNumber, bool relayState, bool forceSwitchToReflect)
+void mcp23017::SetSwitch(unsigned switchNumber, bool relayState)
+{
+	// get the switch state for this port
+	bool switchState = readSwitch(switchNumber);
+
+	DEBUG(DEBUG_VERBOSE, Serial.printf("port %d switchState = %02x\n\r", switchNumber, switchState));
+
+	// thw switch does NOT mirror the request state
+	if (switchState != relayState)
+	{
+		flipPolarityPort(switchNumber);
+	}
+
+}
+
+
+void mcp23017::SetRelay(unsigned relayNumber, bool relayState)
 {
 	if (relayNumber > 7 || relayNumber < 0)
 	{
@@ -171,21 +187,6 @@ void mcp23017::SetRelay(unsigned relayNumber, bool relayState, bool forceSwitchT
 	// then set the bit we're after (hi is OFF)
 	if (!relayState)
 		state = state | (1 << relayNumber);
-
-	// if we have to force the switch to relect the current decision
-	if (forceSwitchToReflect)
-	{
-		// get the switch state for this port
-		bool switchState = readSwitch(relayNumber);
-
-		DEBUG(DEBUG_VERBOSE, Serial.printf("port %d switchState = %02x\n\r",relayNumber,switchState));
-
-		// thw switch does NOT mirror the request state
-		if (switchState != relayState)
-		{
-			flipPolarityPort(relayNumber);
-		}
-	}
 
 	writeOneRegister(MCP_GPIO_B, state);
 }

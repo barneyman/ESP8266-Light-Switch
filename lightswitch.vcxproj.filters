@@ -22,6 +22,15 @@
     <None Include="data\config.json">
       <Filter>data</Filter>
     </None>
+    <None Include="APmode.htm">
+      <Filter>data</Filter>
+    </None>
+    <None Include="STAmode.htm">
+      <Filter>data</Filter>
+    </None>
+    <None Include="Error.htm">
+      <Filter>data</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="__vm\.lightswitch.vsarduino.h">

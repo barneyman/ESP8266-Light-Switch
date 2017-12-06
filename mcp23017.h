@@ -60,7 +60,8 @@ public:
 	// read switch state
 	bool readSwitch(unsigned switchNumber);
 	// set the output
-	void SetRelay(unsigned relayNumber, bool relayState, bool forceSwitchToReflect);
+	void SetRelay(unsigned relayNumber, bool relayState);
+	void SetSwitch(unsigned switchNumber, bool relayState);
 	// find out what caused the isr
 	int InterruptCauseAndCurrentState(bool justClearInterrupt);
 	// get all the switches

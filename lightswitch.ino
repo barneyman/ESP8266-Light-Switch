@@ -5,6 +5,9 @@
 
 #include "mcp23017.h"
 
+#include "debug_defines.h"
+
+
 // use eiher the flash or SIFFS
 // if you use FLASH, you'll have to build/upload with _INITIALISE_EEPROM set once, then upload WITHOUT it set (or the eeprom will be erased every boot = BAD)
 // if you use SIFFS you'll have to upload the config.json file in the data directory
@@ -22,11 +25,39 @@
 #include <EEPROM.h>
 #endif
 
+
 #define _USING_OLED
 
 #ifdef _USING_OLED
 #include <ACROBOTIC_SSD1306.h>
+
+class oledDebug : public debugBase
+{
+private:
+
+	ACROBOTIC_SSD1306 *m_driver;
+
+public:
+
+	oledDebug(ACROBOTIC_SSD1306 *driver) :debugBase(), m_driver(driver)
+	{}
+
+protected:
+
+	void internalDebug(String out)
+	{
+		if (m_driver)
+			m_driver->putString(out);
+	}
+};
+
+
+
 #endif
+
+// first board that worked, althought the pins were swapped around on the output
+#define _BOARD_VER_1_1
+
 
 
 
@@ -37,7 +68,6 @@ extern "C" {
 }
 
 
-#include "debug_defines.h"
 
 
 
@@ -87,10 +117,6 @@ void ConnectWifi(wifiMode intent);
 
 ESP8266WebServer server(80);
 
-String webPageSTA = "";
-String webPageAP = "";
-String webPageAPtry = "";
-
 // light manual trigger IN
 int inputSwitchPin = 14; // D5
 int resetMCPpin = 16;// D0;
@@ -123,46 +149,38 @@ mcp23017AndRelay mcp(4, 5, resetMCPpin, powerRelayBoardNPN);
 #define QUICK_SWITCH_TIMEOUT_DEFAULT	6000
 #define BOUNCE_TIMEOUT_DEFAULT			100
 
-#define _BOARD_VER_1_1
+	unsigned switchToRelayMap[NUM_SOCKETS] =
+	{
+#ifdef _BOARD_VER_1_1
+		0,5,4,3,2,1
+#else
+		0,1,2,3,4,5
+#endif
+	};
+
 
 unsigned MapSwitchToRelay(unsigned switchNumber)
 {
 	unsigned relayNumber = switchNumber;
-#ifdef _BOARD_VER_1_1
-	// if you're a complete numpty and you wire the board up wrong
-	// this is the place you put the smoke and mirrors
-	switch (switchNumber)
+
+	if (relayNumber > NUM_SOCKETS || relayNumber < 0)
 	{
-	case 0:
-	case 3:
-		break;
-	case 1:
-		relayNumber=5;
-		break;
-	case 2:
-		relayNumber = 4;
-		break;
-	case 4:
-		relayNumber = 2;
-		break;
-	case 5:
-		relayNumber = 1;
-		break;
-	default:
-		// 1 - 5
-		// 2 - 4
-		// 3 - 3
-		// 4 - 2
-		// 5 - 1
-		break;
+		DEBUG(DEBUG_ERROR, Serial.printf("MapSwitchToRelay called out of bounds %u\n\r", relayNumber));
+	}
+	else
+	{
+		relayNumber=switchToRelayMap[switchNumber];
 	}
 
-	DEBUG(DEBUG_WARN, Serial.printf("	MapSwitchToRelay %u -> %u\r\n", switchNumber, relayNumber));
+	DEBUG(DEBUG_VERBOSE, Serial.printf("	MapSwitchToRelay %u -> %u\r\n", switchNumber, relayNumber));
 
-#endif
 	return relayNumber;
 
 }
+
+
+
+
 
 void OnSwitchISR()
 {
@@ -182,12 +200,12 @@ void OnSwitchISR()
 	int causeAndState =
 		mcp.InterruptCauseAndCurrentState(false);
 
-	for (unsigned port = 0; port < NUM_SOCKETS; port++)
+	for (unsigned switchPort = 0; switchPort < NUM_SOCKETS; switchPort++)
 	{
-		DEBUG(DEBUG_VERBOSE,Serial.printf("Checking port %d\r\n",port));
+		DEBUG(DEBUG_VERBOSE,Serial.printf("Checking port %d\r\n", switchPort));
 
 		// +8 to get HIBYTE to see if this port CAUSED the interrupt
-		if (causeAndState & (1 << (port + 8)))
+		if (causeAndState & (1 << (switchPort + 8)))
 		{
 
 #if defined(_RESET_VIA_QUICK_SWITCH) || !defined(_IGNORE_BOUNCE_LOGIC)
@@ -196,7 +214,7 @@ void OnSwitchISR()
 
 #ifndef _IGNORE_BOUNCE_LOGIC
 			// gate against messy tactile/physical switches
-			interval = now - last_micros[port];
+			interval = now - last_micros[switchPort];
 
 			DEBUG(DEBUG_WARN, Serial.printf("%lu ms ", interval / 1000UL));
 
@@ -205,24 +223,21 @@ void OnSwitchISR()
 			{
 #ifdef _RESET_VIA_QUICK_SWITCH
 				// move the last seens along
-				memmove(&lastSwitchesSeen[port][0], &lastSwitchesSeen[port][1], sizeof(lastSwitchesSeen[port][1])*RESET_ARRAY_SIZE - 1);
-				lastSwitchesSeen[port][RESET_ARRAY_SIZE - 1] =now/1000;
+				memmove(&lastSwitchesSeen[switchPort][0], &lastSwitchesSeen[switchPort][1], sizeof(lastSwitchesSeen[switchPort][1])*RESET_ARRAY_SIZE - 1);
+				lastSwitchesSeen[switchPort][RESET_ARRAY_SIZE - 1] =now/1000;
 
 				DEBUG(DEBUG_INFO, Serial.printf("lastSwitchesSeen "));
 
 				for (int each = 0; each < NUM_SOCKETS; each++)
 				{
-					DEBUG(DEBUG_INFO, Serial.printf("%lu ", lastSwitchesSeen[port][each]));
+					DEBUG(DEBUG_INFO, Serial.printf("%lu ", lastSwitchesSeen[switchPort][each]));
 				}
 
 				DEBUG(DEBUG_INFO, Serial.printf("\n\r"));
 #endif
 
-				// remap switches to ports
-				unsigned relay = MapSwitchToRelay(port);
-
-				// having CAUSED the interrupt, reflect its STATE in the DoSwitch call
-				DoSwitch(relay, (causeAndState & (1 << port)) ? true : false, false);
+				// having CAUSED the interrupt, reflect its STATE in the DoRelay call
+				DoSwitch(switchPort, (causeAndState & (1 << switchPort)) ? true : false, false);
 
 
 
@@ -232,7 +247,7 @@ void OnSwitchISR()
 				// only reset if we're currently STA
 				if (currentMode == wifiMode::modeSTA)
 				{
-					if (lastSwitchesSeen[port][RESET_ARRAY_SIZE - 1] - lastSwitchesSeen[port][0] < (Details.resetWindowms))
+					if (lastSwitchesSeen[switchPort][RESET_ARRAY_SIZE - 1] - lastSwitchesSeen[switchPort][0] < (Details.resetWindowms))
 					{
 						DEBUG(DEBUG_WARN, Serial.println("RESETTING WIFI!\n\r"));
 						resetWIFI = true;
@@ -245,7 +260,7 @@ void OnSwitchISR()
 			{
 				DEBUG(DEBUG_WARN, Serial.printf("bounce ignored\n\r"));
 			}
-			last_micros[port] = now;
+			last_micros[switchPort] = now;
 #endif
 		}
 	}
@@ -260,7 +275,7 @@ void RevertAllSwitch()
 	// get the switch state
 	for (int port = 0; port < NUM_SOCKETS; port++)
 	{
-		DoSwitch(port, 
+		DoSwitch((port),
 			mcp.readSwitch(port),
 			false);
 
@@ -270,11 +285,15 @@ void RevertAllSwitch()
 // override switch state
 void DoAllSwitch(bool state, bool force)
 {
-	for (int port = 0; port < NUM_SOCKETS; port++)
-		DoSwitch(port, state, force);
+	DEBUG(DEBUG_IMPORTANT, Serial.printf("DoAllSwitch: %s %s\r\n", state ? "ON" : "off", force ? "FORCE" : ""));
+
+	for (int Switch = 0; Switch < NUM_SOCKETS; Switch++)
+	{
+		// MapSwitchToRelay is redundant given we're doing them all
+		DoSwitch((Switch), state, force);
+	}
 }
 
-// do, portNumber is 0 thru 7
 // if forceSwitchToReflect change polarity of input switch if necessary to reflect this request
 void DoSwitch(unsigned portNumber, bool on, bool forceSwitchToReflect)
 {
@@ -284,16 +303,35 @@ void DoSwitch(unsigned portNumber, bool on, bool forceSwitchToReflect)
 		return;
 	}
 
+	DEBUG(DEBUG_IMPORTANT, Serial.printf("DoSwitch: relay %d %s %s\r\n", portNumber, on ? "ON" : "off", forceSwitchToReflect ? "FORCE" : ""));
 
-	DEBUG(DEBUG_IMPORTANT, Serial.printf("DoSwitch: port %d %s %s\r\n", portNumber, on?"ON":"off", forceSwitchToReflect?"FORCE":""));
+	DoRelay(MapSwitchToRelay(portNumber),on);
+	if (forceSwitchToReflect)
+	{
+		mcp.SetSwitch(portNumber, on);
+	}
 
-	mcp.SetRelay(portNumber, on, forceSwitchToReflect);
+}
+
+// do, portNumber is 0 thru 7
+void DoRelay(unsigned portNumber, bool on)
+{
+	if (portNumber > 7 || portNumber < 0)
+	{
+		DEBUG(DEBUG_ERROR, Serial.printf("DoRelay called out of bounds %u\n\r", portNumber));
+		return;
+	}
+
+
+	DEBUG(DEBUG_IMPORTANT, Serial.printf("DoRelay: relay %d %s\r\n", portNumber, on?"ON":"off"));
+
+	mcp.SetRelay(portNumber, on);
 
 }
 
 #ifdef _USE_JSON_NOT_EEPROM
 
-void WriteJSON(bool apset, const char *ssid, const char *pwd, long bounce, long reset)
+void WriteJSON(bool apset, const char *ssid, const char *pwd, long bounce, long reset, unsigned *map)
 {
 	DEBUG(DEBUG_INFO, Serial.println("WriteJSON"));
 
@@ -329,6 +367,12 @@ void WriteJSON(bool apset, const char *ssid, const char *pwd, long bounce, long 
 		wifi["ssid"]=Details.wifi.ssid;
 	}
 
+
+	AddMapToJSON(root, NUM_SOCKETS, map);
+
+
+	///////////////////// written here
+
 	String jsonText;
 	root.prettyPrintTo(jsonText);
 
@@ -339,7 +383,7 @@ void WriteJSON(bool apset, const char *ssid, const char *pwd, long bounce, long 
 	json.close();
 }
 
-void ReadJSON()
+void ReadJSON(unsigned *map)
 {
 	DEBUG(DEBUG_INFO, Serial.println("ReadJSON"));
 
@@ -352,7 +396,7 @@ void ReadJSON()
 	{
 		DEBUG(DEBUG_IMPORTANT, Serial.println("Config.json does not exist"));
 		// file does not exist
-		WriteJSON(false, NULL, NULL, BOUNCE_TIMEOUT_DEFAULT, QUICK_SWITCH_TIMEOUT_DEFAULT);
+		WriteJSON(false, NULL, NULL, BOUNCE_TIMEOUT_DEFAULT, QUICK_SWITCH_TIMEOUT_DEFAULT,map);
 
 		return;
 
@@ -362,7 +406,9 @@ void ReadJSON()
 
 	String jsonString=json.readString();
 
-	DEBUG(DEBUG_INFO, Serial.printf("JSON: %s\n\r",jsonString.c_str()));
+	json.close();
+
+	DEBUG(DEBUG_IMPORTANT, Serial.printf("JSON: %s\n\r",jsonString.c_str()));
 
 	StaticJsonBuffer<1024> jsonBuffer;
 
@@ -371,7 +417,7 @@ void ReadJSON()
 	if (!root.success())
 	{
 		DEBUG(DEBUG_ERROR, Serial.println("JSON parse failed"));
-		WriteJSON(false, NULL, NULL, Details.debounceThresholdms, Details.resetWindowms);
+		WriteJSON(false, NULL, NULL, Details.debounceThresholdms, Details.resetWindowms,&switchToRelayMap[0]);
 	}
 
 	Details.debounceThresholdms=root["debounceThresholdms"];
@@ -390,6 +436,18 @@ void ReadJSON()
 		Details.wifi.password = String();
 		Details.wifi.ssid = String();
 	}
+
+	// add the switch map
+	JsonArray &switchMap = root["switchMap"];
+	if (switchMap.success())
+	{
+		for (unsigned each = 0; each < NUM_SOCKETS; each++)
+		{
+			*map = switchMap[each];
+			map++;
+		}
+	}
+
 
 }
 
@@ -469,6 +527,8 @@ void ConnectWifi(wifiMode intent)
 
 		WiFi.mode(WIFI_STA);
 
+
+
 #ifdef _USE_JSON_NOT_EEPROM
 		WiFi.begin(Details.wifi.ssid.c_str(), Details.wifi.password.c_str());
 #else
@@ -547,7 +607,7 @@ void ResetMe()
 	resetWIFI = false;
 	// clear the credentials
 #ifdef _USE_JSON_NOT_EEPROM
-	WriteJSON(false, NULL, NULL, Details.debounceThresholdms, Details.resetWindowms);
+	WriteJSON(false, NULL, NULL, Details.debounceThresholdms, Details.resetWindowms, &switchToRelayMap[0]);
 #else
 	WriteEeprom(false, NULL, NULL, Details.debounceThresholdms, Details.resetWindowms);
 #endif
@@ -569,10 +629,11 @@ void setup(void)
 
 #ifdef _USING_OLED
 	oled.init();                      // Initialze SSD1306 OLED display
-	//oled.setFont(font5x7);            // Set font type (default 8x8)
+	oled.setFont(font8x8);            // Set font type (default 8x8)
 	oled.clearDisplay();              // Clear screen
 	oled.setTextXY(0, 0);              // Set cursor position, start of line 0
 	oled.putString(esphostname);
+	oled.putString(".local");
 #endif
 
 
@@ -598,7 +659,7 @@ void setup(void)
 
 	SPIFFS.begin();
 
-	ReadJSON();
+	ReadJSON(&switchToRelayMap[0]);
 
 #else
 	// start eeprom library
@@ -613,45 +674,6 @@ void setup(void)
 	EEPROM.get(0, Details);
 
 #endif
-
-
-	String boilerPlate("<html><head><style type=\"text/css\">$$$STYLE$$$</style></head><body>$$BODY$$</body></html>");
-	String style("body {font: Arial; font-size: 20px;} .big{height:20px;width:100px;}");
-
-	boilerPlate.replace("$$$STYLE$$$", style);
-
-
-	// sure, this could be prettier
-	webPageAPtry = webPageAP = "<h1>"+ esphostname +"</h1>";
-
-	// set the handler string up
-	String webPageSTAbody(webPageAPtry);
-
-	for (int socket = 0; socket < NUM_SOCKETS; socket++)
-	{
-		webPageSTAbody += String("<p>Socket ")+String(socket)+String("<a href=\"button?action=on&port=") +String(socket)+ String("\"><button class='big'>ON</button></a>&nbsp;<a href=\"button?action=off&port=") + String(socket) + String("\"><button  class='big'>OFF</button></a></p>");
-	}
-
-	webPageSTAbody += String("<p><a href='revert'>Revert All</a></p>");
-	webPageSTAbody += String("<p><a href='all?action=off'>All OFF</a></p>");
-	webPageSTAbody += String("<p><a href='all?action=on'>All ON</a></p>");
-
-	String webPageSTA = boilerPlate;
-	webPageSTA.replace("$$BODY$$", webPageSTAbody);
-
-
-//	webPageSTA += "<p>Socket<a href=\"socket2On\"><button>ON</button></a>&nbsp;<a href=\"socket2Off\"><button>OFF</button></a></p>";
-
-	char noise[25];
-	webPageAP += "<form action = \"associate\">SSID:<input name = ssid size = 15 type = text /><br/>PWD : <input name = psk size = 15 type = text / ><br/><hr/>";
-	webPageAP += "Bounce : <input name = bounce size = 15 type =number value="+String(ltoa(Details.debounceThresholdms, noise, 10))+" />ms<br/>";
-	webPageAP += "Reset : <input name = reset size = 15 type =number value="+String(ltoa(Details.resetWindowms, noise, 10))+" />ms<br/>";
-	webPageAP += "<input name=Submit type = submit value = \"join\" /></form>";
-
-	ltoa(Details.resetWindowms, noise, 10);
-
-	webPageAPtry += "trying";
-
 
 	DEBUG(DEBUG_VERBOSE, Serial.println("starting"));
 	DEBUG(DEBUG_IMPORTANT, Serial.println(esphostname));
@@ -686,6 +708,19 @@ void setup(void)
 	onIPgranted=WiFi.onStationModeGotIP([](const WiFiEventStationModeGotIP& event) {
 		IPAddress copy = event.ip;
 		DEBUG(DEBUG_IMPORTANT, Serial.printf("EVENT IP granted %s\n\r", copy.toString().c_str()));
+
+// my router doesn't understand *LAN* routes
+#define _HARD_CODED_IP_ADDRESS
+#ifdef _HARD_CODED_IP_ADDRESS
+		if(WiFi.config(IPAddress(192, 168, 42, 17), IPAddress(192, 168, 42, 250), IPAddress(255, 255, 255, 0)))
+		{
+			DEBUG(DEBUG_IMPORTANT, Serial.printf("EVENT IP FORCED %s\n\r", WiFi.localIP().toString().c_str()));
+		}
+		else
+			DEBUG(DEBUG_IMPORTANT, Serial.println("EVENT IP FORCED FAILED"));
+#endif
+		DEBUG(DEBUG_IMPORTANT, Serial.printf("EVENT GATEWAY %s\n\r", WiFi.gatewayIP().toString().c_str()));
+
 	});
 
 	onDisconnect=WiFi.onStationModeDisconnected([](const WiFiEventStationModeDisconnected &c) {
@@ -715,33 +750,49 @@ void setup(void)
 	// honour current switch state
 	RevertAllSwitch();
 
-	server.on("/revert", [webPageSTA]() {
+	// set up the callback handlers for the webserver
+	InstallWebServerHandlers();
+
+
+
+}
+
+// set up all the handlers for the web server
+void InstallWebServerHandlers()
+{
+	// set up the json handlers
+	// POST
+	// all ON/OFF 
+	// switch ON/OFF
+	// revert
+
+	server.on("/revert", []() {
 
 		RevertAllSwitch();
 
 		delay(_WEB_TAR_PIT_DELAY);
 
- 		server.send(200, "text/html", webPageSTA);
+		SendServerPage();
 	});
 
-	server.on("/all", [webPageSTA]() {
+	server.on("/all", []() {
 
 		for (uint8_t i = 0; i < server.args(); i++)
 		{
 			if (server.argName(i) == "action")
 			{
-				DoAllSwitch(server.arg(i) == "on"?true:false,true);
+				DoAllSwitch(server.arg(i) == "on" ? true : false, true);
 			}
 		}
 
 		delay(_WEB_TAR_PIT_DELAY);
 
-		server.send(200, "text/html", webPageSTA);
+		SendServerPage();
 	});
 
 
 
-	server.on("/button", [webPageSTA]() {
+	server.on("/button", []() {
 
 		// these have to be in port/action pairs
 		if (server.args() % 2)
@@ -753,84 +804,56 @@ void setup(void)
 		for (uint8_t i = 0; i < server.args(); i += 2)
 		{
 			int port = -1; bool action = false;
-			if(server.argName(i)=="port" && server.argName(i+1)=="action")
-			{ 
+			if (server.argName(i) == "port" && server.argName(i + 1) == "action")
+			{
 				port = server.arg(i).toInt();
 				server.arg(i + 1).toLowerCase();
-				action = server.arg(i + 1) == "on" ? true: false;
+				action = server.arg(i + 1) == "on" ? true : false;
 			}
 			else if (server.argName(i) == "action" && server.argName(i + 1) == "port")
 			{
-				port = server.arg(i+1).toInt();
+				port = server.arg(i + 1).toInt();
 				server.arg(i).toLowerCase();
 				action = server.arg(i) == "on" ? true : false;
 			}
 
-			if(port!=-1)
+			if (port != -1)
 				DoSwitch(port, action, true);
 		}
 
 		delay(_WEB_TAR_PIT_DELAY);
 
-		server.send(200, "text/html", webPageSTA);
+		SendServerPage();
 
 	});
 
-
-	// handlers can't be replaced
-	server.on("/", [webPageSTA]() {
+	server.on("/", []() {
 
 		delay(_WEB_TAR_PIT_DELAY);
 
-		switch (currentMode)
-		{
-		case wifiMode::modeAP:
-			server.send(200, "text/html", webPageAP);
-			break;
-		case wifiMode::modeSTA:
-			server.send(200, "text/html", webPageSTA);
-			break;
-		case wifiMode::modeUnknown:
-			break;
-
-		}
+		SendServerPage();
 
 	});
 
 
-	server.on("/join", []() {
-		delay(_WEB_TAR_PIT_DELAY);
-		server.send(200, "text/html", webPageAP);
-	});
+	// posted config
+	server.on("/json/config", HTTP_POST, []() {
 
-	server.on("/associate", []() {
+		DEBUG(DEBUG_INFO, Serial.println("json config posted"));
+		DEBUG(DEBUG_INFO, Serial.println(server.arg("plain")));
 
-		String ssid, pwd;
-		long bounce = 250, reset = 3000;
+		StaticJsonBuffer<1024> jsonBuffer;
+		// 'plain' is the secret source to get to the body
+		JsonObject& root = jsonBuffer.parseObject(server.arg("plain"));
 
-		// get the args
-		if (currentMode==wifiMode::modeAP && server.args() > 0) {
-			for (uint8_t i = 0; i < server.args(); i++) 
-			{
-				if (server.argName(i) == "ssid") 
-				{
-					ssid= server.arg(i).c_str();
-				}
-				if (server.argName(i) == "psk")
-				{
-					pwd=server.arg(i).c_str();
-				}
+		String ssid = root["ssid"];
+		String pwd = root["pwd"];
+		long bounce = root["bouncems"];
+		long reset = root["resetms"];
 
-				if (server.argName(i) == "bounce")
-					bounce = atol(server.arg(i).c_str());
-
-				if (server.argName(i) == "reset")
-					reset = atol(server.arg(i).c_str());
-
-			}
-		} 
+		// extract the details
 #ifdef _USE_JSON_NOT_EEPROM
-		WriteJSON(true, ssid.c_str(), pwd.c_str(), bounce, reset);
+		WriteJSON(true, ssid.c_str(), pwd.c_str(), bounce, reset, &switchToRelayMap[0]);
 #else
 		WriteEeprom(true, ssid.c_str(), pwd.c_str(), bounce, reset);
 #endif
@@ -839,10 +862,136 @@ void setup(void)
 		// force attempt
 		ConnectWifi(wifiMode::modeSTA);
 		delay(1000);
-		server.send(200, "text/html", webPageAPtry);
+
+		server.send(200, "text/html", "<html></html>");
+
+
+		});
+
+	// GET
+	server.on("/json/map", HTTP_GET, []() {
+		// give them back the port / switch map
+
+		DEBUG(DEBUG_INFO, Serial.println("json map called"));
+
+		StaticJsonBuffer<1024> jsonBuffer;
+
+		JsonObject &root = jsonBuffer.createObject();
+
+		AddMapToJSON(root, NUM_SOCKETS, &switchToRelayMap[0]);
+
+		String jsonText;
+		root.prettyPrintTo(jsonText);
+
+		server.send(200, "application/json", jsonText);
+	});
+
+
+	server.on("/json/state", HTTP_GET, []() {
+		// give them back the port / switch map
+
+		DEBUG(DEBUG_INFO, Serial.println("json state called"));
+
+		StaticJsonBuffer<1024> jsonBuffer;
+
+		JsonObject &root = jsonBuffer.createObject();
+
+		root["name"] = esphostname;
+		root["switchCount"] = NUM_SOCKETS;
+
+		JsonArray &switchState = root.createNestedArray("switchState");
+		for (unsigned each = 0; each < NUM_SOCKETS; each++)
+		{
+			JsonObject &switchRelay = jsonBuffer.createObject();
+			switchRelay["switch"] = each;
+			switchRelay["relay"] = MapSwitchToRelay(each);
+			switchRelay["state"] = mcp.readSwitch(each) ? 1 : 0;
+
+			switchState.add(switchRelay);
+		}
+
+		String jsonText;
+		root.prettyPrintTo(jsonText);
+
+		server.send(200, "application/json", jsonText);
+	});
+
+	server.on("/json/config", HTTP_GET, []() {
+		// give them back the port / switch map
+
+		DEBUG(DEBUG_INFO, Serial.println("json config called"));
+
+		StaticJsonBuffer<1024> jsonBuffer;
+
+		JsonObject &root = jsonBuffer.createObject();
+
+		root["name"] = esphostname;
+		root["bouncems"] = Details.debounceThresholdms;
+		root["resetms"] = Details.resetWindowms;
+
+		String jsonText;
+		root.prettyPrintTo(jsonText);
+
+		server.send(200, "text/json", jsonText);
+	});
+
+
+	server.on("/json/file", HTTP_GET, []() {
+		// give them back the port / switch map
+
+		DEBUG(DEBUG_IMPORTANT, Serial.println("json file called"));
+
+		if (SPIFFS.exists(_JSON_CONFIG_FILE))
+		{
+			fs::File json = SPIFFS.open(_JSON_CONFIG_FILE, "r");
+
+			String jsonString = json.readString();
+
+			server.send(200, "application/json", jsonString);
+
+			json.close();
+		}
 	});
 
 }
+
+void SendServerPage()
+{
+	// given the current state of the device, send the appropriate page back
+	File f;
+	switch (currentMode)
+	{
+	case wifiMode::modeAP:
+		f = SPIFFS.open("/APmode.htm", "r");
+		break;
+	case wifiMode::modeSTA:
+		f = SPIFFS.open("/STAmode.htm", "r");
+		break;
+	case wifiMode::modeUnknown:
+	default:
+		f = SPIFFS.open("/Error.htm", "r");
+		break;
+
+	}
+
+	server.streamFile(f, "text/html");
+	f.close();
+
+}
+
+void AddMapToJSON(JsonObject &root, unsigned numSockets, unsigned *map)
+{
+	root["switchCount"] = numSockets;
+
+	JsonArray &switchMap = root.createNestedArray("switchMap");
+	for (unsigned each = 0; each < numSockets; each++)
+	{
+		switchMap.add(*map);
+		map++;
+	}
+
+}
+
 
 void loop(void) 
 {
