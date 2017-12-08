@@ -16,7 +16,7 @@
 
 #define JSON_STATIC_BUFSIZE	2048
 
-#define _USING_OLED
+//#define _USING_OLED
 
 #ifdef _USING_OLED
 #include <ACROBOTIC_SSD1306.h>
@@ -71,6 +71,15 @@ MDNSResponder mdns;
 #define QUICK_SWITCH_TIMEOUT_DEFAULT	6000
 #define BOUNCE_TIMEOUT_DEFAULT			100
 
+#define _RESET_VIA_QUICK_SWITCH
+//#define _IGNORE_BOUNCE_LOGIC	
+
+
+#ifdef _RESET_VIA_QUICK_SWITCH
+#define RESET_ARRAY_SIZE 12
+bool resetWIFI = false;
+#endif
+
 
 struct
 {
@@ -89,14 +98,23 @@ struct
 	// 6 switches in this time force an AP reset
 	unsigned long resetWindowms;
 
-	// map
-	// unsigned switchToRelayMap[NUM_SOCKETS];
-
 	// the switches are named
 	struct {
 
 		String name;
 		unsigned relay;
+
+#ifndef _IGNORE_BOUNCE_LOGIC
+		// when we saw this switch change state - used to debounce the switch
+		unsigned long last_seen_bounce;
+#endif
+
+#ifdef _RESET_VIA_QUICK_SWITCH
+		unsigned long lastSwitchesSeen[RESET_ARRAY_SIZE];
+#endif
+
+		// how many times we've see this PHYSICAL switch .. er ... switch
+		unsigned long switchCount;
 
 	} switches[NUM_SOCKETS];
 
@@ -139,7 +157,7 @@ volatile bool busyDoingSomethingIgnoreSwitch = false;
 String esphostname = "esp8266_";
 
 
-enum wifiMode { modeAP, modeSTA, modeSTAspeculative, modeUnknown } ;
+enum wifiMode { modeOff, modeAP, modeSTA, modeSTAspeculative, modeUnknown } ;
 wifiMode currentMode = modeUnknown;
 
 wifiMode ConnectWifi(wifiMode intent);
@@ -160,18 +178,6 @@ mcp23017AndRelay mcp(4, 5, resetMCPpin, powerRelayBoardNPN);
 // how long we slow the web hots down for (millis)
 #define _WEB_TAR_PIT_DELAY 200
 
-#define _RESET_VIA_QUICK_SWITCH
-//#define _IGNORE_BOUNCE_LOGIC	
-
-#ifndef _IGNORE_BOUNCE_LOGIC
-	unsigned long last_micros[NUM_SOCKETS];
-#endif
-
-#ifdef _RESET_VIA_QUICK_SWITCH
-	#define RESET_ARRAY_SIZE 12
-	unsigned long lastSwitchesSeen[NUM_SOCKETS][RESET_ARRAY_SIZE];
-	bool resetWIFI = false;
-#endif
 
 
 
@@ -230,7 +236,7 @@ void OnSwitchISR()
 
 #ifndef _IGNORE_BOUNCE_LOGIC
 			// gate against messy tactile/physical switches
-			interval = now - last_micros[switchPort];
+			interval = now - Details.switches[switchPort].last_seen_bounce;
 
 			DEBUG(DEBUG_WARN, Serial.printf("%lu ms ", interval / 1000UL));
 
@@ -239,14 +245,16 @@ void OnSwitchISR()
 			{
 #ifdef _RESET_VIA_QUICK_SWITCH
 				// move the last seens along
-				memmove(&lastSwitchesSeen[switchPort][0], &lastSwitchesSeen[switchPort][1], sizeof(lastSwitchesSeen[switchPort][1])*RESET_ARRAY_SIZE - 1);
-				lastSwitchesSeen[switchPort][RESET_ARRAY_SIZE - 1] =now/1000;
+				for (unsigned mover = 0; mover < RESET_ARRAY_SIZE - 1; mover++)
+					Details.switches[switchPort].lastSwitchesSeen[mover] = Details.switches[switchPort].lastSwitchesSeen[mover + 1];
 
-				DEBUG(DEBUG_INFO, Serial.printf("lastSwitchesSeen "));
+				Details.switches[switchPort].lastSwitchesSeen[RESET_ARRAY_SIZE - 1] =now/1000;
 
-				for (int each = 0; each < NUM_SOCKETS; each++)
+				DEBUG(DEBUG_INFO, Serial.printf("lastSwitchesSeen (ms) "));
+
+				for (int each = 0; each < RESET_ARRAY_SIZE; each++)
 				{
-					DEBUG(DEBUG_INFO, Serial.printf("%lu ", lastSwitchesSeen[switchPort][each]));
+					DEBUG(DEBUG_INFO, Serial.printf("%lu ", Details.switches[switchPort].lastSwitchesSeen[each]));
 				}
 
 				DEBUG(DEBUG_INFO, Serial.printf("\n\r"));
@@ -255,7 +263,7 @@ void OnSwitchISR()
 				// having CAUSED the interrupt, reflect its STATE in the DoRelay call
 				DoSwitch(switchPort, (causeAndState & (1 << switchPort)) ? true : false, false);
 
-
+				Details.switches[switchPort].switchCount++;
 
 #ifdef _RESET_VIA_QUICK_SWITCH
 
@@ -263,7 +271,7 @@ void OnSwitchISR()
 				// only reset if we're currently STA
 				if (currentMode == wifiMode::modeSTA)
 				{
-					if (lastSwitchesSeen[switchPort][RESET_ARRAY_SIZE - 1] - lastSwitchesSeen[switchPort][0] < (Details.resetWindowms))
+					if (Details.switches[switchPort].lastSwitchesSeen[RESET_ARRAY_SIZE - 1] - Details.switches[switchPort].lastSwitchesSeen[0] < (Details.resetWindowms))
 					{
 						DEBUG(DEBUG_WARN, Serial.println("RESETTING WIFI!\n\r"));
 						resetWIFI = true;
@@ -276,7 +284,7 @@ void OnSwitchISR()
 			{
 				DEBUG(DEBUG_WARN, Serial.printf("bounce ignored\n\r"));
 			}
-			last_micros[switchPort] = now;
+			Details.switches[switchPort].last_seen_bounce = now;
 #endif
 		}
 	}
@@ -489,6 +497,8 @@ wifiMode ConnectWifi(wifiMode intent)
 	// turn off wifi
 	switch (currentMode)
 	{
+	case wifiMode::modeOff:
+		break;
 	case wifiMode::modeAP:
 		WiFi.softAPdisconnect();
 		break;
@@ -505,6 +515,12 @@ wifiMode ConnectWifi(wifiMode intent)
 
 	DEBUG(DEBUG_WARN, Serial.println("wifi disconnected"));
 
+	if (intent == wifiMode::modeOff)
+	{
+		// turn wifi off
+		WiFi.mode(WIFI_OFF);
+
+	}
 
 	if (intent == wifiMode::modeSTA || intent==wifiMode::modeSTAspeculative)
 	{
@@ -596,7 +612,27 @@ void BeginMDNSServer()
 
 }
 
+
+void ResetWIFI()
+{
+	DEBUG(DEBUG_IMPORTANT, Serial.println("Resetting WIFI"));
+
+	wifiMode now = currentMode;
+
+	ConnectWifi(wifiMode::modeOff);
+
+	ConnectWifi(now);
+}
+
+void RebootMe()
+{
+	// hangs the esp
+	//WiFi.forceSleepBegin(); wdt_reset(); ESP.restart(); while (1)wdt_reset();
+	//ESP.restart();
+}
+
 #ifdef _RESET_VIA_QUICK_SWITCH
+
 void ResetMe()
 {
 	DEBUG(DEBUG_WARN, Serial.println("Resetting"));
@@ -634,18 +670,20 @@ void setup(void)
 
 
 
-#ifdef _RESET_VIA_QUICK_SWITCH
-	// clean up the switch times
-	memset(&lastSwitchesSeen, 0, sizeof(lastSwitchesSeen));
-#endif
 
 	// reset the bounce thresh-holds
-#ifndef _IGNORE_BOUNCE_LOGIC
 	for (int eachSwitch = 0; eachSwitch < NUM_SOCKETS; eachSwitch++)
 	{
-		last_micros[eachSwitch] = 0;
-	}
+#ifdef _RESET_VIA_QUICK_SWITCH
+		// clean up the switch times
+		memset(&Details.switches[eachSwitch].lastSwitchesSeen, 0, sizeof(Details.switches[eachSwitch].lastSwitchesSeen));
 #endif
+
+		Details.switches[eachSwitch].switchCount = 0;
+#ifndef _IGNORE_BOUNCE_LOGIC
+		Details.switches[eachSwitch].last_seen_bounce = 0;
+#endif
+	}
 
 	// mandatory "let it settle" delay
 	delay(1000);
@@ -711,12 +749,14 @@ void setup(void)
 
 
 	// initialise the MCP
+	DEBUG(DEBUG_VERBOSE, Serial.println("Initialising MCP"));
 	mcp.Initialise();
 
 
 	// preparing GPIOs
 	pinMode(inputSwitchPin, INPUT_PULLUP);
 	// the MCP interrupt is configured to fire on change, and goes LOW when fired
+	DEBUG(DEBUG_VERBOSE, Serial.println("Attach Interrupt"));
 	attachInterrupt(inputSwitchPin, OnSwitchISR, ONLOW);
 
 
@@ -811,6 +851,32 @@ void InstallWebServerHandlers()
 		SendServerPage();
 
 	});
+
+	server.on("/resetCounts", []() {
+
+		DEBUG(DEBUG_VERBOSE, Serial.println("/resetCounts"));
+
+		delay(_WEB_TAR_PIT_DELAY);
+
+		for (int eachSwitch = 0; eachSwitch < NUM_SOCKETS; eachSwitch++)
+		{
+			Details.switches[eachSwitch].switchCount = 0;
+		}
+
+		server.send(200,"text/html","<html/>");
+
+	});
+
+	server.on("/reboot", []() {
+
+		DEBUG(DEBUG_VERBOSE, Serial.println("/reboot"));
+
+		RebootMe();
+
+	});
+
+
+
 
 	server.on("/", []() {
 
@@ -911,6 +977,7 @@ void InstallWebServerHandlers()
 			switchRelay["name"] = Details.switches[each].name;
 			switchRelay["relay"] = Details.switches[each].relay;
 			switchRelay["state"] = mcp.readSwitch(each) ? 1 : 0;
+			switchRelay["stateChanges"] = Details.switches[each].switchCount;
 		}
 
 		String jsonText;
@@ -1030,6 +1097,14 @@ void AddMapToJSON(JsonObject &root, unsigned numSockets)
 
 }
 
+#define _TEST_WFI_STATE	
+
+#ifdef _TEST_WFI_STATE
+
+unsigned long lastTested = 0;
+#define _TEST_WIFI_MILLIS	(15*60*1000)
+
+#endif
 
 void loop(void) 
 {
@@ -1039,4 +1114,23 @@ void loop(void)
 #endif
 
 	server.handleClient();
+
+#ifdef _TEST_WFI_STATE
+
+	unsigned long now = micros() / 1000;
+
+	if (!lastTested || ((now - lastTested) > _TEST_WIFI_MILLIS))
+	{
+		WiFiMode_t currentState = WiFi.getMode();
+
+		DEBUG(DEBUG_VERBOSE, Serial.printf("================ WIFI %d\n\r", currentState));
+
+		WiFi.printDiag(Serial);
+
+		lastTested = now;
+
+	}
+
+#endif
+
 }
