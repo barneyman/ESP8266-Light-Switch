@@ -7,7 +7,7 @@
 
 #define DEBUG_DEBUG		1000	// what i'm currently fixing!
 
-#define DEBUG_LEVEL		DEBUG_IMPORTANT
+#define DEBUG_LEVEL		DEBUG_VERBOSE
 
 #define DEBUG(a,b)	if(a>=DEBUG_LEVEL)	b
 

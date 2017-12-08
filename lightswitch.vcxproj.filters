@@ -22,13 +22,28 @@
     <None Include="data\config.json">
       <Filter>data</Filter>
     </None>
-    <None Include="APmode.htm">
+    <None Include="data\APmode.htm">
       <Filter>data</Filter>
     </None>
-    <None Include="STAmode.htm">
+    <None Include="data\Error.htm">
       <Filter>data</Filter>
     </None>
-    <None Include="Error.htm">
+    <None Include="data\HeaderFrame.htm">
+      <Filter>data</Filter>
+    </None>
+    <None Include="data\STAmode.htm">
+      <Filter>data</Filter>
+    </None>
+    <None Include="data\switch.css">
+      <Filter>data</Filter>
+    </None>
+    <None Include="data\ConfigFrame.htm">
+      <Filter>data</Filter>
+    </None>
+    <None Include="data\common.js">
+      <Filter>data</Filter>
+    </None>
+    <None Include="data\SwitchAssignFrame.htm">
       <Filter>data</Filter>
     </None>
   </ItemGroup>

@@ -1,6 +1,6 @@
 {
   "debounceThresholdms": 100,
-  "resetWindowms": 3000,
+  "resetWindowms": 6000,
   "wifi": {
     "configured": false
   }

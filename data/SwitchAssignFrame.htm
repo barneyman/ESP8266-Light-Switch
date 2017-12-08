@@ -1,0 +1,98 @@
+<HTML>
+<HEAD>
+<META NAME="GENERATOR" Content="Microsoft Visual Studio">
+<TITLE></TITLE>
+    <link rel="stylesheet" type="text/css" href="switch.css">
+</HEAD>
+<BODY onload="OnLoad()">
+
+    <button onclick="testRelay()">Test</button>
+    <select id="switch"/>
+    <input id="name" />
+    <hr />
+    <button id="prev" onclick="Previous()">Previous</button>
+    <button id="next" onclick="Next()">Next</button>
+    <button id="finish" onclick="Finish()">Finish</button>
+
+    <script src="common.js"></script>
+
+    <script>
+
+        var previousState, currentState;
+        var currentIteration, maxIteration;
+
+        function Iteration(iter) {
+
+            document.getElementById('name').value = currentState['switchState'][iter]["name"];
+
+            // some bounds checking
+            if (iter == 0)
+                document.getElementById("prev").disabled = true;
+            else
+                document.getElementById("prev").disabled = false;
+
+            if (iter < (maxIteration - 1)) {
+                document.getElementById("next").disabled = false;
+                document.getElementById("finish").disabled = true;
+            }
+            else {
+                document.getElementById("next").disabled = true;
+                document.getElementById("finish").disabled = false;
+            }
+
+        }
+
+        function Next() {
+            currentIteration++
+            Iteration(currentIteration)
+        }
+
+        function Previous() {
+            currentIteration--
+            Iteration(currentIteration)
+        }
+
+
+        function OnLoad() {
+
+            // get current state
+            let url = base + '/json/state'
+
+            fetch(url)
+                .then(function (response) {
+                    if (response.ok)
+                        return response.json();
+                    throw new Error('network err')
+                })
+                .then(function (data) {
+
+                    // initialise
+                    currentState = previousState = data;
+                    currentIteration = 0;
+
+                    maxIteration = data["switchCount"]
+
+                    // fill details for this iteration
+                    Iteration(currentIteration)
+
+
+                }).catch(function (error) {
+
+                    //find all the buttons and turn them off
+                    var buttons = document.getElementsByTagName('button')
+
+                    for (index = 0; index < buttons.length; index++) {
+                        buttons[index].disabled = true;
+                    }
+
+
+                })
+
+
+        }
+
+
+    </script>
+
+</BODY>
+</HTML>

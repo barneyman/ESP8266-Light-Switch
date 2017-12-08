@@ -1,21 +1,12 @@
 <HTML>
 <HEAD>
 <META NAME="GENERATOR" Content="Microsoft Visual Studio">
-<TITLE></TITLE>
-    <style>
-        body {
-            font: Arial;
-            font-size: 20px;
-        }
-
-        .big {
-            height: 20px;
-            width: 100px;
-        }
-    </style>
-
+<TITLE>STA</TITLE>
+    <link rel="stylesheet" type="text/css" href="switch.css">
 </HEAD>
 <BODY onload="OnLoad()">
+
+    <iframe src="HeaderFrame.htm" id="header" name="header" onload="headerLoaded()"></iframe>
 
     <h1 id="name"></h1>
 
@@ -27,29 +18,32 @@
 
     <hr />
     
-    <button onclick="All('on')">All On</button>
-    <button onclick="All('off')" >All Off</button>
-    <button onclick="PopulateList(true)">Refresh</button>
+    <button id="on" onclick="All('on')">All On</button>
+    <button id="off" onclick="All('off')" >All Off</button>
+    <button id="refresh" onclick="PopulateList(true)">Refresh</button>
+
+    <script src="common.js"></script>
+
 
         <script>
-
-            let base = "http://192.168.42.17"
-
 
             function OnLoad() {
                 PopulateList(true)
             }
+
+
 
             function PopulateList(clearTheList) {
 
                 let url = base + '/json/state'
 
                 fetch(url)
-                    .then(function (response) { return response.json(); })
+                    .then(function (response) {
+                        if (response.ok)
+                            return response.json();
+                        throw new Error('network err')
+                    })
                     .then(function (data) {
-
-                        // get the name
-                        document.getElementById('name').innerText = data['name']
 
                         // then work out the switch states
                         var states = data['switchState']
@@ -57,7 +51,7 @@
                         var table=document.getElementById('states')
 
                         if (clearTheList) {
-                            table.innerHTML = "<tr><th>Switch Number</th><th>Switch Action</th><th>Relay Number</th></tr>";
+                            table.innerHTML = "<tr><th>Switch Number</th><th>Switch Action</th><th>Relay Number</th><th>Switch Name</th></tr>";
                         }
                             
 
@@ -68,13 +62,16 @@
                                 var tdRelay = document.createElement('td')
                                 var tdAction = document.createElement('td')
                                 var tdSwitch = document.createElement('td')
+                                var tdName = document.createElement('td')
                                 tr.appendChild(tdSwitch)
                                 tr.appendChild(tdAction)
                                 tr.appendChild(tdRelay)
+                                tr.appendChild(tdName)
 
                                 var button = document.createElement('button');
                                 var switchNumber = states[eachState]["switch"]
                                 var relayNumber = states[eachState]["relay"]
+                                var switchName=states[eachState]["name"]
 
                                 var buttonStateInverse = states[eachState]["state"] == 0 ? "on" : "off"
 
@@ -85,12 +82,24 @@
                                 tdRelay.innerText = relayNumber
                                 tdAction.appendChild(button);
                                 tdSwitch.innerText = switchNumber
+                                tdName.innerText = switchName;
+
                                 table.appendChild(tr)
 
 
 
                             }
                         }
+                    }).catch(function (error) {
+
+                        //find all the buttons and turn them off
+                        var buttons = document.getElementsByTagName('button')
+
+                        for (index=0;index<buttons.length;index++) {
+                            buttons[index].disabled = true;
+                        }
+
+
                     })
 
             }

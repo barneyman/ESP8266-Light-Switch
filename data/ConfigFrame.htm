@@ -1,0 +1,118 @@
+<HTML>
+<HEAD>
+    <META NAME="GENERATOR" Content="Microsoft Visual Studio">
+    <TITLE></TITLE>
+    <link rel="stylesheet" type="text/css" href="switch.css">
+</HEAD>
+<BODY onload="OnLoad()">
+
+    <iframe src="HeaderFrame.htm" id="header" name="header" onload="headerLoaded()"></iframe>
+
+    <h2>Configuration</h2>
+    <table>
+        <tr>
+            <td>
+                Rebounce Guard
+            </td>
+            <td>
+                <input name="bounce" size="15" type="number" id="bouncems" disabled />ms
+            </td>
+            <td>
+                How long to guard against 'dirty' physical switch rebounces
+            </td>
+        </tr>
+        <tr>
+            <td>
+                Reset Window
+            </td>
+            <td>
+                <input name="reset" size="15" type="number" id="resetms" disabled/>ms
+            </td>
+            <td>
+                The window in which N repeated on/off switch changes force the device to reset itself
+            </td>
+        </tr>
+    </table>
+    <hr />
+    <button onclick="OnSave()">Save</button>
+
+    <script src="common.js"></script>
+
+    <script>
+
+
+        function OnLoad()
+        {
+            let url = base+'/json/config'
+
+            fetch(url)
+                .then(function(response) { return response.json(); })
+                .then(function(data) {
+                    for(var eachNode in data)
+                    {
+                        if (data.hasOwnProperty(eachNode)) {
+                            // depends on the type
+                            if (document.getElementById(eachNode) != null) {
+
+                                if (document.getElementById(eachNode).nodeName == 'INPUT') {
+                                    document.getElementById(eachNode).value = data[eachNode];
+                                    document.getElementById(eachNode).disabled = false;
+                                }
+                                else {
+                                    document.getElementById(eachNode).innerText = data[eachNode];
+                                }
+                            }
+                        }
+                    }
+                })
+        }
+
+
+        function OnSave() {
+
+            // check there are proper values
+            var jsonData = {};
+
+            // get all inputs
+            var inputs = document.getElementsByTagName('input')
+            var inputValid = true;
+            for (index = 0; index < inputs.length; ++index) {
+
+
+                if (inputs[index].id != '') {
+
+                    if (inputs[index].value == '')
+                        inputValid = false;
+
+                    jsonData[inputs[index].id] = inputs[index].value;
+                }
+            }
+            if(inputValid==true) {
+
+                let url = base + '/json/config'
+
+                var xhr = new XMLHttpRequest();
+
+                xhr.open("POST", url, true);
+                xhr.setRequestHeader("Content-type", "text/plain");
+
+                xhr.send(JSON.stringify(jsonData));
+                xhr.onloadend = function () {
+                    // done
+                    // we should delay for a couple of seconds, then try to
+                    // go to the .local domain again
+
+                };
+
+
+            }
+            else
+                alert('values cannot be empty')
+        }
+
+
+    </script>
+
+
+</BODY>
+</HTML>

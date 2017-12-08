@@ -7,24 +7,14 @@
 
 #include "debug_defines.h"
 
-
-// use eiher the flash or SIFFS
-// if you use FLASH, you'll have to build/upload with _INITIALISE_EEPROM set once, then upload WITHOUT it set (or the eeprom will be erased every boot = BAD)
-// if you use SIFFS you'll have to upload the config.json file in the data directory
-
-#define _USE_JSON_NOT_EEPROM
-
-#ifdef _USE_JSON_NOT_EEPROM
 #include <ArduinoJson.h>
 #include <FS.h>
+
+
 //#define _ERASE_JSON_CONFIG
 #define _JSON_CONFIG_FILE "/config.json"
-#else
-// run it ONCE with this flag set, just to write sane values into the EEPROM
-//#define _INITIALISE_EEPROM
-#include <EEPROM.h>
-#endif
 
+#define JSON_STATIC_BUFSIZE	2048
 
 #define _USING_OLED
 
@@ -74,19 +64,21 @@ extern "C" {
 // we run MDNS so we can be found by "esp8266_<last 3 bytes of MAC address>.local" by the RPI
 MDNSResponder mdns;
 
+// number of relays & switches
+#define NUM_SOCKETS	6
+
+// millis timeouts
+#define QUICK_SWITCH_TIMEOUT_DEFAULT	6000
+#define BOUNCE_TIMEOUT_DEFAULT			100
+
 
 struct
 {
 	// store network credentials in eeprom
 	struct
 	{
-#ifdef _USE_JSON_NOT_EEPROM
 		String ssid;
 		String password;
-#else
-		char ssid[128];
-		char password[128];
-#endif
 		bool configured;
 
 	} wifi;
@@ -97,7 +89,46 @@ struct
 	// 6 switches in this time force an AP reset
 	unsigned long resetWindowms;
 
-} Details;
+	// map
+	// unsigned switchToRelayMap[NUM_SOCKETS];
+
+	// the switches are named
+	struct {
+
+		String name;
+		unsigned relay;
+
+	} switches[NUM_SOCKETS];
+
+} Details = {
+
+	{
+		"","",false
+	},
+	BOUNCE_TIMEOUT_DEFAULT,
+	QUICK_SWITCH_TIMEOUT_DEFAULT,
+
+#ifdef _BOARD_VER_1_1
+	{
+		{ "Switch 0", 0 },
+		{ "Switch 1", 5 },
+		{ "Switch 2", 4 },
+		{ "Switch 3", 3 },
+		{ "Switch 4", 2 },
+		{ "Switch 5", 1 }
+	}
+#else
+	{
+		{ "Switch 0", 0 },
+		{ "Switch 1", 1 },
+		{ "Switch 2", 2 },
+		{ "Switch 3", 3 },
+		{ "Switch 4", 4 },
+		{ "Switch 5", 5 }
+	}
+#endif
+
+};
 
 // needs to be persisted or the event is unsubscribed
 WiFiEventHandler onConnect, onDisconnect, onIPgranted;
@@ -108,11 +139,10 @@ volatile bool busyDoingSomethingIgnoreSwitch = false;
 String esphostname = "esp8266_";
 
 
-enum wifiMode { modeAP, modeSTA, modeUnknown } ;
+enum wifiMode { modeAP, modeSTA, modeSTAspeculative, modeUnknown } ;
 wifiMode currentMode = modeUnknown;
 
-
-void ConnectWifi(wifiMode intent);
+wifiMode ConnectWifi(wifiMode intent);
 
 
 ESP8266WebServer server(80);
@@ -126,8 +156,6 @@ int powerRelayBoardNPN = 0; // d3
 mcp23017AndRelay mcp(4, 5, resetMCPpin, powerRelayBoardNPN);
 
 
-// number of relays & switches
-#define NUM_SOCKETS	6
 
 // how long we slow the web hots down for (millis)
 #define _WEB_TAR_PIT_DELAY 200
@@ -145,18 +173,6 @@ mcp23017AndRelay mcp(4, 5, resetMCPpin, powerRelayBoardNPN);
 	bool resetWIFI = false;
 #endif
 
-	// millis timeouts
-#define QUICK_SWITCH_TIMEOUT_DEFAULT	6000
-#define BOUNCE_TIMEOUT_DEFAULT			100
-
-	unsigned switchToRelayMap[NUM_SOCKETS] =
-	{
-#ifdef _BOARD_VER_1_1
-		0,5,4,3,2,1
-#else
-		0,1,2,3,4,5
-#endif
-	};
 
 
 unsigned MapSwitchToRelay(unsigned switchNumber)
@@ -169,7 +185,7 @@ unsigned MapSwitchToRelay(unsigned switchNumber)
 	}
 	else
 	{
-		relayNumber=switchToRelayMap[switchNumber];
+		relayNumber=Details.switches[switchNumber].relay;
 	}
 
 	DEBUG(DEBUG_VERBOSE, Serial.printf("	MapSwitchToRelay %u -> %u\r\n", switchNumber, relayNumber));
@@ -329,20 +345,14 @@ void DoRelay(unsigned portNumber, bool on)
 
 }
 
-#ifdef _USE_JSON_NOT_EEPROM
 
-void WriteJSON(bool apset, const char *ssid, const char *pwd, long bounce, long reset, unsigned *map)
+
+
+void WriteJSONconfig()
 {
-	DEBUG(DEBUG_INFO, Serial.println("WriteJSON"));
+	DEBUG(DEBUG_INFO, Serial.println("WriteJSONconfig"));
 
-	Details.debounceThresholdms = bounce;
-	Details.resetWindowms = reset;
-	Details.wifi.configured = apset;
-
-	Details.wifi.password = pwd?pwd:String();
-	Details.wifi.ssid = ssid?ssid:String();
-
-	// first - see if the file is there
+	// try to create it
 	fs::File json = SPIFFS.open("/config.json", "w");
 
 	if (!json)
@@ -351,24 +361,23 @@ void WriteJSON(bool apset, const char *ssid, const char *pwd, long bounce, long 
 		return;
 	}
 
-	StaticJsonBuffer<1024> jsonBuffer;
+	StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 
-	JsonObject &root=jsonBuffer.createObject();
+	JsonObject &root = jsonBuffer.createObject();
 
-	root["debounceThresholdms"]= Details.debounceThresholdms;
-	root["resetWindowms"]=Details.resetWindowms;
+	root["debounceThresholdms"] = Details.debounceThresholdms;
+	root["resetWindowms"] = Details.resetWindowms;
 
 	JsonObject &wifi = root.createNestedObject("wifi");
 
-	wifi["configured"]=Details.wifi.configured;
+	wifi["configured"] = Details.wifi.configured;
 	if (Details.wifi.configured)
 	{
-		wifi["password"]=Details.wifi.password;
-		wifi["ssid"]=Details.wifi.ssid;
+		wifi["password"] = Details.wifi.password;
+		wifi["ssid"] = Details.wifi.ssid;
 	}
 
-
-	AddMapToJSON(root, NUM_SOCKETS, map);
+	AddMapToJSON(root, NUM_SOCKETS);
 
 
 	///////////////////// written here
@@ -376,14 +385,15 @@ void WriteJSON(bool apset, const char *ssid, const char *pwd, long bounce, long 
 	String jsonText;
 	root.prettyPrintTo(jsonText);
 
-	DEBUG(DEBUG_VERBOSE, Serial.printf("JSON : %s\n\r",jsonText.c_str()));
+	DEBUG(DEBUG_VERBOSE, Serial.printf("JSON : %s\n\r", jsonText.c_str()));
 
-	json.write((byte*)jsonText.c_str(),jsonText.length());
-	
+	json.write((byte*)jsonText.c_str(), jsonText.length());
+
 	json.close();
 }
 
-void ReadJSON(unsigned *map)
+
+void ReadJSONconfig()
 {
 	DEBUG(DEBUG_INFO, Serial.println("ReadJSON"));
 
@@ -396,7 +406,7 @@ void ReadJSON(unsigned *map)
 	{
 		DEBUG(DEBUG_IMPORTANT, Serial.println("Config.json does not exist"));
 		// file does not exist
-		WriteJSON(false, NULL, NULL, BOUNCE_TIMEOUT_DEFAULT, QUICK_SWITCH_TIMEOUT_DEFAULT,map);
+		WriteJSONconfig();
 
 		return;
 
@@ -404,24 +414,23 @@ void ReadJSON(unsigned *map)
 	// first - see if the file is there
 	fs::File json = SPIFFS.open(_JSON_CONFIG_FILE, "r");
 
-	String jsonString=json.readString();
+	String jsonString = json.readString();
 
 	json.close();
 
-	DEBUG(DEBUG_IMPORTANT, Serial.printf("JSON: %s\n\r",jsonString.c_str()));
+	DEBUG(DEBUG_IMPORTANT, Serial.printf("JSON: %s\n\r", jsonString.c_str()));
 
-	StaticJsonBuffer<1024> jsonBuffer;
+	StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 
 	JsonObject& root = jsonBuffer.parseObject(jsonString);
-	
+
 	if (!root.success())
 	{
 		DEBUG(DEBUG_ERROR, Serial.println("JSON parse failed"));
-		WriteJSON(false, NULL, NULL, Details.debounceThresholdms, Details.resetWindowms,&switchToRelayMap[0]);
 	}
 
-	Details.debounceThresholdms=root["debounceThresholdms"];
-	Details.resetWindowms=root["resetWindowms"];
+	Details.debounceThresholdms = root["debounceThresholdms"];
+	Details.resetWindowms = root["resetWindowms"];
 
 	JsonObject &wifi = root["wifi"];
 
@@ -443,8 +452,16 @@ void ReadJSON(unsigned *map)
 	{
 		for (unsigned each = 0; each < NUM_SOCKETS; each++)
 		{
-			*map = switchMap[each];
-			map++;
+			JsonObject &theSwitch= switchMap[each]["switch"];
+			if(theSwitch.success())
+			{
+				Details.switches[each].relay = theSwitch["relay"];
+				Details.switches[each].name = (const char*)theSwitch["name"];
+			}
+			else
+			{
+				DEBUG(DEBUG_IMPORTANT, Serial.printf("switchMap switch %d not found\n\r",each));
+			}
 		}
 	}
 
@@ -452,35 +469,6 @@ void ReadJSON(unsigned *map)
 }
 
 
-#else
-
-void WriteEeprom(bool apset,const char *ssid,const char *pwd, long bounce, long reset)
-{
-	DEBUG(DEBUG_VERBOSE, Serial.println("Writing EEPROM"));
-	DEBUG(DEBUG_VERBOSE, Serial.println(bounce));
-	DEBUG(DEBUG_VERBOSE, Serial.println(reset));
-
-	Details.wifi.configured = apset;
-	if(apset)
-	{
-		strcpy(Details.wifi.ssid, ssid);
-		strcpy(Details.wifi.password, pwd);
-	}
-	else
-	{
-		memset(Details.wifi.ssid, 0, sizeof(Details.wifi.ssid));
-		memset(Details.wifi.password, 0, sizeof(Details.wifi.password));
-	}
-
-	Details.debounceThresholdms = bounce;
-	Details.resetWindowms = reset;
-
-	EEPROM.put(0, Details);
-	EEPROM.commit();
-
-}
-
-#endif
 
 
 void BeginWebServer()
@@ -490,7 +478,7 @@ void BeginWebServer()
 }
 
 // disjoin and rejoin, optionally force a STA attempt
-void ConnectWifi(wifiMode intent)
+wifiMode ConnectWifi(wifiMode intent)
 {
 	busyDoingSomethingIgnoreSwitch = true;
 
@@ -505,6 +493,7 @@ void ConnectWifi(wifiMode intent)
 		WiFi.softAPdisconnect();
 		break;
 	case wifiMode::modeSTA:
+	case wifiMode::modeSTAspeculative:
 		WiFi.setAutoReconnect(false);
 		WiFi.disconnect();
 		break;
@@ -517,9 +506,8 @@ void ConnectWifi(wifiMode intent)
 	DEBUG(DEBUG_WARN, Serial.println("wifi disconnected"));
 
 
-	if (intent == wifiMode::modeSTA)
+	if (intent == wifiMode::modeSTA || intent==wifiMode::modeSTAspeculative)
 	{
-		currentMode = wifiMode::modeSTA;
 
 		// turn bonjour off??
 		DEBUG(DEBUG_VERBOSE, Serial.print("Attempting connect to "));
@@ -527,13 +515,7 @@ void ConnectWifi(wifiMode intent)
 
 		WiFi.mode(WIFI_STA);
 
-
-
-#ifdef _USE_JSON_NOT_EEPROM
 		WiFi.begin(Details.wifi.ssid.c_str(), Details.wifi.password.c_str());
-#else
-		WiFi.begin(Details.wifi.ssid, Details.wifi.password);
-#endif
 
 		// Wait for connection
 		for(int attempts=0;attempts<15;attempts++)
@@ -556,6 +538,20 @@ void ConnectWifi(wifiMode intent)
 
 			WiFi.setAutoReconnect(true);
 
+			currentMode = wifiMode::modeSTA;
+
+		}
+		else
+		{
+
+			DEBUG(DEBUG_IMPORTANT, Serial.println("FAILED to connect"));
+
+			// depending on intent ...
+			if (intent == wifiMode::modeSTAspeculative)
+			{
+				// we're trying this for the first time, we failed, fall back to AP
+				return ConnectWifi(wifiMode::modeAP);
+			}
 		}
 	}
 
@@ -581,6 +577,7 @@ void ConnectWifi(wifiMode intent)
 
 	busyDoingSomethingIgnoreSwitch = false;
 
+	return currentMode;
 }
 
 // if we see more than x switches in y time, we reset the flash and enter AP mode (so we can be joined to another wifi network)
@@ -606,11 +603,10 @@ void ResetMe()
 
 	resetWIFI = false;
 	// clear the credentials
-#ifdef _USE_JSON_NOT_EEPROM
-	WriteJSON(false, NULL, NULL, Details.debounceThresholdms, Details.resetWindowms, &switchToRelayMap[0]);
-#else
-	WriteEeprom(false, NULL, NULL, Details.debounceThresholdms, Details.resetWindowms);
-#endif
+	Details.wifi.configured = false;
+	Details.wifi.password = String();
+	Details.wifi.ssid = String();
+	WriteJSONconfig();
 	// and reconnect as an AP
 	ConnectWifi(wifiMode::modeAP);
 
@@ -655,25 +651,10 @@ void setup(void)
 	delay(1000);
 	Serial.begin(115200);
 
-#ifdef _USE_JSON_NOT_EEPROM
 
 	SPIFFS.begin();
 
-	ReadJSON(&switchToRelayMap[0]);
-
-#else
-	// start eeprom library
-	EEPROM.begin(512);
-
-#ifdef _INITIALISE_EEPROM
-	WriteEeprom(false, NULL, NULL, BOUNCE_TIMEOUT_DEFAULT, QUICK_SWITCH_TIMEOUT_DEFAULT);
-#endif
-
-	// try reading the eeprom
-	// the marker is to spot virgin EEPROM (can i vape it on a build?)
-	EEPROM.get(0, Details);
-
-#endif
+	ReadJSONconfig();
 
 	DEBUG(DEBUG_VERBOSE, Serial.println("starting"));
 	DEBUG(DEBUG_IMPORTANT, Serial.println(esphostname));
@@ -701,7 +682,6 @@ void setup(void)
 	onConnect=WiFi.onStationModeConnected([](const WiFiEventStationModeConnected&c) {
 	
 		DEBUG(DEBUG_IMPORTANT, Serial.printf("EVENT wifi connected %s\n\r", c.ssid.c_str()));
-		//Serial.println(c.ssid);
 
 	});
 
@@ -712,7 +692,7 @@ void setup(void)
 // my router doesn't understand *LAN* routes
 #define _HARD_CODED_IP_ADDRESS
 #ifdef _HARD_CODED_IP_ADDRESS
-		if(WiFi.config(IPAddress(192, 168, 42, 17), IPAddress(192, 168, 42, 250), IPAddress(255, 255, 255, 0)))
+		if(WiFi.config(IPAddress(192, 168, 42, 18), IPAddress(192, 168, 42, 250), IPAddress(255, 255, 255, 0)))
 		{
 			DEBUG(DEBUG_IMPORTANT, Serial.printf("EVENT IP FORCED %s\n\r", WiFi.localIP().toString().c_str()));
 		}
@@ -726,7 +706,6 @@ void setup(void)
 	onDisconnect=WiFi.onStationModeDisconnected([](const WiFiEventStationModeDisconnected &c) {
 	
 		DEBUG(DEBUG_WARN, Serial.println("EVENT disconnected "));
-		//Serial.println(c.ssid);
 
 	});
 
@@ -760,6 +739,8 @@ void setup(void)
 // set up all the handlers for the web server
 void InstallWebServerHandlers()
 {
+	DEBUG(DEBUG_VERBOSE, Serial.println("InstallWebServerHandlers IN"));
+
 	// set up the json handlers
 	// POST
 	// all ON/OFF 
@@ -777,6 +758,8 @@ void InstallWebServerHandlers()
 
 	server.on("/all", []() {
 
+		DEBUG(DEBUG_VERBOSE, Serial.println("/all"));
+
 		for (uint8_t i = 0; i < server.args(); i++)
 		{
 			if (server.argName(i) == "action")
@@ -793,6 +776,8 @@ void InstallWebServerHandlers()
 
 
 	server.on("/button", []() {
+
+		DEBUG(DEBUG_VERBOSE, Serial.println("/button"));
 
 		// these have to be in port/action pairs
 		if (server.args() % 2)
@@ -829,6 +814,8 @@ void InstallWebServerHandlers()
 
 	server.on("/", []() {
 
+		DEBUG(DEBUG_VERBOSE, Serial.println("/"));
+
 		delay(_WEB_TAR_PIT_DELAY);
 
 		SendServerPage();
@@ -842,57 +829,74 @@ void InstallWebServerHandlers()
 		DEBUG(DEBUG_INFO, Serial.println("json config posted"));
 		DEBUG(DEBUG_INFO, Serial.println(server.arg("plain")));
 
-		StaticJsonBuffer<1024> jsonBuffer;
+		StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
+		// 'plain' is the secret source to get to the body
+		JsonObject& root = jsonBuffer.parseObject(server.arg("plain"));
+
+		long bounce = root["bouncems"];
+		long reset = root["resetms"];
+
+		// sanity check these values!
+
+		Details.debounceThresholdms = bounce;
+		Details.resetWindowms = reset;
+
+		// extract the details
+		WriteJSONconfig();
+		delay(_WEB_TAR_PIT_DELAY);
+
+		server.send(200, "text/html", "<html></html>");
+
+		});
+
+
+	server.on("/json/wifi", HTTP_POST, []() {
+
+		DEBUG(DEBUG_INFO, Serial.println("json wifi posted"));
+		DEBUG(DEBUG_INFO, Serial.println(server.arg("plain")));
+
+		StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 		// 'plain' is the secret source to get to the body
 		JsonObject& root = jsonBuffer.parseObject(server.arg("plain"));
 
 		String ssid = root["ssid"];
 		String pwd = root["pwd"];
-		long bounce = root["bouncems"];
-		long reset = root["resetms"];
 
-		// extract the details
-#ifdef _USE_JSON_NOT_EEPROM
-		WriteJSON(true, ssid.c_str(), pwd.c_str(), bounce, reset, &switchToRelayMap[0]);
-#else
-		WriteEeprom(true, ssid.c_str(), pwd.c_str(), bounce, reset);
-#endif
-		delay(_WEB_TAR_PIT_DELAY);
+		// sanity check these values
+
+		Details.wifi.ssid = ssid;
+		Details.wifi.password = pwd;
+
 
 		// force attempt
-		ConnectWifi(wifiMode::modeSTA);
-		delay(1000);
+		// if we fail we fall back to AP
+		if (ConnectWifi(wifiMode::modeSTAspeculative) == wifiMode::modeSTA)
+		{
+			Details.wifi.configured = true;
+		}
+		else
+		{
+			Details.wifi.configured = false;
+		}
+
+		// and update json
+		WriteJSONconfig();
+
+		delay(_WEB_TAR_PIT_DELAY);
 
 		server.send(200, "text/html", "<html></html>");
 
 
-		});
-
-	// GET
-	server.on("/json/map", HTTP_GET, []() {
-		// give them back the port / switch map
-
-		DEBUG(DEBUG_INFO, Serial.println("json map called"));
-
-		StaticJsonBuffer<1024> jsonBuffer;
-
-		JsonObject &root = jsonBuffer.createObject();
-
-		AddMapToJSON(root, NUM_SOCKETS, &switchToRelayMap[0]);
-
-		String jsonText;
-		root.prettyPrintTo(jsonText);
-
-		server.send(200, "application/json", jsonText);
 	});
 
+	// GET
 
 	server.on("/json/state", HTTP_GET, []() {
 		// give them back the port / switch map
 
 		DEBUG(DEBUG_INFO, Serial.println("json state called"));
 
-		StaticJsonBuffer<1024> jsonBuffer;
+		StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 
 		JsonObject &root = jsonBuffer.createObject();
 
@@ -902,17 +906,17 @@ void InstallWebServerHandlers()
 		JsonArray &switchState = root.createNestedArray("switchState");
 		for (unsigned each = 0; each < NUM_SOCKETS; each++)
 		{
-			JsonObject &switchRelay = jsonBuffer.createObject();
+			JsonObject &switchRelay = switchState.createNestedObject();
 			switchRelay["switch"] = each;
-			switchRelay["relay"] = MapSwitchToRelay(each);
+			switchRelay["name"] = Details.switches[each].name;
+			switchRelay["relay"] = Details.switches[each].relay;
 			switchRelay["state"] = mcp.readSwitch(each) ? 1 : 0;
-
-			switchState.add(switchRelay);
 		}
 
 		String jsonText;
 		root.prettyPrintTo(jsonText);
 
+		server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
 		server.send(200, "application/json", jsonText);
 	});
 
@@ -921,7 +925,7 @@ void InstallWebServerHandlers()
 
 		DEBUG(DEBUG_INFO, Serial.println("json config called"));
 
-		StaticJsonBuffer<1024> jsonBuffer;
+		StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 
 		JsonObject &root = jsonBuffer.createObject();
 
@@ -932,26 +936,56 @@ void InstallWebServerHandlers()
 		String jsonText;
 		root.prettyPrintTo(jsonText);
 
+		server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+		server.send(200, "application/json", jsonText);
+	});
+
+	server.on("/json/wifi", HTTP_GET, []() {
+		// give them back the port / switch map
+
+		DEBUG(DEBUG_INFO, Serial.println("json wifi called"));
+
+		StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
+
+		JsonObject &root = jsonBuffer.createObject();
+		root["name"] = esphostname;
+
+		// let's get all wifis we can see
+		int found=WiFi.scanNetworks();
+
+		JsonArray &wifis = root.createNestedArray("wifi");
+
+		for (int each = 0; each < found; each++)
+		{
+			JsonObject &wifi = wifis.createNestedObject();
+			wifi["ssid"] = WiFi.SSID(each);
+			wifi["sig"] = WiFi.RSSI(each);
+
+		}
+
+		String jsonText;
+		root.prettyPrintTo(jsonText);
+		
+		// do not cache
+		server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
 		server.send(200, "text/json", jsonText);
 	});
 
+	// serve up everthing in SPIFFS
+	SPIFFS.openDir("/");
 
-	server.on("/json/file", HTTP_GET, []() {
-		// give them back the port / switch map
+	Dir dir = SPIFFS.openDir("/");
+	while (dir.next()) {
+		String file = dir.fileName();
 
-		DEBUG(DEBUG_IMPORTANT, Serial.println("json file called"));
+		// cache it for an hour
+		server.serveStatic(file.c_str(), SPIFFS, file.c_str(),"Cache-Control: public, max-age=3600");
 
-		if (SPIFFS.exists(_JSON_CONFIG_FILE))
-		{
-			fs::File json = SPIFFS.open(_JSON_CONFIG_FILE, "r");
+		DEBUG(DEBUG_VERBOSE, Serial.printf("Serving %s\n\r", file.c_str()));
 
-			String jsonString = json.readString();
+	}
 
-			server.send(200, "application/json", jsonString);
-
-			json.close();
-		}
-	});
+	DEBUG(DEBUG_VERBOSE, Serial.println("InstallWebServerHandlers OUT"));
 
 }
 
@@ -979,15 +1013,19 @@ void SendServerPage()
 
 }
 
-void AddMapToJSON(JsonObject &root, unsigned numSockets, unsigned *map)
+void AddMapToJSON(JsonObject &root, unsigned numSockets)
 {
 	root["switchCount"] = numSockets;
 
 	JsonArray &switchMap = root.createNestedArray("switchMap");
+
 	for (unsigned each = 0; each < numSockets; each++)
 	{
-		switchMap.add(*map);
-		map++;
+		JsonObject &theSwitch = switchMap.createNestedObject();
+		theSwitch["switch"] = each;
+		theSwitch["relay"] = Details.switches[each].relay;
+		theSwitch["name"] = Details.switches[each].name.c_str();
+
 	}
 
 }
@@ -1000,6 +1038,5 @@ void loop(void)
 		ResetMe();
 #endif
 
-	
 	server.handleClient();
 }
