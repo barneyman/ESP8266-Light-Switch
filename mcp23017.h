@@ -60,12 +60,15 @@ public:
 	// read switch state
 	bool readSwitch(unsigned switchNumber);
 	// set the output
-	void SetRelay(unsigned relayNumber, bool relayState);
+	bool SetRelay(unsigned relayNumber, bool relayState);
+	bool ToggleRelay(unsigned relayNumber);
 	void SetSwitch(unsigned switchNumber, bool relayState);
 	// find out what caused the isr
 	int InterruptCauseAndCurrentState(bool justClearInterrupt);
 	// get all the switches
 	byte readAllSwitches(bool readInterrupt=false);
+	// read the RELAY
+	bool GetRelay(unsigned relayNumber, bool &relayState);
 
 
 protected:

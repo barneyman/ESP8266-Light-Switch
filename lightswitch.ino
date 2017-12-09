@@ -814,6 +814,27 @@ void InstallWebServerHandlers()
 	});
 
 
+	server.on("/toggle", []() {
+
+		DEBUG(DEBUG_VERBOSE, Serial.println("/toggle"));
+
+		delay(_WEB_TAR_PIT_DELAY);
+
+		// these have to be in port/action pairs
+		if (!server.args())
+		{
+			return;
+		}
+
+		if (server.argName(0) == "relay")
+		{
+			if (mcp.ToggleRelay(server.arg(0).toInt()))
+			{
+				server.send(200, "text/html", "<html></html>");
+			}
+		}
+
+	});
 
 	server.on("/button", []() {
 

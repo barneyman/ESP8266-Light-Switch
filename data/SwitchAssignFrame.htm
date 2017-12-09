@@ -17,7 +17,7 @@
     <table>
         <tr>
             <td>
-                <button onclick="testRelay()">Test</button>
+                <button onclick="TestRelay(currentState['switchState'][currentIteration]['relay'])">Test</button>
             </td>
             <td>
                 <input id="name" />
@@ -42,6 +42,35 @@
 
         var previousState, currentState;
         var currentIteration, maxIteration;
+
+        function TestRelay(relay) {
+
+            ToggleRelay(relay, 3);
+
+
+        }
+
+
+        function ToggleRelay(relay, repeatCount) {
+
+            // reset all counts
+            url = base + '/toggle?relay='+relay
+
+            var xhr = new XMLHttpRequest();
+                
+            xhr.open("GET", url, true);
+            xhr.setRequestHeader("Content-type", "text/plain");
+
+            xhr.send();
+            xhr.onloadend = function () {
+
+                if (repeatCount) {
+                    setTimeout(function () { ToggleRelay(relay, repeatCount - 1); }, 1200)
+                }
+
+            }
+
+        }
 
         function BuildRadioButton(iter) {
 

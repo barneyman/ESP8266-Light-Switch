@@ -160,35 +160,73 @@ void mcp23017::SetSwitch(unsigned switchNumber, bool relayState)
 
 }
 
+bool mcp23017::ToggleRelay(unsigned relayNumber)
+{
+	bool currentState = false;
+	if (GetRelay(relayNumber, currentState))
+	{
+		DEBUG(DEBUG_INFO, Serial.printf("ToggleRelay %u %s -> %s\n\r", relayNumber,currentState?"ON":"off", !currentState ? "ON" : "off"));
+		return SetRelay(relayNumber, !currentState);
+	}
 
-void mcp23017::SetRelay(unsigned relayNumber, bool relayState)
+	return false;
+}
+
+bool mcp23017::GetRelay(unsigned relayNumber, bool &relayState)
+{
+	if (relayNumber > 7 || relayNumber < 0)
+	{
+		DEBUG(DEBUG_ERROR, Serial.printf("GetRelay called out of bounds %u\n\r", relayNumber));
+		return false;
+	}
+
+	byte state = readOneRegister(MCP_GPIO_B);
+
+	DEBUG(DEBUG_INFO, Serial.printf("GetRelay state %02x\n\r", (int)state));
+
+	// get the existing state *of the relay* HI is OFF
+	relayState = ((state & (1 << relayNumber))&0xff) ? false : true;
+
+
+
+	return true;
+}
+
+
+bool mcp23017::SetRelay(unsigned relayNumber, bool relayState)
 {
 	if (relayNumber > 7 || relayNumber < 0)
 	{
 		DEBUG(DEBUG_ERROR, Serial.printf("SetRelay called out of bounds %u\n\r", relayNumber));
-		return;
+		return false;
 	}
 
 	// first, let's insure we haven't been here, for this switch, too soon
-	unsigned long timediff = micros()-m_lastRelayMicros[relayNumber];
+	unsigned long now = micros();
+	unsigned long timediff = now-m_lastRelayMicros[relayNumber];
 	if (timediff < _MIN_TIME_BETWEEN_SWITCHES)
 	{
-		DEBUG(DEBUG_ERROR, Serial.printf("SetRelay called too soon for switch %u\n\r", relayNumber));
-		return;
+		DEBUG(DEBUG_ERROR, Serial.printf("SetRelay called too soon for relay %u (%lums)\n\r", relayNumber, timediff/1000));
+		return false;
 	}
 
-	m_lastRelayMicros[relayNumber] = micros();
+	m_lastRelayMicros[relayNumber] = now;
 
 	byte state = readOneRegister(MCP_GPIO_B);
 
+	DEBUG(DEBUG_INFO, Serial.printf("SetRelay state %02x\n\r", (int)state));
+
 	// get the existing state *of the relay*, mask out the bit we want
 	state = ((state& (~(1 << relayNumber)))) & 0xff;
+
 
 	// then set the bit we're after (hi is OFF)
 	if (!relayState)
 		state = state | (1 << relayNumber);
 
 	writeOneRegister(MCP_GPIO_B, state);
+
+	return true;
 }
 
 int mcp23017::InterruptCauseAndCurrentState(bool justClearInterrupt)
