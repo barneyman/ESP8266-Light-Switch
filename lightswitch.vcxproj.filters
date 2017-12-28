@@ -46,6 +46,15 @@
     <None Include="data\SwitchAssignFrame.htm">
       <Filter>data</Filter>
     </None>
+    <None Include="data\CurrentStateFrame.htm">
+      <Filter>data</Filter>
+    </None>
+    <None Include="data\homeFrame.htm">
+      <Filter>data</Filter>
+    </None>
+    <None Include="data\AdminFrame.htm">
+      <Filter>data</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="__vm\.lightswitch.vsarduino.h">

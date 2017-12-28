@@ -1,7 +1,7 @@
 <HTML>
 <HEAD>
 <META NAME="GENERATOR" Content="Microsoft Visual Studio">
-<TITLE>AP</TITLE>
+<TITLE>ESP8266 Provisioning</TITLE>
     <link rel="stylesheet" type="text/css" href="switch.css">
 </HEAD>
 <BODY onload="OnLoad()">
@@ -9,6 +9,10 @@
     <iframe src="HeaderFrame.htm" id="header" name="header" onload="headerLoaded()"></iframe>
 
     <h2>Wifi Details</h2>
+    After successful configuration, this device will join that network and be available
+    as either <b><span id="devicename">???</span></b> or via configured IP address<br />
+    If configuration fails, this screen, on this AP, will be available again
+    <hr />
     <table>
         <tr>
             <td>
@@ -24,6 +28,25 @@
             </td>
             <td>
                 <input name="pwd" size="15" type="password" id="pwd" />
+            </td>
+        </tr>
+        <tr>
+            <td>Type</td>
+            <td>
+                <select>
+                    <option>DHCP</option>
+                    <option>Static</option>
+                </select>
+            </td>
+        </tr>
+        <tr>
+            <td>
+                IP Address<br />Gateway<br />Netmask<br />
+            </td>
+            <td>
+                <input type="text" id="ip"/><br />
+                <input type="text" id="gateway"/><br />
+                <input type="text" id="netmask"/><br />
             </td>
         </tr>
     </table>        
@@ -53,12 +76,21 @@
                 })
                 .then(function (data) {
 
+                    document.getElementById("devicename").innerText=data["name"]+".local"
+
                     wifis.innerText = ""
                     select = document.createElement("select")
                     select.setAttribute('id','wifisids')
                     wifis.appendChild(select)
 
-                    var wifiArray=data["wifi"]
+                    var wifiArray = data["wifi"]
+
+                    //wifiArray.sort(function (a, b) {
+                    //    return a.sig > b.sig;
+                    //});
+
+                    //wifiArray.sort();
+
 
                     for (var eachNode in wifiArray)
                     {

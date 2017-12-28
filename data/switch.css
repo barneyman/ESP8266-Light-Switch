@@ -18,7 +18,6 @@ table td
     word-wrap:break-word;
 }
 
-
 #header
 {
     width:100%;
@@ -31,4 +30,41 @@ table td
     color: white;
     text-align: right;
     font-weight: bold;
+}
+
+ul.main
+{
+    margin: 0;
+    padding: 0;
+    list-style-type: none;
+    background-color: darkblue;
+}
+
+ul.main li 
+{ 
+    display: inline; 
+    color: white;
+}
+
+ul.main li a
+{
+    text-decoration: none;
+    color: white;
+    background-color: darkblue;
+}
+
+ul.main li a:hover
+{
+    color: white;
+    background-color: #369;
+}
+
+ul.main li + li:before {
+    content: "| ";
+}
+
+iframe.main
+{
+    width:100%;
+    height:100%
 }

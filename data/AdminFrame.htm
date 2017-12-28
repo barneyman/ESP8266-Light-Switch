@@ -1,0 +1,30 @@
+<HTML>
+<HEAD>
+<META NAME="GENERATOR" Content="Microsoft Visual Studio">
+<TITLE></TITLE>
+    <link rel="stylesheet" type="text/css" href="switch.css">
+</HEAD>
+<BODY>
+
+    <button onclick="ResetWIFI()">Reset WIFI</button>
+
+    <script src="common.js"></script>
+
+    <script>
+
+        function ResetWIFI() {
+
+            let url = base + '/json/resetWIFI'
+
+            var xhr = new XMLHttpRequest();
+
+            xhr.open("GET", url, true);
+            xhr.setRequestHeader("Content-type", "text/plain");
+
+            xhr.send();
+
+        }
+    </script>
+
+</BODY>
+</HTML>

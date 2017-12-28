@@ -10,11 +10,20 @@
 #include <ArduinoJson.h>
 #include <FS.h>
 
+#include <vector>
+#include <algorithm> 
 
 //#define _ERASE_JSON_CONFIG
 #define _JSON_CONFIG_FILE "/config.json"
 
 #define JSON_STATIC_BUFSIZE	2048
+
+#ifdef _DEBUG
+#define _TEST_WFI_STATE	
+#endif
+
+
+
 
 //#define _USING_OLED
 
@@ -90,6 +99,10 @@ struct
 		String password;
 		bool configured;
 
+		bool dhcp;
+		// if not dhcp
+		IPAddress ip, netmask, gateway;
+
 	} wifi;
 
 	// how long to wait for the light switch to settle
@@ -121,28 +134,28 @@ struct
 } Details = {
 
 	{
-		"","",false
+		"","",false, true
 	},
 	BOUNCE_TIMEOUT_DEFAULT,
 	QUICK_SWITCH_TIMEOUT_DEFAULT,
 
 #ifdef _BOARD_VER_1_1
 	{
-		{ "Switch 0", 0 },
-		{ "Switch 1", 5 },
-		{ "Switch 2", 4 },
-		{ "Switch 3", 3 },
-		{ "Switch 4", 2 },
-		{ "Switch 5", 1 }
+		{ "Device A", 0 },
+		{ "Device B", 5 },
+		{ "Device C", 4 },
+		{ "Device D", 3 },
+		{ "Device E", 2 },
+		{ "Device F", 1 }
 	}
 #else
 	{
-		{ "Switch 0", 0 },
-		{ "Switch 1", 1 },
-		{ "Switch 2", 2 },
-		{ "Switch 3", 3 },
-		{ "Switch 4", 4 },
-		{ "Switch 5", 5 }
+		{ "Device A", 0 },
+		{ "Device B", 1 },
+		{ "Device C", 2 },
+		{ "Device D", 3 },
+		{ "Device E", 4 },
+		{ "Device F", 5 }
 	}
 #endif
 
@@ -369,7 +382,7 @@ void WriteJSONconfig()
 		return;
 	}
 
-	StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
+	StaticJsonBuffer<4096> jsonBuffer;
 
 	JsonObject &root = jsonBuffer.createObject();
 
@@ -383,10 +396,20 @@ void WriteJSONconfig()
 	{
 		wifi["password"] = Details.wifi.password;
 		wifi["ssid"] = Details.wifi.ssid;
+
+		if (Details.wifi.dhcp)
+		{
+			JsonObject &staticDetails = wifi.createNestedObject("network");
+			staticDetails["ip"] = Details.wifi.ip.toString();
+			staticDetails["gateway"] = Details.wifi.gateway.toString();
+			staticDetails["mask"] = Details.wifi.netmask.toString();
+		}
+
 	}
 
 	AddMapToJSON(root, NUM_SOCKETS);
 
+	DEBUG(DEBUG_VERBOSE, Serial.printf("jsonBuffer.size used : %d\n\r", jsonBuffer.size()));
 
 	///////////////////// written here
 
@@ -397,7 +420,12 @@ void WriteJSONconfig()
 
 	json.write((byte*)jsonText.c_str(), jsonText.length());
 
+	DEBUG(DEBUG_VERBOSE, Serial.println("JSON : written"));
+
 	json.close();
+
+	DEBUG(DEBUG_VERBOSE, Serial.println("JSON : closed"));
+
 }
 
 
@@ -412,7 +440,7 @@ void ReadJSONconfig()
 
 	if (!SPIFFS.exists(_JSON_CONFIG_FILE))
 	{
-		DEBUG(DEBUG_IMPORTANT, Serial.println("Config.json does not exist"));
+		DEBUG(DEBUG_IMPORTANT, Serial.printf("'%s' does not exist", _JSON_CONFIG_FILE));
 		// file does not exist
 		WriteJSONconfig();
 
@@ -426,7 +454,7 @@ void ReadJSONconfig()
 
 	json.close();
 
-	DEBUG(DEBUG_IMPORTANT, Serial.printf("JSON: %s\n\r", jsonString.c_str()));
+	DEBUG(DEBUG_INFO, Serial.printf("JSON: %s\n\r", jsonString.c_str()));
 
 	StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 
@@ -435,6 +463,16 @@ void ReadJSONconfig()
 	if (!root.success())
 	{
 		DEBUG(DEBUG_ERROR, Serial.println("JSON parse failed"));
+
+		// kill it - and write it again
+		SPIFFS.remove(_JSON_CONFIG_FILE);
+
+		DEBUG(DEBUG_VERBOSE, Serial.println("JSON file deleted"));
+
+		WriteJSONconfig();
+
+		return;
+
 	}
 
 	Details.debounceThresholdms = root["debounceThresholdms"];
@@ -447,6 +485,30 @@ void ReadJSONconfig()
 	{
 		Details.wifi.password = (const char*)(wifi["password"]);
 		Details.wifi.ssid = (const char*)(wifi["ssid"]);
+
+		JsonObject &staticDetails = wifi["network"];
+
+		if(staticDetails.success())
+		{
+			Details.wifi.dhcp = false;
+
+			if(Details.wifi.ip.fromString((const char*)staticDetails["ip"]) &&
+				Details.wifi.gateway.fromString((const char*)staticDetails["gateway"]) &&
+				Details.wifi.netmask.fromString((const char*)staticDetails["mask"]))
+			{
+				Details.wifi.dhcp = false;
+			}
+			else
+			{
+				DEBUG(DEBUG_ERROR, Serial.println("staticDetails parse failed, reverting to DHCP"));
+				Details.wifi.dhcp = true;
+			}
+		}
+		else
+		{
+			Details.wifi.dhcp = true;
+		}
+
 	}
 	else
 	{
@@ -492,7 +554,7 @@ wifiMode ConnectWifi(wifiMode intent)
 
 	WiFi.persistent(false);
 
-	DEBUG(DEBUG_INFO, Serial.println("ConnectWifi"));
+	DEBUG(DEBUG_INFO, Serial.printf("ConnectWifi from %d to %d\n\r", currentMode, intent));
 
 	// turn off wifi
 	switch (currentMode)
@@ -613,16 +675,16 @@ void BeginMDNSServer()
 }
 
 
-void ResetWIFI()
-{
-	DEBUG(DEBUG_IMPORTANT, Serial.println("Resetting WIFI"));
-
-	wifiMode now = currentMode;
-
-	ConnectWifi(wifiMode::modeOff);
-
-	ConnectWifi(now);
-}
+//void ResetWIFI()
+//{
+//	DEBUG(DEBUG_IMPORTANT, Serial.println("Resetting WIFI"));
+//
+//	wifiMode now = currentMode;
+//
+//	ConnectWifi(wifiMode::modeOff);
+//
+//	ConnectWifi(now);
+//}
 
 void RebootMe()
 {
@@ -727,16 +789,17 @@ void setup(void)
 		IPAddress copy = event.ip;
 		DEBUG(DEBUG_IMPORTANT, Serial.printf("EVENT IP granted %s\n\r", copy.toString().c_str()));
 
-// my router doesn't understand *LAN* routes
-#define _HARD_CODED_IP_ADDRESS
-#ifdef _HARD_CODED_IP_ADDRESS
-		if(WiFi.config(IPAddress(192, 168, 42, 18), IPAddress(192, 168, 42, 250), IPAddress(255, 255, 255, 0)))
+		if (!Details.wifi.dhcp)
 		{
-			DEBUG(DEBUG_IMPORTANT, Serial.printf("EVENT IP FORCED %s\n\r", WiFi.localIP().toString().c_str()));
+			if (WiFi.config(Details.wifi.ip, Details.wifi.gateway, Details.wifi.netmask))
+			{
+				DEBUG(DEBUG_IMPORTANT, Serial.printf("EVENT IP FORCED %s\n\r", WiFi.localIP().toString().c_str()));
+			}
+			else
+				DEBUG(DEBUG_IMPORTANT, Serial.println("EVENT IP FORCED FAILED"));
+
 		}
-		else
-			DEBUG(DEBUG_IMPORTANT, Serial.println("EVENT IP FORCED FAILED"));
-#endif
+
 		DEBUG(DEBUG_IMPORTANT, Serial.printf("EVENT GATEWAY %s\n\r", WiFi.gatewayIP().toString().c_str()));
 
 	});
@@ -772,7 +835,7 @@ void setup(void)
 	// set up the callback handlers for the webserver
 	InstallWebServerHandlers();
 
-
+	
 
 }
 
@@ -897,6 +960,15 @@ void InstallWebServerHandlers()
 	});
 
 
+	server.on("/resetWIFI", []() {
+
+		DEBUG(DEBUG_VERBOSE, Serial.println("/reboot"));
+
+		ResetMe();
+
+	});
+
+
 
 
 	server.on("/", []() {
@@ -969,9 +1041,8 @@ void InstallWebServerHandlers()
 		// and update json
 		WriteJSONconfig();
 
-		delay(_WEB_TAR_PIT_DELAY);
-
-		server.send(200, "text/html", "<html></html>");
+		//delay(_WEB_TAR_PIT_DELAY);
+		//server.send(200, "text/html", "<html></html>");
 
 
 	});
@@ -1008,6 +1079,47 @@ void InstallWebServerHandlers()
 		server.send(200, "application/json", jsonText);
 	});
 
+	server.on("/json/maxSwitchCount", HTTP_GET, []() {
+		// give them back the port / switch map
+
+		DEBUG(DEBUG_INFO, Serial.println("json maxSwitchCount called"));
+
+		StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
+
+		JsonObject &root = jsonBuffer.createObject();
+
+		root["name"] = esphostname;
+		root["switchCount"] = NUM_SOCKETS;
+
+		unsigned maxSwitch = -1, maxSwitchCount = 0;
+
+		for (unsigned each = 0; each < NUM_SOCKETS; each++)
+		{
+			if (Details.switches[each].switchCount > maxSwitchCount)
+			{
+				maxSwitchCount = Details.switches[each].switchCount;
+				maxSwitch = each;
+			}
+
+		}
+
+		{
+			root["maxSwitch"] = maxSwitch;
+			root["maxSwitchCount"] = maxSwitchCount;
+
+			DEBUG(DEBUG_INFO, Serial.printf("maxSwitch %u count %u \n\r",maxSwitch, maxSwitch));
+
+		}
+
+		String jsonText;
+		root.prettyPrintTo(jsonText);
+
+		server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+		server.send(200, "application/json", jsonText);
+	});
+
+
+
 	server.on("/json/config", HTTP_GET, []() {
 		// give them back the port / switch map
 
@@ -1041,15 +1153,29 @@ void InstallWebServerHandlers()
 		// let's get all wifis we can see
 		int found=WiFi.scanNetworks();
 
+		std::vector<std::pair<String, int>> allWifis;
+
 		JsonArray &wifis = root.createNestedArray("wifi");
 
 		for (int each = 0; each < found; each++)
 		{
-			JsonObject &wifi = wifis.createNestedObject();
-			wifi["ssid"] = WiFi.SSID(each);
-			wifi["sig"] = WiFi.RSSI(each);
+			allWifis.push_back(std::pair<String, int>(WiFi.SSID(each), WiFi.RSSI(each)));
+			std::sort(allWifis.begin(), allWifis.end(), [](const std::pair<String, int> &a, const std::pair<String, int> &b) { return a.second > b.second; });
 
 		}
+
+		int maxFound = found < 10 ? found : 10;
+
+		for (int each = 0; each < maxFound ; each++)
+		{
+			JsonObject &wifi = wifis.createNestedObject();
+			wifi["ssid"] = allWifis[each].first;
+			wifi["sig"] = allWifis[each].second;
+
+			DEBUG(DEBUG_INFO, Serial.printf("%d '%s' %d \n\r",each+1, allWifis[each].first.c_str(), allWifis[each].second));
+
+		}
+		
 
 		String jsonText;
 		root.prettyPrintTo(jsonText);
@@ -1103,6 +1229,9 @@ void SendServerPage()
 
 void AddMapToJSON(JsonObject &root, unsigned numSockets)
 {
+
+	DEBUG(DEBUG_VERBOSE, Serial.printf("AddMapToJSON %d\n\r", numSockets));
+
 	root["switchCount"] = numSockets;
 
 	JsonArray &switchMap = root.createNestedArray("switchMap");
@@ -1118,13 +1247,9 @@ void AddMapToJSON(JsonObject &root, unsigned numSockets)
 
 }
 
-#define _TEST_WFI_STATE	
-
 #ifdef _TEST_WFI_STATE
-
 unsigned long lastTested = 0;
 #define _TEST_WIFI_MILLIS	(15*60*1000)
-
 #endif
 
 void loop(void) 

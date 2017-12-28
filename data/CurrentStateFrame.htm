@@ -1,0 +1,118 @@
+<HTML>
+<HEAD>
+<META NAME="GENERATOR" Content="Microsoft Visual Studio">
+<TITLE></TITLE>
+    <link rel="stylesheet" type="text/css" href="switch.css">
+
+</HEAD>
+<BODY onload="OnLoad()">
+
+    <div>
+        <div id="loading">Loading</div>
+        <div id="error" hidden>problem loading content</div>
+        <div id="found" hidden>
+            <table id="states"></table>
+
+
+        </div>
+    </div>
+
+    <script src="common.js"></script>
+
+
+    <script>
+
+            function OnLoad() {
+                PopulateList(true)
+            }
+
+
+
+            function PopulateList(clearTheList) {
+
+                let url = base + '/json/state'
+
+                fetch(url)
+                    .then(function (response) {
+                        if (response.ok)
+                            return response.json();
+                        throw new Error('network err')
+                    })
+                    .then(function (data) {
+
+                        // then work out the switch states
+                        var states = data['switchState']
+                        var name=data['name']
+
+                        var table=document.getElementById('states')
+
+                        if (clearTheList) {
+                            table.innerHTML = "<tr><th>Switch Number</th><th>Relay Number</th><th>Switch Name</th><th>Web Links</th></tr>";
+                        }
+
+
+                        for (var eachState in states) {
+                            if (states.hasOwnProperty(eachState)) {
+                                // tab
+                                var tr = document.createElement('tr')
+                                var tdRelay = document.createElement('td')
+                                var tdSwitch = document.createElement('td')
+                                var tdName = document.createElement('td')
+                                var webLinks=document.createElement('td')
+
+                                tr.appendChild(tdSwitch)
+                                tr.appendChild(tdRelay)
+                                tr.appendChild(tdName)
+                                tr.appendChild(webLinks)
+
+                                var switchNumber = states[eachState]["switch"]
+                                var relayNumber = states[eachState]["relay"]
+                                var switchName=states[eachState]["name"]
+
+                                tdRelay.innerText = relayNumber
+                                tdSwitch.innerText = switchNumber
+                                tdName.innerText = switchName;
+
+                                var wlinkTable = document.createElement('table')
+                                wlinkTable.innerHTML = "<tr><td>ON</td><td name='wlinkON'></td></tr><tr><td>OFF</td><td name='wlinkOFF'></td></tr>"
+
+                                webLinks.appendChild(wlinkTable);
+
+                                table.appendChild(tr)
+
+                                var onLink = name+'.local/button?action=on&port=' + switchNumber
+                                var offLink = name + '.local/button?action=off&port=' + switchNumber
+
+                                wlinkTable.getElementsByTagName('td')[1].innerText = onLink
+                                wlinkTable.getElementsByTagName('td')[3].innerText = offLink
+
+                                document.getElementById('loading').hidden = true;
+                                document.getElementById('found').hidden = false;
+
+
+                            }
+                        }
+                    }).catch(function (error) {
+
+                        document.getElementById('loading').hidden = true;
+                        document.getElementById('error').hidden = false;
+
+                        //find all the buttons and turn them off
+                        var buttons = document.getElementsByTagName('button')
+
+                        for (index=0;index<buttons.length;index++) {
+                            buttons[index].disabled = true;
+                        }
+
+
+                    })
+
+            }
+
+
+
+
+    </script>
+
+</BODY>
+</HTML>

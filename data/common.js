@@ -1,5 +1,6 @@
-let base = "http://192.168.42.18"
-//let base = "."
+//let base = "http://192.168.42.18"
+let base = "."
+
 
 function headerLoaded() {
 
@@ -14,5 +15,7 @@ function headerLoaded() {
             // get the name
             iframe.document.getElementById('name').innerText = data['name']
         })
+
+
 
 }
