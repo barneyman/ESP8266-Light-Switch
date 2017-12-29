@@ -3,6 +3,10 @@
 #include <ESP8266mDNS.h>
 #include <WiFiClient.h>
 
+// if you're just using a switch driven driectly by the GPIO pins, enable this define
+#define _SIMPLE_ONE_SWITCH
+
+
 #include "mcp23017.h"
 
 #include "debug_defines.h"
@@ -54,7 +58,7 @@ protected:
 
 #endif
 
-// first board that worked, althought the pins were swapped around on the output
+// first board that worked, although the pins were swapped around on the output
 #define _BOARD_VER_1_1
 
 
@@ -73,8 +77,17 @@ extern "C" {
 // we run MDNS so we can be found by "esp8266_<last 3 bytes of MAC address>.local" by the RPI
 MDNSResponder mdns;
 
+#ifdef _SIMPLE_ONE_SWITCH
+
+#define GPIO_RELAY	D1
+#define GPIO_SWITCH D2
+
+#define NUM_SOCKETS	1
+
+#else
 // number of relays & switches
 #define NUM_SOCKETS	6
+#endif
 
 // millis timeouts
 #define QUICK_SWITCH_TIMEOUT_DEFAULT	6000
@@ -85,6 +98,7 @@ MDNSResponder mdns;
 
 
 #ifdef _RESET_VIA_QUICK_SWITCH
+// how many transitions we have to see (on -> off and v-v) within Details.resetWindowms before we assume a resey has been asked for
 #define RESET_ARRAY_SIZE 12
 bool resetWIFI = false;
 #endif
@@ -139,6 +153,13 @@ struct
 	BOUNCE_TIMEOUT_DEFAULT,
 	QUICK_SWITCH_TIMEOUT_DEFAULT,
 
+#ifdef _SIMPLE_ONE_SWITCH
+
+	{
+		{ "Device A", 0 }
+	}
+#else
+
 #ifdef _BOARD_VER_1_1
 	{
 		{ "Device A", 0 },
@@ -157,6 +178,8 @@ struct
 		{ "Device E", 4 },
 		{ "Device F", 5 }
 	}
+#endif
+
 #endif
 
 };
@@ -178,21 +201,28 @@ wifiMode ConnectWifi(wifiMode intent);
 
 ESP8266WebServer server(80);
 
-// light manual trigger IN
+#ifdef _SIMPLE_ONE_SWITCH
+
+#else
+
+// light manual trigger IN, driven by the INT pin on the MCP
 int inputSwitchPin = 14; // D5
+// pin that controls power to the MCP
 int resetMCPpin = 16;// D0;
+// pin that controls power to the relay board
 int powerRelayBoardNPN = 0; // d3
 
-//mcp23017 mcp(4, 5, resetMCPpin);
+
 mcp23017AndRelay mcp(4, 5, resetMCPpin, powerRelayBoardNPN);
 
+#endif
 
 
 // how long we slow the web hots down for (millis)
 #define _WEB_TAR_PIT_DELAY 200
 
 
-
+#ifndef _SIMPLE_ONE_SWITCH
 
 unsigned MapSwitchToRelay(unsigned switchNumber)
 {
@@ -213,7 +243,7 @@ unsigned MapSwitchToRelay(unsigned switchNumber)
 
 }
 
-
+#endif
 
 
 
@@ -222,9 +252,12 @@ void OnSwitchISR()
 	// if we're up to our neck in something else (normally WIFI negotiation) ignore this
 	if (busyDoingSomethingIgnoreSwitch)
 	{
-		DEBUG(DEBUG_WARN, Serial.println("	OnSwitchISR redundant"));
-		// ask what changed, clear interrupt
+		DEBUG(DEBUG_INFO, Serial.println("	OnSwitchISR redundant"));
+
+#ifndef _SIMPLE_ONE_SWITCH
+		// ask what changed, clear interrupt, so we don't leave the INT hanging
 		mcp.InterruptCauseAndCurrentState(true);
+#endif
 		return;
 	}
 
@@ -233,11 +266,16 @@ void OnSwitchISR()
 
 	// ask what changed, clear interrupt
 	int causeAndState =
+#ifdef _SIMPLE_ONE_SWITCH
+		// fake the cause and reflect state of switch0
+		(1<<8) | (digitalRead(GPIO_SWITCH)==HIGH?1:0);
+#else
 		mcp.InterruptCauseAndCurrentState(false);
+#endif
 
 	for (unsigned switchPort = 0; switchPort < NUM_SOCKETS; switchPort++)
 	{
-		DEBUG(DEBUG_VERBOSE,Serial.printf("Checking port %d\r\n", switchPort));
+		DEBUG(DEBUG_VERBOSE,Serial.printf("Checking port %d [%04x]\r\n", switchPort, causeAndState));
 
 		// +8 to get HIBYTE to see if this port CAUSED the interrupt
 		if (causeAndState & (1 << (switchPort + 8)))
@@ -251,7 +289,7 @@ void OnSwitchISR()
 			// gate against messy tactile/physical switches
 			interval = now - Details.switches[switchPort].last_seen_bounce;
 
-			DEBUG(DEBUG_WARN, Serial.printf("%lu ms ", interval / 1000UL));
+			DEBUG(DEBUG_VERBOSE, Serial.printf("%lu ms ", interval / 1000UL));
 
 			if (interval >= (unsigned long)(Details.debounceThresholdms * 1000))
 #endif
@@ -280,13 +318,13 @@ void OnSwitchISR()
 
 #ifdef _RESET_VIA_QUICK_SWITCH
 
-				// remember the last 6 - i'm assuming we won't wrap
+				// remember the last RESET_ARRAY_SIZE - i'm assuming we won't wrap
 				// only reset if we're currently STA
 				if (currentMode == wifiMode::modeSTA)
 				{
 					if (Details.switches[switchPort].lastSwitchesSeen[RESET_ARRAY_SIZE - 1] - Details.switches[switchPort].lastSwitchesSeen[0] < (Details.resetWindowms))
 					{
-						DEBUG(DEBUG_WARN, Serial.println("RESETTING WIFI!\n\r"));
+						DEBUG(DEBUG_IMPORTANT, Serial.println("RESETTING WIFI!\n\r"));
 						resetWIFI = true;
 					}
 				}
@@ -295,7 +333,7 @@ void OnSwitchISR()
 #ifndef _IGNORE_BOUNCE_LOGIC
 			else
 			{
-				DEBUG(DEBUG_WARN, Serial.printf("bounce ignored\n\r"));
+				DEBUG(DEBUG_INFO, Serial.printf("bounce ignored\n\r"));
 			}
 			Details.switches[switchPort].last_seen_bounce = now;
 #endif
@@ -309,6 +347,14 @@ void OnSwitchISR()
 // honour current switch state
 void RevertAllSwitch()
 {
+
+#ifdef _SIMPLE_ONE_SWITCH
+
+	// read the current switch state, and reflect that in the relay state
+	digitalWrite(GPIO_RELAY, digitalRead(GPIO_SWITCH)==HIGH);
+
+
+#else
 	// get the switch state
 	for (int port = 0; port < NUM_SOCKETS; port++)
 	{
@@ -317,18 +363,26 @@ void RevertAllSwitch()
 			false);
 
 	}
+#endif
 }
 
 // override switch state
 void DoAllSwitch(bool state, bool force)
 {
-	DEBUG(DEBUG_IMPORTANT, Serial.printf("DoAllSwitch: %s %s\r\n", state ? "ON" : "off", force ? "FORCE" : ""));
+	DEBUG(DEBUG_INFO, Serial.printf("DoAllSwitch: %s %s\r\n", state ? "ON" : "off", force ? "FORCE" : ""));
+
+#ifdef _SIMPLE_ONE_SWITCH
+
+	digitalWrite(GPIO_RELAY, state?HIGH:LOW);
+
+#else
 
 	for (int Switch = 0; Switch < NUM_SOCKETS; Switch++)
 	{
 		// MapSwitchToRelay is redundant given we're doing them all
 		DoSwitch((Switch), state, force);
 	}
+#endif
 }
 
 // if forceSwitchToReflect change polarity of input switch if necessary to reflect this request
@@ -342,13 +396,20 @@ void DoSwitch(unsigned portNumber, bool on, bool forceSwitchToReflect)
 
 	DEBUG(DEBUG_IMPORTANT, Serial.printf("DoSwitch: relay %d %s %s\r\n", portNumber, on ? "ON" : "off", forceSwitchToReflect ? "FORCE" : ""));
 
+#ifdef _SIMPLE_ONE_SWITCH
+
+	digitalWrite(GPIO_RELAY, on ? HIGH : LOW);
+
+#else
 	DoRelay(MapSwitchToRelay(portNumber),on);
 	if (forceSwitchToReflect)
 	{
 		mcp.SetSwitch(portNumber, on);
 	}
-
+#endif
 }
+
+#ifndef _SIMPLE_ONE_SWITCH
 
 // do, portNumber is 0 thru 7
 void DoRelay(unsigned portNumber, bool on)
@@ -366,6 +427,7 @@ void DoRelay(unsigned portNumber, bool on)
 
 }
 
+#endif
 
 
 
@@ -382,7 +444,7 @@ void WriteJSONconfig()
 		return;
 	}
 
-	StaticJsonBuffer<4096> jsonBuffer;
+	StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 
 	JsonObject &root = jsonBuffer.createObject();
 
@@ -407,7 +469,9 @@ void WriteJSONconfig()
 
 	}
 
+#ifndef _SIMPLE_ONE_SWITCH
 	AddMapToJSON(root, NUM_SOCKETS);
+#endif
 
 	DEBUG(DEBUG_VERBOSE, Serial.printf("jsonBuffer.size used : %d\n\r", jsonBuffer.size()));
 
@@ -416,7 +480,7 @@ void WriteJSONconfig()
 	String jsonText;
 	root.prettyPrintTo(jsonText);
 
-	DEBUG(DEBUG_VERBOSE, Serial.printf("JSON : %s\n\r", jsonText.c_str()));
+	DEBUG(DEBUG_VERBOSE, Serial.printf("JSON : -- %s --\n\r", jsonText.c_str()));
 
 	json.write((byte*)jsonText.c_str(), jsonText.length());
 
@@ -440,7 +504,7 @@ void ReadJSONconfig()
 
 	if (!SPIFFS.exists(_JSON_CONFIG_FILE))
 	{
-		DEBUG(DEBUG_IMPORTANT, Serial.printf("'%s' does not exist", _JSON_CONFIG_FILE));
+		DEBUG(DEBUG_IMPORTANT, Serial.printf("'%s' does not exist\n\r", _JSON_CONFIG_FILE));
 		// file does not exist
 		WriteJSONconfig();
 
@@ -454,10 +518,9 @@ void ReadJSONconfig()
 
 	json.close();
 
-	DEBUG(DEBUG_INFO, Serial.printf("JSON: %s\n\r", jsonString.c_str()));
+	DEBUG(DEBUG_INFO, Serial.printf("JSON: (%d) -- %s --\n\r",jsonString.length(), jsonString.c_str()));
 
 	StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
-
 	JsonObject& root = jsonBuffer.parseObject(jsonString);
 
 	if (!root.success())
@@ -473,6 +536,10 @@ void ReadJSONconfig()
 
 		return;
 
+	}
+	else
+	{
+		DEBUG(DEBUG_VERBOSE, Serial.println("JSON parsed"));
 	}
 
 	Details.debounceThresholdms = root["debounceThresholdms"];
@@ -516,6 +583,7 @@ void ReadJSONconfig()
 		Details.wifi.ssid = String();
 	}
 
+#ifndef _SIMPLE_ONE_SWITCH
 	// add the switch map
 	JsonArray &switchMap = root["switchMap"];
 	if (switchMap.success())
@@ -534,7 +602,7 @@ void ReadJSONconfig()
 			}
 		}
 	}
-
+#endif
 
 }
 
@@ -575,7 +643,7 @@ wifiMode ConnectWifi(wifiMode intent)
 
 	delay(1000);
 
-	DEBUG(DEBUG_WARN, Serial.println("wifi disconnected"));
+	DEBUG(DEBUG_INFO, Serial.println("wifi disconnected"));
 
 	if (intent == wifiMode::modeOff)
 	{
@@ -622,7 +690,7 @@ wifiMode ConnectWifi(wifiMode intent)
 		else
 		{
 
-			DEBUG(DEBUG_IMPORTANT, Serial.println("FAILED to connect"));
+			DEBUG(DEBUG_ERROR, Serial.println("FAILED to connect"));
 
 			// depending on intent ...
 			if (intent == wifiMode::modeSTAspeculative)
@@ -697,7 +765,7 @@ void RebootMe()
 
 void ResetMe()
 {
-	DEBUG(DEBUG_WARN, Serial.println("Resetting"));
+	DEBUG(DEBUG_INFO, Serial.println("Resetting"));
 
 	resetWIFI = false;
 	// clear the credentials
@@ -716,6 +784,8 @@ void ResetMe()
 
 void setup(void) 
 {
+
+
 	char idstr[20];
 	sprintf(idstr,"%0x", system_get_chip_id());
 	esphostname += idstr;
@@ -749,7 +819,9 @@ void setup(void)
 
 	// mandatory "let it settle" delay
 	delay(1000);
-	Serial.begin(115200);
+	Serial.begin(921600);
+
+	DEBUG(DEBUG_INFO, Serial.println("setup() running"));
 
 
 	SPIFFS.begin();
@@ -772,7 +844,7 @@ void setup(void)
 	}
 	else
 	{
-		DEBUG(DEBUG_WARN, Serial.println("no stored credentials"));
+		DEBUG(DEBUG_WARN, Serial.println("WiFi not configured"));
 		intent = wifiMode::modeAP;
 
 	}
@@ -810,7 +882,17 @@ void setup(void)
 
 	});
 
+#ifdef _SIMPLE_ONE_SWITCH
 
+	// set the relay pin to output
+	pinMode(GPIO_RELAY, OUTPUT);
+
+	// and the switch pin to input
+	pinMode(GPIO_SWITCH, INPUT_PULLUP);
+
+	attachInterrupt(GPIO_SWITCH, OnSwitchISR, CHANGE);
+
+#else
 	// initialise the MCP
 	DEBUG(DEBUG_VERBOSE, Serial.println("Initialising MCP"));
 	mcp.Initialise();
@@ -819,9 +901,8 @@ void setup(void)
 	// preparing GPIOs
 	pinMode(inputSwitchPin, INPUT_PULLUP);
 	// the MCP interrupt is configured to fire on change, and goes LOW when fired
-	DEBUG(DEBUG_VERBOSE, Serial.println("Attach Interrupt"));
 	attachInterrupt(inputSwitchPin, OnSwitchISR, ONLOW);
-
+#endif
 
 	// default off, and don't force switches
 	DoAllSwitch(false,false);
@@ -876,6 +957,7 @@ void InstallWebServerHandlers()
 		SendServerPage();
 	});
 
+#ifndef _SIMPLE_ONE_SWITCH
 
 	server.on("/toggle", []() {
 
@@ -883,7 +965,7 @@ void InstallWebServerHandlers()
 
 		delay(_WEB_TAR_PIT_DELAY);
 
-		// these have to be in port/action pairs
+		// must be an arg
 		if (!server.args())
 		{
 			return;
@@ -898,6 +980,7 @@ void InstallWebServerHandlers()
 		}
 
 	});
+#endif
 
 	server.on("/button", []() {
 
@@ -1068,12 +1151,19 @@ void InstallWebServerHandlers()
 			switchRelay["switch"] = each;
 			switchRelay["name"] = Details.switches[each].name;
 			switchRelay["relay"] = Details.switches[each].relay;
-			switchRelay["state"] = mcp.readSwitch(each) ? 1 : 0;
+			switchRelay["state"] = 
+#ifdef _SIMPLE_ONE_SWITCH
+				digitalRead(GPIO_SWITCH)==HIGH ? 1 : 0;
+#else
+				mcp.readSwitch(each) ? 1 : 0;
+#endif
 			switchRelay["stateChanges"] = Details.switches[each].switchCount;
 		}
 
 		String jsonText;
 		root.prettyPrintTo(jsonText);
+
+		DEBUG(DEBUG_VERBOSE, Serial.println(jsonText));
 
 		server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
 		server.send(200, "application/json", jsonText);
@@ -1114,6 +1204,8 @@ void InstallWebServerHandlers()
 		String jsonText;
 		root.prettyPrintTo(jsonText);
 
+		DEBUG(DEBUG_VERBOSE, Serial.println(jsonText));
+
 		server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
 		server.send(200, "application/json", jsonText);
 	});
@@ -1135,6 +1227,8 @@ void InstallWebServerHandlers()
 
 		String jsonText;
 		root.prettyPrintTo(jsonText);
+
+		DEBUG(DEBUG_VERBOSE, Serial.println(jsonText));
 
 		server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
 		server.send(200, "application/json", jsonText);
@@ -1179,7 +1273,9 @@ void InstallWebServerHandlers()
 
 		String jsonText;
 		root.prettyPrintTo(jsonText);
-		
+
+		DEBUG(DEBUG_VERBOSE, Serial.println(jsonText));
+
 		// do not cache
 		server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
 		server.send(200, "text/json", jsonText);
@@ -1227,6 +1323,7 @@ void SendServerPage()
 
 }
 
+#ifndef _SIMPLE_ONE_SWITCH
 void AddMapToJSON(JsonObject &root, unsigned numSockets)
 {
 
@@ -1246,6 +1343,8 @@ void AddMapToJSON(JsonObject &root, unsigned numSockets)
 	}
 
 }
+
+#endif
 
 #ifdef _TEST_WFI_STATE
 unsigned long lastTested = 0;

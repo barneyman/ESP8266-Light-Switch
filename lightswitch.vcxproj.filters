@@ -49,10 +49,10 @@
     <None Include="data\CurrentStateFrame.htm">
       <Filter>data</Filter>
     </None>
-    <None Include="data\homeFrame.htm">
+    <None Include="data\AdminFrame.htm">
       <Filter>data</Filter>
     </None>
-    <None Include="data\AdminFrame.htm">
+    <None Include="data\HomeFrame.htm">
       <Filter>data</Filter>
     </None>
   </ItemGroup>
