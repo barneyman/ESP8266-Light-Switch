@@ -6,7 +6,7 @@
 </HEAD>
 <BODY>
 
-    <button onclick="ResetWIFI()">Reset WIFI</button>
+    <button onclick="ResetWIFI()">vanilla reset</button>
 
     <script src="common.js"></script>
 
@@ -14,7 +14,7 @@
 
         function ResetWIFI() {
 
-            let url = base + '/json/resetWIFI'
+            let url = base + '/resetWIFI'
 
             var xhr = new XMLHttpRequest();
 

@@ -33,20 +33,20 @@
         <tr>
             <td>Type</td>
             <td>
-                <select>
-                    <option>DHCP</option>
-                    <option>Static</option>
+                <select id="dhcp" onchange="chooseDHCP()">
+                    <option value="1">DHCP</option>
+                    <option value="0">Static</option>
                 </select>
             </td>
         </tr>
-        <tr>
+        <tr hidden id="staticInfo"> 
             <td>
                 IP Address<br />Gateway<br />Netmask<br />
             </td>
             <td>
                 <input type="text" id="ip"/><br />
                 <input type="text" id="gateway"/><br />
-                <input type="text" id="netmask"/><br />
+                <input type="text" id="netmask" value="255.255.255.0"><br />
             </td>
         </tr>
     </table>        
@@ -57,6 +57,21 @@
     <script src="common.js"></script>
 
     <script>
+
+        function chooseDHCP() {
+
+            var select = document.getElementById("dhcp");
+            var dhcp = select.options[select.selectedIndex].value
+
+            if (dhcp == "1") {
+                document.getElementById('staticInfo').hidden=true
+            }
+            else {
+                document.getElementById('staticInfo').hidden = false
+            }
+
+
+        }
 
         function OnLoad()
         {
@@ -84,13 +99,6 @@
                     wifis.appendChild(select)
 
                     var wifiArray = data["wifi"]
-
-                    //wifiArray.sort(function (a, b) {
-                    //    return a.sig > b.sig;
-                    //});
-
-                    //wifiArray.sort();
-
 
                     for (var eachNode in wifiArray)
                     {
@@ -122,6 +130,18 @@
 
             jsonData['pwd'] = pwd.value;
             jsonData['ssid'] = ssid;
+
+            var select = document.getElementById("dhcp");
+            var dhcp = select.options[select.selectedIndex].value
+
+            jsonData['dhcp'] = dhcp
+
+            if (dhcp == "0")
+            {
+                jsonData['ip']=document.getElementById('ip').value;
+                jsonData['gateway'] = document.getElementById('gateway').value;
+                jsonData['netmask'] = document.getElementById('netmask').value;
+            }
 
             var inputValid = true;
 

@@ -21,6 +21,7 @@
 #define _JSON_CONFIG_FILE "/config.json"
 
 #define JSON_STATIC_BUFSIZE	2048
+StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 
 #ifdef _DEBUG
 #define _TEST_WFI_STATE	
@@ -444,7 +445,8 @@ void WriteJSONconfig()
 		return;
 	}
 
-	StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
+	//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
+	jsonBuffer.clear();
 
 	JsonObject &root = jsonBuffer.createObject();
 
@@ -459,7 +461,7 @@ void WriteJSONconfig()
 		wifi["password"] = Details.wifi.password;
 		wifi["ssid"] = Details.wifi.ssid;
 
-		if (Details.wifi.dhcp)
+		if (!Details.wifi.dhcp)
 		{
 			JsonObject &staticDetails = wifi.createNestedObject("network");
 			staticDetails["ip"] = Details.wifi.ip.toString();
@@ -520,7 +522,8 @@ void ReadJSONconfig()
 
 	DEBUG(DEBUG_INFO, Serial.printf("JSON: (%d) -- %s --\n\r",jsonString.length(), jsonString.c_str()));
 
-	StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
+	//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
+	jsonBuffer.clear();
 	JsonObject& root = jsonBuffer.parseObject(jsonString);
 
 	if (!root.success())
@@ -765,7 +768,7 @@ void RebootMe()
 
 void ResetMe()
 {
-	DEBUG(DEBUG_INFO, Serial.println("Resetting"));
+	DEBUG(DEBUG_IMPORTANT, Serial.println("Resetting"));
 
 	resetWIFI = false;
 	// clear the credentials
@@ -818,8 +821,7 @@ void setup(void)
 	}
 
 	// mandatory "let it settle" delay
-	delay(1000);
-	Serial.begin(921600);
+	Serial.begin(115200);
 
 	DEBUG(DEBUG_INFO, Serial.println("setup() running"));
 
@@ -1045,7 +1047,7 @@ void InstallWebServerHandlers()
 
 	server.on("/resetWIFI", []() {
 
-		DEBUG(DEBUG_VERBOSE, Serial.println("/reboot"));
+		DEBUG(DEBUG_VERBOSE, Serial.println("/resetWIFI"));
 
 		ResetMe();
 
@@ -1071,7 +1073,8 @@ void InstallWebServerHandlers()
 		DEBUG(DEBUG_INFO, Serial.println("json config posted"));
 		DEBUG(DEBUG_INFO, Serial.println(server.arg("plain")));
 
-		StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
+		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
+		jsonBuffer.clear();
 		// 'plain' is the secret source to get to the body
 		JsonObject& root = jsonBuffer.parseObject(server.arg("plain"));
 
@@ -1097,7 +1100,8 @@ void InstallWebServerHandlers()
 		DEBUG(DEBUG_INFO, Serial.println("json wifi posted"));
 		DEBUG(DEBUG_INFO, Serial.println(server.arg("plain")));
 
-		StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
+		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
+		jsonBuffer.clear();
 		// 'plain' is the secret source to get to the body
 		JsonObject& root = jsonBuffer.parseObject(server.arg("plain"));
 
@@ -1109,6 +1113,18 @@ void InstallWebServerHandlers()
 		Details.wifi.ssid = ssid;
 		Details.wifi.password = pwd;
 
+		// dhcp or static?
+		if (root["dhcp"] == 1)
+		{
+			Details.wifi.dhcp = true;
+		}
+		else
+		{
+			Details.wifi.dhcp = false;
+			Details.wifi.ip.fromString( (const char*)root["ip"] );
+			Details.wifi.gateway.fromString((const char*)root["gateway"]);
+			Details.wifi.netmask.fromString((const char*)root["netmask"]);
+		}
 
 		// force attempt
 		// if we fail we fall back to AP
@@ -1137,7 +1153,8 @@ void InstallWebServerHandlers()
 
 		DEBUG(DEBUG_INFO, Serial.println("json state called"));
 
-		StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
+		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
+		jsonBuffer.clear();
 
 		JsonObject &root = jsonBuffer.createObject();
 
@@ -1153,7 +1170,8 @@ void InstallWebServerHandlers()
 			switchRelay["relay"] = Details.switches[each].relay;
 			switchRelay["state"] = 
 #ifdef _SIMPLE_ONE_SWITCH
-				digitalRead(GPIO_SWITCH)==HIGH ? 1 : 0;
+				// reflect the relay, not the switch
+				digitalRead(GPIO_RELAY)==HIGH ? 1 : 0;
 #else
 				mcp.readSwitch(each) ? 1 : 0;
 #endif
@@ -1174,7 +1192,8 @@ void InstallWebServerHandlers()
 
 		DEBUG(DEBUG_INFO, Serial.println("json maxSwitchCount called"));
 
-		StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
+		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
+		jsonBuffer.clear();
 
 		JsonObject &root = jsonBuffer.createObject();
 
@@ -1217,7 +1236,8 @@ void InstallWebServerHandlers()
 
 		DEBUG(DEBUG_INFO, Serial.println("json config called"));
 
-		StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
+		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
+		jsonBuffer.clear();
 
 		JsonObject &root = jsonBuffer.createObject();
 
@@ -1239,7 +1259,8 @@ void InstallWebServerHandlers()
 
 		DEBUG(DEBUG_INFO, Serial.println("json wifi called"));
 
-		StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
+		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
+		jsonBuffer.clear();
 
 		JsonObject &root = jsonBuffer.createObject();
 		root["name"] = esphostname;

@@ -1,15 +1,6 @@
 {
   "debounceThresholdms": 100,
-  "resetWindowms": 6000,
-  "wifi": {
-    "configured": true,
-    "password": "0404407219",
-    "ssid": "beige",
-    "network": {
-      "gateway": "192.168.42.250",
-      "ip": "192.168.42.18",
-      "mask": "255.255.255.0"
-    }
+  "resetWindowms": 6000
 
   }
 }
