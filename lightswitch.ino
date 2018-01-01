@@ -105,7 +105,7 @@ bool resetWIFI = false;
 #endif
 
 
-struct
+struct 
 {
 	// store network credentials in eeprom
 	struct
@@ -247,8 +247,8 @@ unsigned MapSwitchToRelay(unsigned switchNumber)
 #endif
 
 
-
-void OnSwitchISR()
+// ICACHE_RAM_ATTR  makes it ISR safe
+void ICACHE_RAM_ATTR OnSwitchISR()
 {
 	// if we're up to our neck in something else (normally WIFI negotiation) ignore this
 	if (busyDoingSomethingIgnoreSwitch)
