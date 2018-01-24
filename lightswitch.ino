@@ -63,13 +63,11 @@ protected:
 #define _BOARD_VER_1_1
 
 
+// my libs
+#include <hostname.h>
 
+hostName esphostname;
 
-extern "C" {
-
-#include <user_interface.h>		// for system_get_chip_id();
-
-}
 
 
 
@@ -190,8 +188,6 @@ WiFiEventHandler onConnect, onDisconnect, onIPgranted;
 
 
 volatile bool busyDoingSomethingIgnoreSwitch = false;
-
-String esphostname = "esp8266_";
 
 
 enum wifiMode { modeOff, modeAP, modeSTA, modeSTAspeculative, modeUnknown } ;
@@ -787,12 +783,6 @@ void ResetMe()
 
 void setup(void) 
 {
-
-
-	char idstr[20];
-	sprintf(idstr,"%0x", system_get_chip_id());
-	esphostname += idstr;
-
 
 #ifdef _USING_OLED
 	oled.init();                      // Initialze SSD1306 OLED display
