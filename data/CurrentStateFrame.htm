@@ -47,7 +47,7 @@
                         var table=document.getElementById('states')
 
                         if (clearTheList) {
-                            table.innerHTML = "<tr><th>Switch Number</th><th>Relay Number</th><th>Switch Name</th><th>Web Links</th></tr>";
+                            table.innerHTML = "<tr><th>Switch Number</th><th>Type</th><th>Relay Number</th><th>Switch Name</th><th>Web Links</th></tr>";
                         }
 
 
@@ -58,9 +58,11 @@
                                 var tdRelay = document.createElement('td')
                                 var tdSwitch = document.createElement('td')
                                 var tdName = document.createElement('td')
-                                var webLinks=document.createElement('td')
+                                var webLinks = document.createElement('td')
+                                var tdType = document.createElement('td')
 
                                 tr.appendChild(tdSwitch)
+                                tr.appendChild(tdType)
                                 tr.appendChild(tdRelay)
                                 tr.appendChild(tdName)
                                 tr.appendChild(webLinks)
@@ -68,10 +70,12 @@
                                 var switchNumber = states[eachState]["switch"]
                                 var relayNumber = states[eachState]["relay"]
                                 var switchName=states[eachState]["name"]
+                                var switchType = states[eachState]["type"]
 
                                 tdRelay.innerText = relayNumber
                                 tdSwitch.innerText = switchNumber
                                 tdName.innerText = switchName;
+                                tdType.innerText = switchType;
 
                                 var wlinkTable = document.createElement('table')
                                 wlinkTable.innerHTML = "<tr><td>ON</td><td name='wlinkON'></td></tr><tr><td>OFF</td><td name='wlinkOFF'></td></tr>"

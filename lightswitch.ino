@@ -2,7 +2,13 @@
 #include <WiFiClient.h>
 
 
-#define _SONOFF_BASIC
+//#define _SONOFF_BASIC
+#define _WEMOS_RELAY_SHIELD
+
+
+#if defined(_WEMOS_RELAY_SHIELD) && defined(_SONOFF_BASIC)
+#error "Cannot have BOTH types of modules defined!"
+#endif
 
 #if defined(_WEMOS_RELAY_SHIELD) || defined(_SONOFF_BASIC)
 
@@ -15,6 +21,7 @@
 #if defined (_WEMOS_RELAY_SHIELD)
 
 #define GPIO_RELAY	D1
+#define GPIO_LED	BUILTIN_LED
 // whatever you want it to be!
 #define GPIO_SWITCH D2
 
@@ -87,7 +94,6 @@ myWifiClass wifiInstance;
 #define BOUNCE_TIMEOUT_DEFAULT			100
 
 #define _RESET_VIA_QUICK_SWITCH
-//#define _IGNORE_BOUNCE_LOGIC	
 
 
 #ifdef _RESET_VIA_QUICK_SWITCH
@@ -100,6 +106,7 @@ bool resetWIFI = false;
 
 
 
+enum  typeOfSwitch { stMomentary, stToggle };
 
 struct 
 {
@@ -108,7 +115,7 @@ struct
 
 
 	// how long to wait for the light switch to settle
-	unsigned long debounceThresholdms;
+	unsigned long debounceThresholdmsToggle, debounceThresholdmsMomentary;
 
 	// 6 switches in this time force an AP reset
 	unsigned long resetWindowms;
@@ -117,12 +124,13 @@ struct
 	struct {
 
 		String name;
+
+		enum  typeOfSwitch switchType;
+
 		unsigned relay;
 
-#ifndef _IGNORE_BOUNCE_LOGIC
 		// when we saw this switch change state - used to debounce the switch
 		unsigned long last_seen_bounce;
-#endif
 
 #ifdef _RESET_VIA_QUICK_SWITCH
 		unsigned long lastSwitchesSeen[RESET_ARRAY_SIZE];
@@ -138,13 +146,19 @@ struct
 	{
 		"","",false, true
 	},
-	BOUNCE_TIMEOUT_DEFAULT,
+	BOUNCE_TIMEOUT_DEFAULT, BOUNCE_TIMEOUT_DEFAULT*3,
+
 	QUICK_SWITCH_TIMEOUT_DEFAULT,
 
-#ifdef _SIMPLE_ONE_SWITCH
+#ifdef 	_SONOFF_BASIC
+	{
+		{ "Sonoff", stMomentary, 0 }
+	}
+
+#elif defined _SIMPLE_ONE_SWITCH
 
 	{
-		{ "Device A", 0 }
+		{ "Device A", stMomentary, 0 }
 	}
 #else
 
@@ -233,7 +247,7 @@ void ICACHE_RAM_ATTR OnSwitchISR()
 		DEBUG(DEBUG_INFO, Serial.println("	OnSwitchISR redundant"));
 
 #ifndef _SIMPLE_ONE_SWITCH
-		// ask what changed, clear interrupt, so we don't leave the INT hanging
+		// ask what changed, clear interrupt, so we don't leave the INTerrupt hanging
 		mcp.InterruptCauseAndCurrentState(true);
 #endif
 		return;
@@ -245,8 +259,12 @@ void ICACHE_RAM_ATTR OnSwitchISR()
 	// ask what changed, clear interrupt
 	int causeAndState =
 #ifdef _SIMPLE_ONE_SWITCH
-		// fake the cause and reflect state of switch0
-		(1<<8) | (digitalRead(GPIO_SWITCH)==HIGH?1:0);
+		(Details.switches[0].switchType == stMomentary ?
+		// fake the cause and reflect INVERSE state of relay - because MOMENTARY
+		(1 << 8) | (digitalRead(GPIO_RELAY) == HIGH ? 0 : 1) :
+		// fake the cause and rstate of switch - because TOGGLE
+		(1 << 8) | (digitalRead(GPIO_SWITCH) == HIGH ? 1 : 0));
+
 #else
 		mcp.InterruptCauseAndCurrentState(false);
 #endif
@@ -259,18 +277,18 @@ void ICACHE_RAM_ATTR OnSwitchISR()
 		if (causeAndState & (1 << (switchPort + 8)))
 		{
 
-#if defined(_RESET_VIA_QUICK_SWITCH) || !defined(_IGNORE_BOUNCE_LOGIC)
+#if defined(_RESET_VIA_QUICK_SWITCH) 
 			unsigned long now = micros(), interval=0;
 #endif
 
-#ifndef _IGNORE_BOUNCE_LOGIC
 			// gate against messy tactile/physical switches
 			interval = now - Details.switches[switchPort].last_seen_bounce;
 
 			DEBUG(DEBUG_VERBOSE, Serial.printf("%lu ms ", interval / 1000UL));
 
-			if (interval >= (unsigned long)(Details.debounceThresholdms * 1000))
-#endif
+			// if it's been longer than the bounce threshold since we saw this button, honour it
+			unsigned long bounceToHonour = Details.switches[switchPort].switchType == stMomentary ? Details.debounceThresholdmsMomentary : Details.debounceThresholdmsToggle;
+			if (interval >= (unsigned long)(bounceToHonour * 1000))
 			{
 #ifdef _RESET_VIA_QUICK_SWITCH
 				// move the last seens along
@@ -308,13 +326,11 @@ void ICACHE_RAM_ATTR OnSwitchISR()
 				}
 #endif
 			}
-#ifndef _IGNORE_BOUNCE_LOGIC
 			else
 			{
 				DEBUG(DEBUG_INFO, Serial.printf("bounce ignored\n\r"));
 			}
 			Details.switches[switchPort].last_seen_bounce = now;
-#endif
 		}
 	}
 
@@ -329,8 +345,11 @@ void RevertAllSwitch()
 #ifdef _SIMPLE_ONE_SWITCH
 
 	// read the current switch state, and reflect that in the relay state
-	digitalWrite(GPIO_RELAY, digitalRead(GPIO_SWITCH)==HIGH);
-	digitalWrite(GPIO_LED, digitalRead(GPIO_SWITCH) == HIGH);
+
+	bool switchState = (digitalRead(GPIO_SWITCH) == HIGH);
+
+	digitalWrite(GPIO_RELAY, switchState?HIGH:LOW);
+	digitalWrite(GPIO_LED, switchState ? HIGH : LOW);
 
 
 #else
@@ -430,7 +449,9 @@ void WriteJSONconfig()
 
 	JsonObject &root = jsonBuffer.createObject();
 
-	root["debounceThresholdms"] = Details.debounceThresholdms;
+	root["debounceThresholdmsMomentary"] = Details.debounceThresholdmsMomentary;	
+	root["debounceThresholdmsToggle"] = Details.debounceThresholdmsToggle;
+
 	root["resetWindowms"] = Details.resetWindowms;
 
 	JsonObject &wifi = root.createNestedObject("wifi");
@@ -525,8 +546,10 @@ void ReadJSONconfig()
 		DEBUG(DEBUG_VERBOSE, Serial.println("JSON parsed"));
 	}
 
-	Details.debounceThresholdms = root["debounceThresholdms"];
-	Details.resetWindowms = root["resetWindowms"];
+	Details.debounceThresholdmsMomentary= root["debounceThresholdmsMomentary"];
+	Details.debounceThresholdmsToggle=root["debounceThresholdmsToggle"];
+	Details.resetWindowms= root["resetWindowms"];
+
 
 	JsonObject &wifi = root["wifi"];
 
@@ -657,9 +680,7 @@ void setup(void)
 #endif
 
 		Details.switches[eachSwitch].switchCount = 0;
-#ifndef _IGNORE_BOUNCE_LOGIC
 		Details.switches[eachSwitch].last_seen_bounce = 0;
-#endif
 	}
 
 	// mandatory "let it settle" delay
@@ -674,7 +695,8 @@ void setup(void)
 
 	DEBUG(DEBUG_VERBOSE, Serial.println("starting"));
 	DEBUG(DEBUG_IMPORTANT, Serial.println(wifiInstance.m_hostName.c_str()));
-	DEBUG(DEBUG_VERBOSE, Serial.printf("bounce %lu\n\r",Details.debounceThresholdms));
+	DEBUG(DEBUG_VERBOSE, Serial.printf("bounceMomentary %lu\n\r",Details.debounceThresholdmsMomentary));
+	DEBUG(DEBUG_VERBOSE, Serial.printf("bounceToggle %lu\n\r", Details.debounceThresholdmsToggle));
 	DEBUG(DEBUG_VERBOSE, Serial.printf("reset %lu\n\r",Details.resetWindowms));
 
 	enum myWifiClass::wifiMode intent = myWifiClass::wifiMode::modeUnknown;
@@ -694,37 +716,6 @@ void setup(void)
 	}
 
 
-	//// set callbacks for wifi
-	//onConnect=WiFi.onStationModeConnected([](const WiFiEventStationModeConnected&c) {
-	//
-	//	DEBUG(DEBUG_IMPORTANT, Serial.printf("EVENT wifi connected %s\n\r", c.ssid.c_str()));
-
-	//});
-
-	//onIPgranted=WiFi.onStationModeGotIP([](const WiFiEventStationModeGotIP& event) {
-	//	IPAddress copy = event.ip;
-	//	DEBUG(DEBUG_IMPORTANT, Serial.printf("EVENT IP granted %s\n\r", copy.toString().c_str()));
-
-	//	if (!Details.wifi.dhcp)
-	//	{
-	//		if (WiFi.config(Details.wifi.ip, Details.wifi.gateway, Details.wifi.netmask))
-	//		{
-	//			DEBUG(DEBUG_IMPORTANT, Serial.printf("EVENT IP FORCED %s\n\r", WiFi.localIP().toString().c_str()));
-	//		}
-	//		else
-	//			DEBUG(DEBUG_IMPORTANT, Serial.println("EVENT IP FORCED FAILED"));
-
-	//	}
-
-	//	DEBUG(DEBUG_IMPORTANT, Serial.printf("EVENT GATEWAY %s\n\r", WiFi.gatewayIP().toString().c_str()));
-
-	//});
-
-	//onDisconnect=WiFi.onStationModeDisconnected([](const WiFiEventStationModeDisconnected &c) {
-	//
-	//	DEBUG(DEBUG_WARN, Serial.println("EVENT disconnected "));
-
-	//});
 
 #ifdef _SIMPLE_ONE_SWITCH
 
@@ -732,10 +723,10 @@ void setup(void)
 	pinMode(GPIO_RELAY, OUTPUT);
 	pinMode(GPIO_LED, OUTPUT);
 
-	// and the switch pin to input
+	// and the switch pin to input - pullup
 	pinMode(GPIO_SWITCH, INPUT_PULLUP);
-
-	attachInterrupt(GPIO_SWITCH, OnSwitchISR, CHANGE);
+	// for momentary switches we just look for low
+	attachInterrupt(GPIO_SWITCH, OnSwitchISR, Details.switches[0].switchType==stMomentary?ONLOW:CHANGE);
 
 #else
 	// initialise the MCP
@@ -921,12 +912,16 @@ void InstallWebServerHandlers()
 		// 'plain' is the secret source to get to the body
 		JsonObject& root = jsonBuffer.parseObject(wifiInstance.server.arg("plain"));
 
-		long bounce = root["bouncems"];
+		long bounceMomentary = root["bouncemsMomentary"];
+		long bounceToggle = root["bouncemsToggle"];
+
 		long reset = root["resetms"];
 
 		// sanity check these values!
 
-		Details.debounceThresholdms = bounce;
+		Details.debounceThresholdmsToggle = bounceToggle;
+		Details.debounceThresholdmsMomentary = bounceMomentary;
+
 		Details.resetWindowms = reset;
 
 		// extract the details
@@ -1009,6 +1004,7 @@ void InstallWebServerHandlers()
 		{
 			JsonObject &switchRelay = switchState.createNestedObject();
 			switchRelay["switch"] = each;
+			switchRelay["type"] = Details.switches[each].switchType==stMomentary?"Momentary":"Toggle";
 			switchRelay["name"] = Details.switches[each].name;
 			switchRelay["relay"] = Details.switches[each].relay;
 			switchRelay["state"] = 
@@ -1085,7 +1081,8 @@ void InstallWebServerHandlers()
 		JsonObject &root = jsonBuffer.createObject();
 
 		root["name"] = wifiInstance.m_hostName.c_str();
-		root["bouncems"] = Details.debounceThresholdms;
+		root["bouncemsMomentary"] = Details.debounceThresholdmsMomentary;
+		root["bouncemsToggle"] = Details.debounceThresholdmsToggle;
 		root["resetms"] = Details.resetWindowms;
 
 		String jsonText;
