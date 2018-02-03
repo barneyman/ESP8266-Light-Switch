@@ -1,15 +1,47 @@
-#include <ESP8266WiFi.h>
-#include <ESP8266WebServer.h>
-#include <ESP8266mDNS.h>
+
 #include <WiFiClient.h>
 
-// if you're just using a switch driven driectly by the GPIO pins, enable this define
+
+#define _SONOFF_BASIC
+
+#if defined(_WEMOS_RELAY_SHIELD) || defined(_SONOFF_BASIC)
+
 #define _SIMPLE_ONE_SWITCH
+#define NUM_SOCKETS	1
+
+
+#endif
+
+#if defined (_WEMOS_RELAY_SHIELD)
+
+#define GPIO_RELAY	D1
+// whatever you want it to be!
+#define GPIO_SWITCH D2
+
+#elif defined (_SONOFF_BASIC)
+
+// IMPORTANT
+// https://github.com/arendst/Sonoff-Tasmota/wiki/Arduino-IDE
+// Generic ESP8266 (beware, some 8255s out there!)
+// Flashmode DOUT
+// 1M 128k SPIFFS
+
+// a number of exceptions in 2.4.0 & LWIP2 - currently only works reliably with 2.3.0 and LWIP1.4
+
+#define GPIO_RELAY	12	// GPIO12
+#define GPIO_LED	13
+#define GPIO_SWITCH 0	// GPIO0 is existing button, GPIO14/D5 for the one on the header
+
+#endif
+
+
+
+
 
 
 #include "mcp23017.h"
 
-#include "debug_defines.h"
+
 
 #include <ArduinoJson.h>
 #include <FS.h>
@@ -30,63 +62,25 @@ StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 
 
 
-//#define _USING_OLED
-
-#ifdef _USING_OLED
-#include <ACROBOTIC_SSD1306.h>
-
-class oledDebug : public debugBase
-{
-private:
-
-	ACROBOTIC_SSD1306 *m_driver;
-
-public:
-
-	oledDebug(ACROBOTIC_SSD1306 *driver) :debugBase(), m_driver(driver)
-	{}
-
-protected:
-
-	void internalDebug(String out)
-	{
-		if (m_driver)
-			m_driver->putString(out);
-	}
-};
-
-
-
-#endif
 
 // first board that worked, although the pins were swapped around on the output
 #define _BOARD_VER_1_1
 
 
 // my libs
-#include <hostname.h>
+#include <myWifi.h>
 
-hostName esphostname;
-
-
-
-
-
-
-// we run MDNS so we can be found by "esp8266_<last 3 bytes of MAC address>.local" by the RPI
-MDNSResponder mdns;
-
-#ifdef _SIMPLE_ONE_SWITCH
-
-#define GPIO_RELAY	D1
-#define GPIO_SWITCH D2
-
-#define NUM_SOCKETS	1
-
+#ifdef _SONOFF_BASIC
+myWifiClass wifiInstance("sonoff_");
 #else
-// number of relays & switches
-#define NUM_SOCKETS	6
+myWifiClass wifiInstance;
 #endif
+
+
+
+
+
+
 
 // millis timeouts
 #define QUICK_SWITCH_TIMEOUT_DEFAULT	6000
@@ -103,20 +97,15 @@ bool resetWIFI = false;
 #endif
 
 
+
+
+
+
 struct 
 {
-	// store network credentials in eeprom
-	struct
-	{
-		String ssid;
-		String password;
-		bool configured;
+	// wifi deets
+	myWifiClass::wifiDetails wifi;
 
-		bool dhcp;
-		// if not dhcp
-		IPAddress ip, netmask, gateway;
-
-	} wifi;
 
 	// how long to wait for the light switch to settle
 	unsigned long debounceThresholdms;
@@ -183,20 +172,12 @@ struct
 
 };
 
-// needs to be persisted or the event is unsubscribed
-WiFiEventHandler onConnect, onDisconnect, onIPgranted;
 
 
-volatile bool busyDoingSomethingIgnoreSwitch = false;
 
 
-enum wifiMode { modeOff, modeAP, modeSTA, modeSTAspeculative, modeUnknown } ;
-wifiMode currentMode = modeUnknown;
-
-wifiMode ConnectWifi(wifiMode intent);
 
 
-ESP8266WebServer server(80);
 
 #ifdef _SIMPLE_ONE_SWITCH
 
@@ -247,7 +228,7 @@ unsigned MapSwitchToRelay(unsigned switchNumber)
 void ICACHE_RAM_ATTR OnSwitchISR()
 {
 	// if we're up to our neck in something else (normally WIFI negotiation) ignore this
-	if (busyDoingSomethingIgnoreSwitch)
+	if (wifiInstance.busyDoingSomethingIgnoreSwitch)
 	{
 		DEBUG(DEBUG_INFO, Serial.println("	OnSwitchISR redundant"));
 
@@ -317,7 +298,7 @@ void ICACHE_RAM_ATTR OnSwitchISR()
 
 				// remember the last RESET_ARRAY_SIZE - i'm assuming we won't wrap
 				// only reset if we're currently STA
-				if (currentMode == wifiMode::modeSTA)
+				if (wifiInstance.currentMode == myWifiClass::wifiMode::modeSTA)
 				{
 					if (Details.switches[switchPort].lastSwitchesSeen[RESET_ARRAY_SIZE - 1] - Details.switches[switchPort].lastSwitchesSeen[0] < (Details.resetWindowms))
 					{
@@ -349,6 +330,7 @@ void RevertAllSwitch()
 
 	// read the current switch state, and reflect that in the relay state
 	digitalWrite(GPIO_RELAY, digitalRead(GPIO_SWITCH)==HIGH);
+	digitalWrite(GPIO_LED, digitalRead(GPIO_SWITCH) == HIGH);
 
 
 #else
@@ -371,6 +353,7 @@ void DoAllSwitch(bool state, bool force)
 #ifdef _SIMPLE_ONE_SWITCH
 
 	digitalWrite(GPIO_RELAY, state?HIGH:LOW);
+	digitalWrite(GPIO_LED, state ? HIGH : LOW);
 
 #else
 
@@ -396,9 +379,10 @@ void DoSwitch(unsigned portNumber, bool on, bool forceSwitchToReflect)
 #ifdef _SIMPLE_ONE_SWITCH
 
 	digitalWrite(GPIO_RELAY, on ? HIGH : LOW);
+	digitalWrite(GPIO_LED, on ? HIGH : LOW);
 
 #else
-	DoRelay(MapSwitchToRelay(portNumber),on);
+	DoRelay(MapSwitchToRelay(portNumber), on);
 	if (forceSwitchToReflect)
 	{
 		mcp.SetSwitch(portNumber, on);
@@ -608,138 +592,6 @@ void ReadJSONconfig()
 
 
 
-void BeginWebServer()
-{
-	server.begin();
-	DEBUG(DEBUG_INFO, Serial.println("HTTP server started"));
-}
-
-// disjoin and rejoin, optionally force a STA attempt
-wifiMode ConnectWifi(wifiMode intent)
-{
-	busyDoingSomethingIgnoreSwitch = true;
-
-	WiFi.persistent(false);
-
-	DEBUG(DEBUG_INFO, Serial.printf("ConnectWifi from %d to %d\n\r", currentMode, intent));
-
-	// turn off wifi
-	switch (currentMode)
-	{
-	case wifiMode::modeOff:
-		break;
-	case wifiMode::modeAP:
-		WiFi.softAPdisconnect();
-		break;
-	case wifiMode::modeSTA:
-	case wifiMode::modeSTAspeculative:
-		WiFi.setAutoReconnect(false);
-		WiFi.disconnect();
-		break;
-	case wifiMode::modeUnknown:
-		break;
-	}
-
-	delay(1000);
-
-	DEBUG(DEBUG_INFO, Serial.println("wifi disconnected"));
-
-	if (intent == wifiMode::modeOff)
-	{
-		// turn wifi off
-		WiFi.mode(WIFI_OFF);
-
-	}
-
-	if (intent == wifiMode::modeSTA || intent==wifiMode::modeSTAspeculative)
-	{
-
-		// turn bonjour off??
-		DEBUG(DEBUG_VERBOSE, Serial.print("Attempting connect to "));
-		DEBUG(DEBUG_VERBOSE, Serial.println(Details.wifi.ssid));
-
-		WiFi.mode(WIFI_STA);
-
-		WiFi.begin(Details.wifi.ssid.c_str(), Details.wifi.password.c_str());
-
-		// Wait for connection
-		for(int attempts=0;attempts<15;attempts++)
-		{
-			if (WiFi.status() != WL_CONNECTED) 
-			{
-				delay(1000);
-				DEBUG(DEBUG_VERBOSE, Serial.print("."));
-			}
-			else
-				break;
-		}
-
-		if (WiFi.status() == WL_CONNECTED)
-		{
-
-			DEBUG(DEBUG_INFO, Serial.println(""));
-			DEBUG(DEBUG_INFO, Serial.printf("Connected to %s\n\r", Details.wifi.ssid.c_str()));
-			DEBUG(DEBUG_INFO, Serial.printf("IP address: %s\n\r", WiFi.localIP().toString().c_str()));
-
-			WiFi.setAutoReconnect(true);
-
-			currentMode = wifiMode::modeSTA;
-
-		}
-		else
-		{
-
-			DEBUG(DEBUG_ERROR, Serial.println("FAILED to connect"));
-
-			// depending on intent ...
-			if (intent == wifiMode::modeSTAspeculative)
-			{
-				// we're trying this for the first time, we failed, fall back to AP
-				return ConnectWifi(wifiMode::modeAP);
-			}
-		}
-	}
-
-	if (intent == wifiMode::modeAP)
-	{
-		// defaults to 192.168.4.1
-		DEBUG(DEBUG_INFO, Serial.println("Attempting to start AP"));
-
-		// we were unable to connect, so start our own access point
-		WiFi.mode(WIFI_AP);
-		WiFi.softAP(esphostname.c_str());
-
-		DEBUG(DEBUG_IMPORTANT, Serial.printf("Started AP %s\n\r", WiFi.softAPIP().toString().c_str()));
-	
-		currentMode = wifiMode::modeAP;
-
-
-	}
-
-	BeginMDNSServer();
-
-	BeginWebServer();
-
-	busyDoingSomethingIgnoreSwitch = false;
-
-	return currentMode;
-}
-
-// if we see more than x switches in y time, we reset the flash and enter AP mode (so we can be joined to another wifi network)
-
-void BeginMDNSServer()
-{
-	if (mdns.begin(esphostname.c_str()))
-	{
-		mdns.addService("http", "tcp", 80);
-		DEBUG(DEBUG_IMPORTANT, Serial.printf("MDNS responder started http://%s.local/\n\r", esphostname.c_str()));
-	}
-	else
-	{
-		DEBUG(DEBUG_ERROR, Serial.println("MDNS responder failed"));
-	}
-
-}
 
 
 //void ResetWIFI()
@@ -773,7 +625,7 @@ void ResetMe()
 	Details.wifi.ssid = String();
 	WriteJSONconfig();
 	// and reconnect as an AP
-	ConnectWifi(wifiMode::modeAP);
+	wifiInstance.ConnectWifi(myWifiClass::wifiMode::modeAP,Details.wifi);
 
 }
 
@@ -821,63 +673,64 @@ void setup(void)
 	ReadJSONconfig();
 
 	DEBUG(DEBUG_VERBOSE, Serial.println("starting"));
-	DEBUG(DEBUG_IMPORTANT, Serial.println(esphostname));
+	DEBUG(DEBUG_IMPORTANT, Serial.println(wifiInstance.m_hostName.c_str()));
 	DEBUG(DEBUG_VERBOSE, Serial.printf("bounce %lu\n\r",Details.debounceThresholdms));
 	DEBUG(DEBUG_VERBOSE, Serial.printf("reset %lu\n\r",Details.resetWindowms));
 
-	enum wifiMode intent = wifiMode::modeUnknown;
+	enum myWifiClass::wifiMode intent = myWifiClass::wifiMode::modeUnknown;
 
 	if (Details.wifi.configured)
 	{
 		DEBUG(DEBUG_INFO, Serial.println("credentials found"));
 		DEBUG(DEBUG_VERBOSE, Serial.println(Details.wifi.ssid));
 		DEBUG(DEBUG_VERBOSE, Serial.println(Details.wifi.password));
-		intent = wifiMode::modeSTA;
+		intent = myWifiClass::wifiMode::modeSTA;
 	}
 	else
 	{
 		DEBUG(DEBUG_WARN, Serial.println("WiFi not configured"));
-		intent = wifiMode::modeAP;
+		intent = myWifiClass::wifiMode::modeAP;
 
 	}
 
 
-	// set callbacks for wifi
-	onConnect=WiFi.onStationModeConnected([](const WiFiEventStationModeConnected&c) {
-	
-		DEBUG(DEBUG_IMPORTANT, Serial.printf("EVENT wifi connected %s\n\r", c.ssid.c_str()));
+	//// set callbacks for wifi
+	//onConnect=WiFi.onStationModeConnected([](const WiFiEventStationModeConnected&c) {
+	//
+	//	DEBUG(DEBUG_IMPORTANT, Serial.printf("EVENT wifi connected %s\n\r", c.ssid.c_str()));
 
-	});
+	//});
 
-	onIPgranted=WiFi.onStationModeGotIP([](const WiFiEventStationModeGotIP& event) {
-		IPAddress copy = event.ip;
-		DEBUG(DEBUG_IMPORTANT, Serial.printf("EVENT IP granted %s\n\r", copy.toString().c_str()));
+	//onIPgranted=WiFi.onStationModeGotIP([](const WiFiEventStationModeGotIP& event) {
+	//	IPAddress copy = event.ip;
+	//	DEBUG(DEBUG_IMPORTANT, Serial.printf("EVENT IP granted %s\n\r", copy.toString().c_str()));
 
-		if (!Details.wifi.dhcp)
-		{
-			if (WiFi.config(Details.wifi.ip, Details.wifi.gateway, Details.wifi.netmask))
-			{
-				DEBUG(DEBUG_IMPORTANT, Serial.printf("EVENT IP FORCED %s\n\r", WiFi.localIP().toString().c_str()));
-			}
-			else
-				DEBUG(DEBUG_IMPORTANT, Serial.println("EVENT IP FORCED FAILED"));
+	//	if (!Details.wifi.dhcp)
+	//	{
+	//		if (WiFi.config(Details.wifi.ip, Details.wifi.gateway, Details.wifi.netmask))
+	//		{
+	//			DEBUG(DEBUG_IMPORTANT, Serial.printf("EVENT IP FORCED %s\n\r", WiFi.localIP().toString().c_str()));
+	//		}
+	//		else
+	//			DEBUG(DEBUG_IMPORTANT, Serial.println("EVENT IP FORCED FAILED"));
 
-		}
+	//	}
 
-		DEBUG(DEBUG_IMPORTANT, Serial.printf("EVENT GATEWAY %s\n\r", WiFi.gatewayIP().toString().c_str()));
+	//	DEBUG(DEBUG_IMPORTANT, Serial.printf("EVENT GATEWAY %s\n\r", WiFi.gatewayIP().toString().c_str()));
 
-	});
+	//});
 
-	onDisconnect=WiFi.onStationModeDisconnected([](const WiFiEventStationModeDisconnected &c) {
-	
-		DEBUG(DEBUG_WARN, Serial.println("EVENT disconnected "));
+	//onDisconnect=WiFi.onStationModeDisconnected([](const WiFiEventStationModeDisconnected &c) {
+	//
+	//	DEBUG(DEBUG_WARN, Serial.println("EVENT disconnected "));
 
-	});
+	//});
 
 #ifdef _SIMPLE_ONE_SWITCH
 
 	// set the relay pin to output
 	pinMode(GPIO_RELAY, OUTPUT);
+	pinMode(GPIO_LED, OUTPUT);
 
 	// and the switch pin to input
 	pinMode(GPIO_SWITCH, INPUT_PULLUP);
@@ -900,7 +753,7 @@ void setup(void)
 	DoAllSwitch(false,false);
 
 	// try to connect to the wifi
-	ConnectWifi(intent);
+	wifiInstance.ConnectWifi(intent, Details.wifi);
 
 	// honour current switch state
 	RevertAllSwitch();
@@ -923,7 +776,7 @@ void InstallWebServerHandlers()
 	// switch ON/OFF
 	// revert
 
-	server.on("/revert", []() {
+	wifiInstance.server.on("/revert", []() {
 
 		RevertAllSwitch();
 
@@ -932,15 +785,15 @@ void InstallWebServerHandlers()
 		SendServerPage();
 	});
 
-	server.on("/all", []() {
+	wifiInstance.server.on("/all", []() {
 
 		DEBUG(DEBUG_VERBOSE, Serial.println("/all"));
 
-		for (uint8_t i = 0; i < server.args(); i++)
+		for (uint8_t i = 0; i < wifiInstance.server.args(); i++)
 		{
-			if (server.argName(i) == "action")
+			if (wifiInstance.server.argName(i) == "action")
 			{
-				DoAllSwitch(server.arg(i) == "on" ? true : false, true);
+				DoAllSwitch(wifiInstance.server.arg(i) == "on" ? true : false, true);
 			}
 		}
 
@@ -951,54 +804,54 @@ void InstallWebServerHandlers()
 
 #ifndef _SIMPLE_ONE_SWITCH
 
-	server.on("/toggle", []() {
+	wifiInstance.server.on("/toggle", []() {
 
 		DEBUG(DEBUG_VERBOSE, Serial.println("/toggle"));
 
 		delay(_WEB_TAR_PIT_DELAY);
 
 		// must be an arg
-		if (!server.args())
+		if (!wifiInstance.server.args())
 		{
 			return;
 		}
 
-		if (server.argName(0) == "relay")
+		if (wifiInstance.server.argName(0) == "relay")
 		{
-			if (mcp.ToggleRelay(server.arg(0).toInt()))
+			if (mcp.ToggleRelay(wifiInstance.server.arg(0).toInt()))
 			{
-				server.send(200, "text/html", "<html></html>");
+				wifiInstance.server.send(200, "text/html", "<html></html>");
 			}
 		}
 
 	});
 #endif
 
-	server.on("/button", []() {
+	wifiInstance.server.on("/button", []() {
 
 		DEBUG(DEBUG_VERBOSE, Serial.println("/button"));
 
 		// these have to be in port/action pairs
-		if (server.args() % 2)
+		if (wifiInstance.server.args() % 2)
 		{
 			return;
 		}
 
 
-		for (uint8_t i = 0; i < server.args(); i += 2)
+		for (uint8_t i = 0; i < wifiInstance.server.args(); i += 2)
 		{
 			int port = -1; bool action = false;
-			if (server.argName(i) == "port" && server.argName(i + 1) == "action")
+			if (wifiInstance.server.argName(i) == "port" && wifiInstance.server.argName(i + 1) == "action")
 			{
-				port = server.arg(i).toInt();
-				server.arg(i + 1).toLowerCase();
-				action = server.arg(i + 1) == "on" ? true : false;
+				port = wifiInstance.server.arg(i).toInt();
+				wifiInstance.server.arg(i + 1).toLowerCase();
+				action = wifiInstance.server.arg(i + 1) == "on" ? true : false;
 			}
-			else if (server.argName(i) == "action" && server.argName(i + 1) == "port")
+			else if (wifiInstance.server.argName(i) == "action" && wifiInstance.server.argName(i + 1) == "port")
 			{
-				port = server.arg(i + 1).toInt();
-				server.arg(i).toLowerCase();
-				action = server.arg(i) == "on" ? true : false;
+				port = wifiInstance.server.arg(i + 1).toInt();
+				wifiInstance.server.arg(i).toLowerCase();
+				action = wifiInstance.server.arg(i) == "on" ? true : false;
 			}
 
 			if (port != -1)
@@ -1011,7 +864,7 @@ void InstallWebServerHandlers()
 
 	});
 
-	server.on("/resetCounts", []() {
+	wifiInstance.server.on("/resetCounts", []() {
 
 		DEBUG(DEBUG_VERBOSE, Serial.println("/resetCounts"));
 
@@ -1022,11 +875,11 @@ void InstallWebServerHandlers()
 			Details.switches[eachSwitch].switchCount = 0;
 		}
 
-		server.send(200,"text/html","<html/>");
+		wifiInstance.server.send(200,"text/html","<html/>");
 
 	});
 
-	server.on("/reboot", []() {
+	wifiInstance.server.on("/reboot", []() {
 
 		DEBUG(DEBUG_VERBOSE, Serial.println("/reboot"));
 
@@ -1035,7 +888,7 @@ void InstallWebServerHandlers()
 	});
 
 
-	server.on("/resetWIFI", []() {
+	wifiInstance.server.on("/resetWIFI", []() {
 
 		DEBUG(DEBUG_VERBOSE, Serial.println("/resetWIFI"));
 
@@ -1046,7 +899,7 @@ void InstallWebServerHandlers()
 
 
 
-	server.on("/", []() {
+	wifiInstance.server.on("/", []() {
 
 		DEBUG(DEBUG_VERBOSE, Serial.println("/"));
 
@@ -1058,15 +911,15 @@ void InstallWebServerHandlers()
 
 
 	// posted config
-	server.on("/json/config", HTTP_POST, []() {
+	wifiInstance.server.on("/json/config", HTTP_POST, []() {
 
 		DEBUG(DEBUG_INFO, Serial.println("json config posted"));
-		DEBUG(DEBUG_INFO, Serial.println(server.arg("plain")));
+		DEBUG(DEBUG_INFO, Serial.println(wifiInstance.server.arg("plain")));
 
 		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 		jsonBuffer.clear();
 		// 'plain' is the secret source to get to the body
-		JsonObject& root = jsonBuffer.parseObject(server.arg("plain"));
+		JsonObject& root = jsonBuffer.parseObject(wifiInstance.server.arg("plain"));
 
 		long bounce = root["bouncems"];
 		long reset = root["resetms"];
@@ -1080,20 +933,20 @@ void InstallWebServerHandlers()
 		WriteJSONconfig();
 		delay(_WEB_TAR_PIT_DELAY);
 
-		server.send(200, "text/html", "<html></html>");
+		wifiInstance.server.send(200, "text/html", "<html></html>");
 
 		});
 
 
-	server.on("/json/wifi", HTTP_POST, []() {
+	wifiInstance.server.on("/json/wifi", HTTP_POST, []() {
 
 		DEBUG(DEBUG_INFO, Serial.println("json wifi posted"));
-		DEBUG(DEBUG_INFO, Serial.println(server.arg("plain")));
+		DEBUG(DEBUG_INFO, Serial.println(wifiInstance.server.arg("plain")));
 
 		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 		jsonBuffer.clear();
 		// 'plain' is the secret source to get to the body
-		JsonObject& root = jsonBuffer.parseObject(server.arg("plain"));
+		JsonObject& root = jsonBuffer.parseObject(wifiInstance.server.arg("plain"));
 
 		String ssid = root["ssid"];
 		String pwd = root["pwd"];
@@ -1118,7 +971,7 @@ void InstallWebServerHandlers()
 
 		// force attempt
 		// if we fail we fall back to AP
-		if (ConnectWifi(wifiMode::modeSTAspeculative) == wifiMode::modeSTA)
+		if (wifiInstance.ConnectWifi(myWifiClass::wifiMode::modeSTAspeculative, Details.wifi) == myWifiClass::wifiMode::modeSTA)
 		{
 			Details.wifi.configured = true;
 		}
@@ -1131,14 +984,14 @@ void InstallWebServerHandlers()
 		WriteJSONconfig();
 
 		//delay(_WEB_TAR_PIT_DELAY);
-		//server.send(200, "text/html", "<html></html>");
+		//wifiInstance.server.send(200, "text/html", "<html></html>");
 
 
 	});
 
 	// GET
 
-	server.on("/json/state", HTTP_GET, []() {
+	wifiInstance.server.on("/json/state", HTTP_GET, []() {
 		// give them back the port / switch map
 
 		DEBUG(DEBUG_INFO, Serial.println("json state called"));
@@ -1148,7 +1001,7 @@ void InstallWebServerHandlers()
 
 		JsonObject &root = jsonBuffer.createObject();
 
-		root["name"] = esphostname;
+		root["name"] = wifiInstance.m_hostName.c_str();
 		root["switchCount"] = NUM_SOCKETS;
 
 		JsonArray &switchState = root.createNestedArray("switchState");
@@ -1173,11 +1026,11 @@ void InstallWebServerHandlers()
 
 		DEBUG(DEBUG_VERBOSE, Serial.println(jsonText));
 
-		server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-		server.send(200, "application/json", jsonText);
+		wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+		wifiInstance.server.send(200, "application/json", jsonText);
 	});
 
-	server.on("/json/maxSwitchCount", HTTP_GET, []() {
+	wifiInstance.server.on("/json/maxSwitchCount", HTTP_GET, []() {
 		// give them back the port / switch map
 
 		DEBUG(DEBUG_INFO, Serial.println("json maxSwitchCount called"));
@@ -1187,7 +1040,7 @@ void InstallWebServerHandlers()
 
 		JsonObject &root = jsonBuffer.createObject();
 
-		root["name"] = esphostname;
+		root["name"] = wifiInstance.m_hostName.c_str();
 		root["switchCount"] = NUM_SOCKETS;
 
 		unsigned maxSwitch = -1, maxSwitchCount = 0;
@@ -1215,13 +1068,13 @@ void InstallWebServerHandlers()
 
 		DEBUG(DEBUG_VERBOSE, Serial.println(jsonText));
 
-		server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-		server.send(200, "application/json", jsonText);
+		wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+		wifiInstance.server.send(200, "application/json", jsonText);
 	});
 
 
 
-	server.on("/json/config", HTTP_GET, []() {
+	wifiInstance.server.on("/json/config", HTTP_GET, []() {
 		// give them back the port / switch map
 
 		DEBUG(DEBUG_INFO, Serial.println("json config called"));
@@ -1231,7 +1084,7 @@ void InstallWebServerHandlers()
 
 		JsonObject &root = jsonBuffer.createObject();
 
-		root["name"] = esphostname;
+		root["name"] = wifiInstance.m_hostName.c_str();
 		root["bouncems"] = Details.debounceThresholdms;
 		root["resetms"] = Details.resetWindowms;
 
@@ -1240,11 +1093,11 @@ void InstallWebServerHandlers()
 
 		DEBUG(DEBUG_VERBOSE, Serial.println(jsonText));
 
-		server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-		server.send(200, "application/json", jsonText);
+		wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+		wifiInstance.server.send(200, "application/json", jsonText);
 	});
 
-	server.on("/json/wifi", HTTP_GET, []() {
+	wifiInstance.server.on("/json/wifi", HTTP_GET, []() {
 		// give them back the port / switch map
 
 		DEBUG(DEBUG_INFO, Serial.println("json wifi called"));
@@ -1253,7 +1106,7 @@ void InstallWebServerHandlers()
 		jsonBuffer.clear();
 
 		JsonObject &root = jsonBuffer.createObject();
-		root["name"] = esphostname;
+		root["name"] = wifiInstance.m_hostName.c_str();
 
 		// let's get all wifis we can see
 		int found=WiFi.scanNetworks();
@@ -1288,8 +1141,8 @@ void InstallWebServerHandlers()
 		DEBUG(DEBUG_VERBOSE, Serial.println(jsonText));
 
 		// do not cache
-		server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-		server.send(200, "text/json", jsonText);
+		wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+		wifiInstance.server.send(200, "text/json", jsonText);
 	});
 
 	// serve up everthing in SPIFFS
@@ -1300,7 +1153,7 @@ void InstallWebServerHandlers()
 		String file = dir.fileName();
 
 		// cache it for an hour
-		server.serveStatic(file.c_str(), SPIFFS, file.c_str(),"Cache-Control: public, max-age=3600");
+		wifiInstance.server.serveStatic(file.c_str(), SPIFFS, file.c_str(),"Cache-Control: public, max-age=3600");
 
 		DEBUG(DEBUG_VERBOSE, Serial.printf("Serving %s\n\r", file.c_str()));
 
@@ -1314,22 +1167,22 @@ void SendServerPage()
 {
 	// given the current state of the device, send the appropriate page back
 	File f;
-	switch (currentMode)
+	switch (wifiInstance.currentMode)
 	{
-	case wifiMode::modeAP:
+	case myWifiClass::wifiMode::modeAP:
 		f = SPIFFS.open("/APmode.htm", "r");
 		break;
-	case wifiMode::modeSTA:
+	case myWifiClass::wifiMode::modeSTA:
 		f = SPIFFS.open("/STAmode.htm", "r");
 		break;
-	case wifiMode::modeUnknown:
+	case myWifiClass::wifiMode::modeUnknown:
 	default:
 		f = SPIFFS.open("/Error.htm", "r");
 		break;
 
 	}
 
-	server.streamFile(f, "text/html");
+	wifiInstance.server.streamFile(f, "text/html");
 	f.close();
 
 }
@@ -1369,7 +1222,7 @@ void loop(void)
 		ResetMe();
 #endif
 
-	server.handleClient();
+	wifiInstance.server.handleClient();
 
 #ifdef _TEST_WFI_STATE
 

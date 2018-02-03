@@ -9,6 +9,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "espBasic", "C:\Users\bflint
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TankSensor", "..\..\tank sensor\TankSensor\TankSensor.vcxproj", "{B70ECBC9-ED23-4F45-8AAA-A96FA35DD49D}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "i2cscanner", "..\i2cscanner\i2cscanner.vcxproj", "{6DC50F42-0C6D-4A6F-96B7-E4472FDCEDFC}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x86 = Debug|x86
@@ -27,6 +29,10 @@ Global
 		{B70ECBC9-ED23-4F45-8AAA-A96FA35DD49D}.Debug|x86.Build.0 = Debug|Win32
 		{B70ECBC9-ED23-4F45-8AAA-A96FA35DD49D}.Release|x86.ActiveCfg = Release|Win32
 		{B70ECBC9-ED23-4F45-8AAA-A96FA35DD49D}.Release|x86.Build.0 = Release|Win32
+		{6DC50F42-0C6D-4A6F-96B7-E4472FDCEDFC}.Debug|x86.ActiveCfg = Debug|Win32
+		{6DC50F42-0C6D-4A6F-96B7-E4472FDCEDFC}.Debug|x86.Build.0 = Debug|Win32
+		{6DC50F42-0C6D-4A6F-96B7-E4472FDCEDFC}.Release|x86.ActiveCfg = Release|Win32
+		{6DC50F42-0C6D-4A6F-96B7-E4472FDCEDFC}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
