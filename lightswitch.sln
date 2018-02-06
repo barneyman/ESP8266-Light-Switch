@@ -11,6 +11,8 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TankSensor", "..\..\tank se
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "i2cscanner", "..\i2cscanner\i2cscanner.vcxproj", "{6DC50F42-0C6D-4A6F-96B7-E4472FDCEDFC}"
 EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "basicSD", "..\..\basicSD\basicSD.vcxproj", "{C5C110E1-B0CA-4393-8649-AB7A41069887}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x86 = Debug|x86
@@ -33,6 +35,10 @@ Global
 		{6DC50F42-0C6D-4A6F-96B7-E4472FDCEDFC}.Debug|x86.Build.0 = Debug|Win32
 		{6DC50F42-0C6D-4A6F-96B7-E4472FDCEDFC}.Release|x86.ActiveCfg = Release|Win32
 		{6DC50F42-0C6D-4A6F-96B7-E4472FDCEDFC}.Release|x86.Build.0 = Release|Win32
+		{C5C110E1-B0CA-4393-8649-AB7A41069887}.Debug|x86.ActiveCfg = Debug|Win32
+		{C5C110E1-B0CA-4393-8649-AB7A41069887}.Debug|x86.Build.0 = Debug|Win32
+		{C5C110E1-B0CA-4393-8649-AB7A41069887}.Release|x86.ActiveCfg = Release|Win32
+		{C5C110E1-B0CA-4393-8649-AB7A41069887}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

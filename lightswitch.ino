@@ -79,6 +79,8 @@ StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 
 #ifdef _SONOFF_BASIC
 myWifiClass wifiInstance("sonoff_");
+#elif defined(_WEMOS_RELAY_SHIELD)
+myWifiClass wifiInstance("wemos_");
 #else
 myWifiClass wifiInstance;
 #endif
