@@ -921,8 +921,7 @@ void InstallWebServerHandlers()
 		// if we succeedefd, send back success, then change to STA
 		if (wifiInstance.ConnectWifi(myWifiClass::wifiMode::modeSTAspeculative, Details.wifi) == myWifiClass::wifiMode::modeSTAandAP)
 		{
-			SendServerPage();
-				
+			
 			Details.wifi.configured = true;
 		}
 		else
