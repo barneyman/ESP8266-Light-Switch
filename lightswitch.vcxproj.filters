@@ -55,6 +55,9 @@
     <None Include="data\HomeFrame.htm">
       <Filter>data</Filter>
     </None>
+    <None Include="data\STAAPmode.htm">
+      <Filter>data</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="__vm\.lightswitch.vsarduino.h">

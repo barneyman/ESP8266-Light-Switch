@@ -456,23 +456,8 @@ void WriteJSONconfig()
 
 	root["resetWindowms"] = Details.resetWindowms;
 
-	JsonObject &wifi = root.createNestedObject("wifi");
+	wifiInstance.WriteDetailsToJSON(root, Details.wifi);
 
-	wifi["configured"] = Details.wifi.configured;
-	if (Details.wifi.configured)
-	{
-		wifi["password"] = Details.wifi.password;
-		wifi["ssid"] = Details.wifi.ssid;
-
-		if (!Details.wifi.dhcp)
-		{
-			JsonObject &staticDetails = wifi.createNestedObject("network");
-			staticDetails["ip"] = Details.wifi.ip.toString();
-			staticDetails["gateway"] = Details.wifi.gateway.toString();
-			staticDetails["mask"] = Details.wifi.netmask.toString();
-		}
-
-	}
 
 #ifndef _SIMPLE_ONE_SWITCH
 	AddMapToJSON(root, NUM_SOCKETS);
@@ -552,44 +537,7 @@ void ReadJSONconfig()
 	Details.debounceThresholdmsToggle=root["debounceThresholdmsToggle"];
 	Details.resetWindowms= root["resetWindowms"];
 
-
-	JsonObject &wifi = root["wifi"];
-
-	Details.wifi.configured = wifi["configured"];
-	if (Details.wifi.configured)
-	{
-		Details.wifi.password = (const char*)(wifi["password"]);
-		Details.wifi.ssid = (const char*)(wifi["ssid"]);
-
-		JsonObject &staticDetails = wifi["network"];
-
-		if(staticDetails.success())
-		{
-			Details.wifi.dhcp = false;
-
-			if(Details.wifi.ip.fromString((const char*)staticDetails["ip"]) &&
-				Details.wifi.gateway.fromString((const char*)staticDetails["gateway"]) &&
-				Details.wifi.netmask.fromString((const char*)staticDetails["mask"]))
-			{
-				Details.wifi.dhcp = false;
-			}
-			else
-			{
-				DEBUG(DEBUG_ERROR, Serial.println("staticDetails parse failed, reverting to DHCP"));
-				Details.wifi.dhcp = true;
-			}
-		}
-		else
-		{
-			Details.wifi.dhcp = true;
-		}
-
-	}
-	else
-	{
-		Details.wifi.password = String();
-		Details.wifi.ssid = String();
-	}
+	wifiInstance.ReadDetailsFromJSON(root, Details.wifi);
 
 #ifndef _SIMPLE_ONE_SWITCH
 	// add the switch map
@@ -660,18 +608,6 @@ void ResetMe()
 
 void setup(void) 
 {
-
-#ifdef _USING_OLED
-	oled.init();                      // Initialze SSD1306 OLED display
-	oled.setFont(font8x8);            // Set font type (default 8x8)
-	oled.clearDisplay();              // Clear screen
-	oled.setTextXY(0, 0);              // Set cursor position, start of line 0
-	oled.putString(esphostname);
-	oled.putString(".local");
-#endif
-
-
-
 
 	// reset the bounce thresh-holds
 	for (int eachSwitch = 0; eachSwitch < NUM_SOCKETS; eachSwitch++)
@@ -889,6 +825,21 @@ void InstallWebServerHandlers()
 
 	});
 
+	wifiInstance.server.on("/stopAP", []() {
+
+		DEBUG(DEBUG_VERBOSE, Serial.println("/stopAP"));
+
+		if (wifiInstance.currentMode == myWifiClass::wifiMode::modeSTAandAP)
+		{
+			wifiInstance.ConnectWifi(myWifiClass::wifiMode::modeSTA, Details.wifi);
+			wifiInstance.server.send(200, "text/html", "<html/>");
+		}
+		else
+		{
+			wifiInstance.server.send(500, "text/html", "<html/>");
+		}
+
+	});
 
 
 
@@ -967,9 +918,11 @@ void InstallWebServerHandlers()
 		}
 
 		// force attempt
-		// if we fail we fall back to AP
-		if (wifiInstance.ConnectWifi(myWifiClass::wifiMode::modeSTAspeculative, Details.wifi) == myWifiClass::wifiMode::modeSTA)
+		// if we succeedefd, send back success, then change to STA
+		if (wifiInstance.ConnectWifi(myWifiClass::wifiMode::modeSTAspeculative, Details.wifi) == myWifiClass::wifiMode::modeSTAandAP)
 		{
+			SendServerPage();
+				
 			Details.wifi.configured = true;
 		}
 		else
@@ -1096,6 +1049,30 @@ void InstallWebServerHandlers()
 		wifiInstance.server.send(200, "application/json", jsonText);
 	});
 
+	wifiInstance.server.on("/json/wificonfig", HTTP_GET, []() {
+		// give them back the port / switch map
+
+		DEBUG(DEBUG_INFO, Serial.println("json wificonfig called"));
+
+		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
+		jsonBuffer.clear();
+
+		JsonObject &root = jsonBuffer.createObject();
+
+		root["name"] = wifiInstance.m_hostName.c_str();
+		root["ssid"] = wifiInstance.SSID();
+		root["ip"] = wifiInstance.localIP().toString();
+
+		String jsonText;
+		root.prettyPrintTo(jsonText);
+
+		DEBUG(DEBUG_VERBOSE, Serial.println(jsonText));
+
+		wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+		wifiInstance.server.send(200, "application/json", jsonText);
+	});
+
+
 	wifiInstance.server.on("/json/wifi", HTTP_GET, []() {
 		// give them back the port / switch map
 
@@ -1108,18 +1085,10 @@ void InstallWebServerHandlers()
 		root["name"] = wifiInstance.m_hostName.c_str();
 
 		// let's get all wifis we can see
-		int found=WiFi.scanNetworks();
-
 		std::vector<std::pair<String, int>> allWifis;
+		int found=wifiInstance.ScanNetworks(allWifis);
 
 		JsonArray &wifis = root.createNestedArray("wifi");
-
-		for (int each = 0; each < found; each++)
-		{
-			allWifis.push_back(std::pair<String, int>(WiFi.SSID(each), WiFi.RSSI(each)));
-			std::sort(allWifis.begin(), allWifis.end(), [](const std::pair<String, int> &a, const std::pair<String, int> &b) { return a.second > b.second; });
-
-		}
 
 		int maxFound = found < 10 ? found : 10;
 
@@ -1168,6 +1137,9 @@ void SendServerPage()
 	File f;
 	switch (wifiInstance.currentMode)
 	{
+	case myWifiClass::wifiMode::modeSTAandAP:
+		f = SPIFFS.open("/STAAPmode.htm", "r");
+		break;
 	case myWifiClass::wifiMode::modeAP:
 		f = SPIFFS.open("/APmode.htm", "r");
 		break;

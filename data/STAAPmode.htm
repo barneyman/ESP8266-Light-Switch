@@ -1,0 +1,78 @@
+<HTML>
+<HEAD>
+<META NAME="GENERATOR" Content="Microsoft Visual Studio">
+<TITLE>ESP8266 Provisioning</TITLE>
+    <link rel="stylesheet" type="text/css" href="switch.css">
+</HEAD>
+<BODY onload="OnLoad()">
+
+    <iframe src="HeaderFrame.htm" id="header" name="header" onload="headerLoaded()"></iframe>
+
+    <h2>Wifi Details</h2>
+    Successfully logged onto network <b><span id="ssid">???</span></b><br />
+    IP address is <b><span id="ip">???</span></b>
+    <hr />
+    <button id="stopAP" onclick="StopAP()" disabled>Stop AP</button>
+
+
+    <script src="common.js"></script>
+
+    <script>
+
+
+        function OnLoad()
+        {
+            let url = base + '/json/wificonfig'
+
+            // disable scan
+            //document.getElementById("rescan").disabled = true;
+            //document.getElementById("join").disabled = true;
+
+            fetch(url)
+                .then(function (response) {
+                    if (response.ok)
+                        return response.json();
+                    throw new Error('network err')
+                })
+                .then(function (data) {
+
+                    //document.getElementById("devicename").innerText = data["name"] + ".local"
+                    document.getElementById("ssid").innerText = data["ssid"]
+                    document.getElementById("ip").innerText = data["ip"]
+
+
+
+                    //document.getElementById("rescan").disabled = false;
+                    document.getElementById("stopAP").disabled = false;
+                }).catch(function (error) {
+                    wifis.innerText = "Error"
+                })
+
+        }
+
+        function StopAP() {
+
+            let url = base + "/stopAP"
+
+            var xhr = new XMLHttpRequest();
+
+            xhr.open("GET", url, true);
+            xhr.setRequestHeader("Content-type", "text/plain");
+
+            xhr.send();
+
+            xhr.onloadend = function () {
+                // reload
+                window.location.reload(true);
+            };
+
+
+
+        }
+
+
+    </script>
+
+
+</BODY>
+</HTML>
