@@ -114,7 +114,6 @@
                 xhr.open("GET", url, true);
                 xhr.setRequestHeader("Content-type", "text/plain");
 
-                xhr.send();
                 xhr.onloadend = function () {
 
                     if (repeatCount) {
@@ -122,6 +121,8 @@
                     }
 
                 }
+
+                xhr.send();
 
             }
 
@@ -181,7 +182,6 @@
                 xhr.open("GET", url, true);
                 xhr.setRequestHeader("Content-type", "text/plain");
 
-                xhr.send();
                 xhr.onloadend = function () {
 
 
@@ -206,6 +206,8 @@
 
                     setInterval(FindPressedSwitch, 2000)
                 }
+
+                xhr.send();
 
             }
 

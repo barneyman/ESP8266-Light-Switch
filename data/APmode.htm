@@ -154,7 +154,6 @@
                 xhr.open("POST", url, true);
                 xhr.setRequestHeader("Content-type", "text/plain");
 
-                xhr.send(JSON.stringify(jsonData));
                 xhr.onloadend = function () {
                     // done
                     // we should delay for a couple of seconds, then try to 
@@ -162,6 +161,7 @@
                     window.location.reload(true)
                 };
 
+                xhr.send(JSON.stringify(jsonData));
 
             }
             else
