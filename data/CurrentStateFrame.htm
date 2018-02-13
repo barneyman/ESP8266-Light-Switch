@@ -87,8 +87,8 @@
                                 var onLink = name+'.local/button?action=on&port=' + switchNumber
                                 var offLink = name + '.local/button?action=off&port=' + switchNumber
 
-                                wlinkTable.getElementsByTagName('td')[1].innerText = onLink
-                                wlinkTable.getElementsByTagName('td')[3].innerText = offLink
+                                wlinkTable.getElementsByTagName('td')[1].innerText = "http://"+onLink
+                                wlinkTable.getElementsByTagName('td')[3].innerText = "http://"+offLink
 
                                 document.getElementById('loading').hidden = true;
                                 document.getElementById('found').hidden = false;

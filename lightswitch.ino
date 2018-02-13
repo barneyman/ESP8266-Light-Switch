@@ -2,8 +2,8 @@
 #include <WiFiClient.h>
 
 
-//#define _SONOFF_BASIC
-#define _WEMOS_RELAY_SHIELD
+#define _SONOFF_BASIC
+//#define _WEMOS_RELAY_SHIELD
 
 
 #if defined(_WEMOS_RELAY_SHIELD) && defined(_SONOFF_BASIC)
@@ -351,7 +351,12 @@ void RevertAllSwitch()
 	bool switchState = (digitalRead(GPIO_SWITCH) == HIGH);
 
 	digitalWrite(GPIO_RELAY, switchState?HIGH:LOW);
+#ifdef _SONOFF_BASIC
+	// LED is inverted on the sonoff
+	digitalWrite(GPIO_LED, switchState ? LOW : HIGH);
+#else
 	digitalWrite(GPIO_LED, switchState ? HIGH : LOW);
+#endif
 
 
 #else
@@ -374,8 +379,12 @@ void DoAllSwitch(bool state, bool force)
 #ifdef _SIMPLE_ONE_SWITCH
 
 	digitalWrite(GPIO_RELAY, state?HIGH:LOW);
+#ifdef _SONOFF_BASIC
+	// LED is inverted on the sonoff
+	digitalWrite(GPIO_LED, state ? LOW : HIGH);
+#else
 	digitalWrite(GPIO_LED, state ? HIGH : LOW);
-
+#endif
 #else
 
 	for (int Switch = 0; Switch < NUM_SOCKETS; Switch++)
@@ -400,7 +409,12 @@ void DoSwitch(unsigned portNumber, bool on, bool forceSwitchToReflect)
 #ifdef _SIMPLE_ONE_SWITCH
 
 	digitalWrite(GPIO_RELAY, on ? HIGH : LOW);
+#ifdef _SONOFF_BASIC
+	// LED is inverted on the sonoff
+	digitalWrite(GPIO_LED, on ? LOW : HIGH);
+#else
 	digitalWrite(GPIO_LED, on ? HIGH : LOW);
+#endif
 
 #else
 	DoRelay(MapSwitchToRelay(portNumber), on);
