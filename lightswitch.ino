@@ -38,7 +38,7 @@
 #define GPIO_RELAY		12	// GPIO12
 #define GPIO_LED		13
 #define GPIO_SWITCH		0	// GPIO0 is existing button, GPIO14/D5 for the one on the header
-#define GPIO_SWITCH2	16
+#define GPIO_SWITCH2	14
 	
 #endif
 
@@ -114,6 +114,8 @@ enum	switchState { swUnknown, swOn, swOff };
 
 struct 
 {
+	bool configDirty;
+
 	// wifi deets
 	myWifiClass::wifiDetails wifi;
 
@@ -127,16 +129,18 @@ struct
 	// the switches are named
 	struct {
 
+		// persisted
 		String name;
+		unsigned relay;
+		enum switchState lastState;
 
-		enum switchState lastState, preferredDefault;
-
+		// not persisted
+		enum switchState preferredDefault;
 		enum  typeOfSwitch switchType;
 #ifdef GPIO_SWITCH2
 		enum  typeOfSwitch altSwitchType;
 #endif
 
-		unsigned relay;
 
 		// when we saw this switch change state - used to debounce the switch
 		unsigned long last_seen_bounce;
@@ -152,6 +156,8 @@ struct
 
 } Details = {
 
+	false, 
+
 	{
 		"","",false, true
 	},
@@ -162,9 +168,9 @@ struct
 #ifdef 	_SONOFF_BASIC
 	{
 #ifdef GPIO_SWITCH2
-		{ "Sonoff",swUnknown, swOff, stMomentary,stToggle, 0 }
+		{ "Sonoff",0,swUnknown, swOff, stMomentary,stToggle, 0, 0 }
 #else
-		{ "Sonoff", swUnknown, swOff, stMomentary, 0 }
+		{ "Sonoff",0, swUnknown, swOff, stMomentary, 0,0 }
 #endif
 	}
 
@@ -458,6 +464,8 @@ void DoSwitch(unsigned portNumber, bool on, bool forceSwitchToReflect)
 	DEBUG(DEBUG_IMPORTANT, Serial.printf("DoSwitch: relay %d %s %s\r\n", portNumber, on ? "ON" : "off", forceSwitchToReflect ? "FORCE" : ""));
 
 	Details.switches[portNumber].lastState = on ? swOn : swOff;
+	Details.configDirty = true;
+
 
 #ifdef _SIMPLE_ONE_SWITCH
 
@@ -528,10 +536,7 @@ void WriteJSONconfig()
 
 	wifiInstance.WriteDetailsToJSON(root, Details.wifi);
 
-
-#ifndef _SIMPLE_ONE_SWITCH
 	AddMapToJSON(root, NUM_SOCKETS);
-#endif
 
 	DEBUG(DEBUG_VERBOSE, Serial.printf("jsonBuffer.size used : %d\n\r", jsonBuffer.size()));
 
@@ -550,6 +555,7 @@ void WriteJSONconfig()
 
 	DEBUG(DEBUG_VERBOSE, Serial.println("JSON : closed"));
 
+	Details.configDirty = false;
 }
 
 
@@ -603,13 +609,14 @@ void ReadJSONconfig()
 		DEBUG(DEBUG_VERBOSE, Serial.println("JSON parsed"));
 	}
 
+	Details.configDirty = false;
+
 	Details.debounceThresholdmsMomentary= root["debounceThresholdmsMomentary"];
 	Details.debounceThresholdmsToggle=root["debounceThresholdmsToggle"];
 	Details.resetWindowms= root["resetWindowms"];
 
 	wifiInstance.ReadDetailsFromJSON(root, Details.wifi);
 
-#ifndef _SIMPLE_ONE_SWITCH
 	// add the switch map
 	JsonArray &switchMap = root["switchMap"];
 	if (switchMap.success())
@@ -621,6 +628,7 @@ void ReadJSONconfig()
 			{
 				Details.switches[each].relay = theSwitch["relay"];
 				Details.switches[each].name = (const char*)theSwitch["name"];
+				Details.switches[each].lastState = (enum switchState)(int)theSwitch["lastState"];
 			}
 			else
 			{
@@ -628,7 +636,6 @@ void ReadJSONconfig()
 			}
 		}
 	}
-#endif
 
 }
 
@@ -1234,7 +1241,7 @@ void SendServerPage()
 
 }
 
-#ifndef _SIMPLE_ONE_SWITCH
+
 void AddMapToJSON(JsonObject &root, unsigned numSockets)
 {
 
@@ -1248,14 +1255,15 @@ void AddMapToJSON(JsonObject &root, unsigned numSockets)
 	{
 		JsonObject &theSwitch = switchMap.createNestedObject();
 		theSwitch["switch"] = each;
-		theSwitch["relay"] = Details.switches[each].relay;
 		theSwitch["name"] = Details.switches[each].name.c_str();
+		theSwitch["relay"] = Details.switches[each].relay;
+		theSwitch["lastState"] = (int)Details.switches[each].lastState;
 
 	}
 
 }
 
-#endif
+
 
 #ifdef _TEST_WFI_STATE
 unsigned long lastTested = 0;
@@ -1268,6 +1276,9 @@ void loop(void)
 	if (resetWIFI)
 		ResetMe();
 #endif
+
+	if (Details.configDirty)
+		WriteJSONconfig();
 
 	wifiInstance.server.handleClient();
 
