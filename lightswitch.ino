@@ -35,10 +35,11 @@
 
 // a number of exceptions in 2.4.0 & LWIP2 - currently only works reliably with 2.3.0 and LWIP1.4
 
-#define GPIO_RELAY	12	// GPIO12
-#define GPIO_LED	13
-#define GPIO_SWITCH 0	// GPIO0 is existing button, GPIO14/D5 for the one on the header
-
+#define GPIO_RELAY		12	// GPIO12
+#define GPIO_LED		13
+#define GPIO_SWITCH		0	// GPIO0 is existing button, GPIO14/D5 for the one on the header
+#define GPIO_SWITCH2	16
+	
 #endif
 
 
@@ -108,7 +109,8 @@ bool resetWIFI = false;
 
 
 
-enum  typeOfSwitch { stMomentary, stToggle };
+enum	typeOfSwitch { stNone, stMomentary, stToggle };
+enum	switchState { swUnknown, swOn, swOff };
 
 struct 
 {
@@ -127,7 +129,12 @@ struct
 
 		String name;
 
+		enum switchState lastState, preferredDefault;
+
 		enum  typeOfSwitch switchType;
+#ifdef GPIO_SWITCH2
+		enum  typeOfSwitch altSwitchType;
+#endif
 
 		unsigned relay;
 
@@ -154,7 +161,11 @@ struct
 
 #ifdef 	_SONOFF_BASIC
 	{
-		{ "Sonoff", stMomentary, 0 }
+#ifdef GPIO_SWITCH2
+		{ "Sonoff",swUnknown, swOff, stMomentary,stToggle, 0 }
+#else
+		{ "Sonoff", swUnknown, swOff, stMomentary, 0 }
+#endif
 	}
 
 #elif defined _SIMPLE_ONE_SWITCH
@@ -239,8 +250,34 @@ unsigned MapSwitchToRelay(unsigned switchNumber)
 
 #endif
 
-
+#ifdef GPIO_SWITCH2
 // ICACHE_RAM_ATTR  makes it ISR safe
+void ICACHE_RAM_ATTR OnSwitchISR2()
+{
+	// if we're up to our neck in something else (normally WIFI negotiation) ignore this
+	if (wifiInstance.busyDoingSomethingIgnoreSwitch)
+	{
+		DEBUG(DEBUG_INFO, Serial.println("	OnSwitchISR redundant"));
+		return;
+	}
+
+	DEBUG(DEBUG_VERBOSE, Serial.println("	OnSwitchISR in"));
+
+
+	// ask what changed, clear interrupt
+	int causeAndState =
+	(Details.switches[0].altSwitchType == stMomentary ?
+		// fake the cause and reflect INVERSE state of relay - because MOMENTARY
+		(1 << 8) | (digitalRead(GPIO_RELAY) == HIGH ? 0 : 1) :
+		// fake the cause and rstate of switch - because TOGGLE
+		(1 << 8) | (digitalRead(GPIO_SWITCH2) == HIGH ? 1 : 0));
+
+	HandleCauseAndState(causeAndState);
+
+	DEBUG(DEBUG_VERBOSE, Serial.println("OnSwitchISR2 out"));
+}
+#endif
+
 void ICACHE_RAM_ATTR OnSwitchISR()
 {
 	// if we're up to our neck in something else (normally WIFI negotiation) ignore this
@@ -271,16 +308,24 @@ void ICACHE_RAM_ATTR OnSwitchISR()
 		mcp.InterruptCauseAndCurrentState(false);
 #endif
 
+	HandleCauseAndState(causeAndState);
+
+	DEBUG(DEBUG_VERBOSE, Serial.println("OnSwitchISR out"));
+
+}
+
+void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState)
+{
 	for (unsigned switchPort = 0; switchPort < NUM_SOCKETS; switchPort++)
 	{
-		DEBUG(DEBUG_VERBOSE,Serial.printf("Checking port %d [%04x]\r\n", switchPort, causeAndState));
+		DEBUG(DEBUG_VERBOSE, Serial.printf("Checking port %d [%04x]\r\n", switchPort, causeAndState));
 
 		// +8 to get HIBYTE to see if this port CAUSED the interrupt
 		if (causeAndState & (1 << (switchPort + 8)))
 		{
 
 #if defined(_RESET_VIA_QUICK_SWITCH) 
-			unsigned long now = micros(), interval=0;
+			unsigned long now = micros(), interval = 0;
 #endif
 
 			// gate against messy tactile/physical switches
@@ -297,7 +342,7 @@ void ICACHE_RAM_ATTR OnSwitchISR()
 				for (unsigned mover = 0; mover < RESET_ARRAY_SIZE - 1; mover++)
 					Details.switches[switchPort].lastSwitchesSeen[mover] = Details.switches[switchPort].lastSwitchesSeen[mover + 1];
 
-				Details.switches[switchPort].lastSwitchesSeen[RESET_ARRAY_SIZE - 1] =now/1000;
+				Details.switches[switchPort].lastSwitchesSeen[RESET_ARRAY_SIZE - 1] = now / 1000;
 
 				DEBUG(DEBUG_INFO, Serial.printf("lastSwitchesSeen (ms) "));
 
@@ -335,9 +380,6 @@ void ICACHE_RAM_ATTR OnSwitchISR()
 			Details.switches[switchPort].last_seen_bounce = now;
 		}
 	}
-
-	DEBUG(DEBUG_VERBOSE, Serial.println("OnSwitchISR out"));
-
 }
 
 // honour current switch state
@@ -347,16 +389,32 @@ void RevertAllSwitch()
 #ifdef _SIMPLE_ONE_SWITCH
 
 	// read the current switch state, and reflect that in the relay state
-
-	bool switchState = (digitalRead(GPIO_SWITCH) == HIGH);
-
-	digitalWrite(GPIO_RELAY, switchState?HIGH:LOW);
-#ifdef _SONOFF_BASIC
-	// LED is inverted on the sonoff
-	digitalWrite(GPIO_LED, switchState ? LOW : HIGH);
-#else
-	digitalWrite(GPIO_LED, switchState ? HIGH : LOW);
+	enum switchState requestState = swUnknown;
+	if (Details.switches[0].lastState == swUnknown)
+	{
+		// try to find it
+		if (Details.switches[0].switchType == stToggle)
+		{
+			// found a toggle, believe it
+			requestState = (digitalRead(GPIO_SWITCH) == HIGH)?swOn:swOff;
+		}
+#ifdef GPIO_SWITCH2
+		else if (Details.switches[0].altSwitchType == stToggle)
+		{
+			// found a toggle, believe it
+			requestState = (digitalRead(GPIO_SWITCH2) == HIGH) ? swOn : swOff;
+		}
 #endif
+		else
+		{
+			requestState = Details.switches[0].preferredDefault;
+		}
+	}
+	else
+	{
+		requestState = Details.switches[0].lastState;
+	}
+	DoSwitch(0, requestState == swOn ? true : false, false);
 
 
 #else
@@ -377,14 +435,7 @@ void DoAllSwitch(bool state, bool force)
 	DEBUG(DEBUG_INFO, Serial.printf("DoAllSwitch: %s %s\r\n", state ? "ON" : "off", force ? "FORCE" : ""));
 
 #ifdef _SIMPLE_ONE_SWITCH
-
-	digitalWrite(GPIO_RELAY, state?HIGH:LOW);
-#ifdef _SONOFF_BASIC
-	// LED is inverted on the sonoff
-	digitalWrite(GPIO_LED, state ? LOW : HIGH);
-#else
-	digitalWrite(GPIO_LED, state ? HIGH : LOW);
-#endif
+	DoSwitch(0, state, force);
 #else
 
 	for (int Switch = 0; Switch < NUM_SOCKETS; Switch++)
@@ -406,9 +457,14 @@ void DoSwitch(unsigned portNumber, bool on, bool forceSwitchToReflect)
 
 	DEBUG(DEBUG_IMPORTANT, Serial.printf("DoSwitch: relay %d %s %s\r\n", portNumber, on ? "ON" : "off", forceSwitchToReflect ? "FORCE" : ""));
 
+	Details.switches[portNumber].lastState = on ? swOn : swOff;
+
 #ifdef _SIMPLE_ONE_SWITCH
 
 	digitalWrite(GPIO_RELAY, on ? HIGH : LOW);
+
+
+
 #ifdef _SONOFF_BASIC
 	// LED is inverted on the sonoff
 	digitalWrite(GPIO_LED, on ? LOW : HIGH);
@@ -679,6 +735,13 @@ void setup(void)
 	pinMode(GPIO_SWITCH, INPUT_PULLUP);
 	// for momentary switches we just look for low
 	attachInterrupt(GPIO_SWITCH, OnSwitchISR, Details.switches[0].switchType==stMomentary?ONLOW:CHANGE);
+
+#ifdef GPIO_SWITCH2
+	// and the switch pin to input - pullup
+	pinMode(GPIO_SWITCH2, INPUT_PULLUP);
+	// for toggle switches we just look for change
+	attachInterrupt(GPIO_SWITCH2, OnSwitchISR2, Details.switches[0].altSwitchType == stMomentary ? ONLOW : CHANGE);
+#endif
 
 #else
 	// initialise the MCP
@@ -978,7 +1041,7 @@ void InstallWebServerHandlers()
 			switchRelay["state"] = 
 #ifdef _SIMPLE_ONE_SWITCH
 				// reflect the relay, not the switch
-				digitalRead(GPIO_RELAY)==HIGH ? 1 : 0;
+				Details.switches[0].lastState;
 #else
 				mcp.readSwitch(each) ? 1 : 0;
 #endif
