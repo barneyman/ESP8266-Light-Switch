@@ -6,6 +6,24 @@
 </HEAD>
 <BODY>
 
+    <table>
+        <tr>
+            <th>Host</th>
+            <td><input type="text" id="host"/></td>
+        </tr>
+        <tr>
+            <th>Port</th>
+            <td><input type="text" id="port" /></td>
+        </tr>
+        <tr>
+            <th>Url</th>
+            <td><input type="text" id="url" /></td>
+        </tr>
+    </table>
+    <button onclick="OTAupdate()">Update OTA</button>
+
+    <hr />
+
     <button onclick="ResetWIFI()">vanilla reset</button>
 
     <script src="common.js"></script>
@@ -24,6 +42,45 @@
             xhr.send();
 
         }
+
+        function OTAupdate() {
+
+
+            var jsonData = {};
+
+            // get all inputs
+            var inputs = document.getElementsByTagName('input')
+            var inputValid = true;
+            for (index = 0; index < inputs.length; ++index) {
+
+
+                if (inputs[index].id != '') {
+
+                    if (inputs[index].value == '')
+                        inputValid = false;
+
+                    jsonData[inputs[index].id] = inputs[index].value;
+                }
+            }
+            if (inputValid == true) {
+
+                let url = base + '/json/upgrade'
+
+                var xhr = new XMLHttpRequest();
+
+                xhr.open("POST", url, true);
+                xhr.setRequestHeader("Content-type", "text/plain");
+
+                xhr.send(JSON.stringify(jsonData));
+
+            }
+            else
+                alert('values cannot be empty')
+        }
+
+
+
+
     </script>
 
 </BODY>

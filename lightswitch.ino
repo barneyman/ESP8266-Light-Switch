@@ -2,7 +2,7 @@
 #include <WiFiClient.h>
 
 
-#define _SONOFF_BASIC
+//#define _SONOFF_BASIC
 //#define _WEMOS_RELAY_SHIELD
 
 
@@ -15,13 +15,15 @@
 #define _SIMPLE_ONE_SWITCH
 #define NUM_SOCKETS	1
 
+#else
+#define NUM_SOCKETS	6
 
 #endif
 
 #if defined (_WEMOS_RELAY_SHIELD)
 
 #define GPIO_RELAY	D1
-#define GPIO_LED	BUILTIN_LED
+#define GPIO_LED		BUILTIN_LED
 // whatever you want it to be!
 #define GPIO_SWITCH D2
 
@@ -36,9 +38,9 @@
 // a number of exceptions in 2.4.0 & LWIP2 - currently only works reliably with 2.3.0 and LWIP1.4
 
 #define GPIO_RELAY		12	// GPIO12
-#define GPIO_LED		13
+#define GPIO_LED			13
 #define GPIO_SWITCH		0	// GPIO0 is existing button, GPIO14/D5 for the one on the header
-#define GPIO_SWITCH2	14
+#define GPIO_SWITCH2		14
 	
 #endif
 
@@ -56,6 +58,22 @@
 
 #include <vector>
 #include <algorithm> 
+
+#ifndef _SONOFF_BASIC
+// sonoff isn't big enough for a decent SPIFFs
+#include <ESP8266httpUpdate.h>
+#endif
+
+#ifdef _SONOFF_BASIC
+#define _VERSION_ROOT	"lightS_"
+#elif defined (_WEMOS_RELAY_SHIELD)
+#define _VERSION_ROOT	"lightW_"
+#else
+#define _VERSION_ROOT	"light6_"
+#endif
+
+
+#define _MYVERSION			_VERSION_ROOT "1.0"
 
 //#define _ERASE_JSON_CONFIG
 #define _JSON_CONFIG_FILE "/config.json"
@@ -140,8 +158,6 @@ struct
 #ifdef GPIO_SWITCH2
 		enum  typeOfSwitch altSwitchType;
 #endif
-
-
 		// when we saw this switch change state - used to debounce the switch
 		unsigned long last_seen_bounce;
 
@@ -177,18 +193,18 @@ struct
 #elif defined _SIMPLE_ONE_SWITCH
 
 	{
-		{ "Device A", stMomentary, 0 }
+		{ "Device A",0, swUnknown,swOff, stMomentary, 0,0 }
 	}
 #else
 
 #ifdef _BOARD_VER_1_1
 	{
-		{ "Device A", 0 },
-		{ "Device B", 5 },
-		{ "Device C", 4 },
-		{ "Device D", 3 },
-		{ "Device E", 2 },
-		{ "Device F", 1 }
+		{ "Device A", 0, swUnknown,swOff, stToggle, 0,0 },
+		{ "Device B", 5, swUnknown,swOff, stToggle, 0,0 },
+		{ "Device C", 4, swUnknown,swOff, stToggle, 0,0 },
+		{ "Device D", 3, swUnknown,swOff, stToggle, 0,0 },
+		{ "Device E", 2, swUnknown,swOff, stToggle, 0,0 },
+		{ "Device F", 1, swUnknown,swOff, stToggle, 0,0 }
 	}
 #else
 	{
@@ -816,6 +832,43 @@ void InstallWebServerHandlers()
 	});
 
 #ifndef _SIMPLE_ONE_SWITCH
+
+	wifiInstance.server.on("/json/upgrade", HTTP_POST, []() {
+
+		DEBUG(DEBUG_INFO, Serial.println("json upgrade posted"));
+		DEBUG(DEBUG_INFO, Serial.println(wifiInstance.server.arg("plain")));
+
+		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
+		jsonBuffer.clear();
+		// 'plain' is the secret source to get to the body
+		JsonObject& root = jsonBuffer.parseObject(wifiInstance.server.arg("plain"));
+
+		String host = root["host"];
+		int port = root["port"];
+		String url= root["url"];
+
+		delay(_WEB_TAR_PIT_DELAY);
+
+		enum HTTPUpdateResult result = ESPhttpUpdate.update(host, port, url, _MYVERSION);
+
+		switch (result)
+		{
+		case HTTP_UPDATE_FAILED:
+			DEBUG(DEBUG_ERROR, Serial.println("updated FAILED"));
+			break;
+		case HTTP_UPDATE_NO_UPDATES:
+			DEBUG(DEBUG_IMPORTANT, Serial.println("no updates"));
+			break;
+		case HTTP_UPDATE_OK:
+			DEBUG(DEBUG_IMPORTANT, Serial.println("update succeeded"));
+			break;
+		}
+
+
+		wifiInstance.server.send(200, "text/html", "<html></html>");
+
+	});
+
 
 	wifiInstance.server.on("/toggle", []() {
 
