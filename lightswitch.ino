@@ -2,7 +2,7 @@
 #include <WiFiClient.h>
 
 
-//#define _SONOFF_BASIC
+#define _SONOFF_BASIC
 //#define _WEMOS_RELAY_SHIELD
 
 
@@ -279,11 +279,11 @@ void ICACHE_RAM_ATTR OnSwitchISR2()
 	// if we're up to our neck in something else (normally WIFI negotiation) ignore this
 	if (wifiInstance.busyDoingSomethingIgnoreSwitch)
 	{
-		DEBUG(DEBUG_INFO, Serial.println("	OnSwitchISR redundant"));
+		DEBUG(DEBUG_INFO, Serial.println("	OnSwitchISR_2 redundant"));
 		return;
 	}
 
-	DEBUG(DEBUG_VERBOSE, Serial.println("	OnSwitchISR in"));
+	DEBUG(DEBUG_VERBOSE, Serial.println("	OnSwitchISR_2 in"));
 
 
 	// ask what changed, clear interrupt
@@ -1101,7 +1101,7 @@ void InstallWebServerHandlers()
 			switchRelay["state"] = 
 #ifdef _SIMPLE_ONE_SWITCH
 				// reflect the relay, not the switch
-				Details.switches[0].lastState;
+				Details.switches[0].lastState== swOn?1:0;
 #else
 				mcp.readSwitch(each) ? 1 : 0;
 #endif
