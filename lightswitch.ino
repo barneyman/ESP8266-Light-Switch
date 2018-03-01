@@ -73,7 +73,7 @@
 #endif
 
 
-#define _MYVERSION			_VERSION_ROOT "1.0"
+#define _MYVERSION			_VERSION_ROOT "1.1"
 
 //#define _ERASE_JSON_CONFIG
 #define _JSON_CONFIG_FILE "/config.json"
@@ -101,7 +101,7 @@ myWifiClass wifiInstance("sonoff_");
 #elif defined(_WEMOS_RELAY_SHIELD)
 myWifiClass wifiInstance("wemos_");
 #else
-myWifiClass wifiInstance;
+myWifiClass wifiInstance("6switch_");
 #endif
 
 
@@ -291,8 +291,8 @@ void ICACHE_RAM_ATTR OnSwitchISR2()
 	(Details.switches[0].altSwitchType == stMomentary ?
 		// fake the cause and reflect INVERSE state of relay - because MOMENTARY
 		(1 << 8) | (digitalRead(GPIO_RELAY) == HIGH ? 0 : 1) :
-		// fake the cause and rstate of switch - because TOGGLE
-		(1 << 8) | (digitalRead(GPIO_SWITCH2) == HIGH ? 1 : 0));
+		// handle the toggle as a toggle
+		(1 << 8) | (digitalRead(GPIO_RELAY) == HIGH ? 0 : 1));
 
 	HandleCauseAndState(causeAndState);
 
@@ -479,10 +479,6 @@ void DoSwitch(unsigned portNumber, bool on, bool forceSwitchToReflect)
 
 	DEBUG(DEBUG_IMPORTANT, Serial.printf("DoSwitch: relay %d %s %s\r\n", portNumber, on ? "ON" : "off", forceSwitchToReflect ? "FORCE" : ""));
 
-	Details.switches[portNumber].lastState = on ? swOn : swOff;
-	Details.configDirty = true;
-
-
 #ifdef _SIMPLE_ONE_SWITCH
 
 	digitalWrite(GPIO_RELAY, on ? HIGH : LOW);
@@ -503,6 +499,14 @@ void DoSwitch(unsigned portNumber, bool on, bool forceSwitchToReflect)
 		mcp.SetSwitch(portNumber, on);
 	}
 #endif
+
+	enum switchState newState = on ? swOn : swOff;;
+	// reflect in state
+	if (newState != Details.switches[portNumber].lastState)
+	{
+		Details.switches[portNumber].lastState = newState;
+		Details.configDirty = true;
+	}
 }
 
 #ifndef _SIMPLE_ONE_SWITCH
@@ -1172,6 +1176,7 @@ void InstallWebServerHandlers()
 		JsonObject &root = jsonBuffer.createObject();
 
 		root["name"] = wifiInstance.m_hostName.c_str();
+		root["version"] = _MYVERSION;
 		root["bouncemsMomentary"] = Details.debounceThresholdmsMomentary;
 		root["bouncemsToggle"] = Details.debounceThresholdmsToggle;
 		root["resetms"] = Details.resetWindowms;

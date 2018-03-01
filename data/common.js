@@ -14,6 +14,7 @@ function headerLoaded() {
 
             // get the name
             iframe.document.getElementById('name').innerText = data['name']
+            iframe.document.getElementById('version').innerText = data['version']
         })
 
 
