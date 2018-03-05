@@ -6,6 +6,20 @@
 //#define _WEMOS_RELAY_SHIELD
 
 
+//class SerialDebug1 : public debugBase<HardwareSerial>
+//{
+//public:
+//
+//	SerialDebug1() :debugBase(Serial)
+//	{}
+//
+//protected:
+//
+//};
+
+
+//SerialDebug1 sd;
+
 #if defined(_WEMOS_RELAY_SHIELD) && defined(_SONOFF_BASIC)
 #error "Cannot have BOTH types of modules defined!"
 #endif
@@ -15,8 +29,12 @@
 #define _SIMPLE_ONE_SWITCH
 #define NUM_SOCKETS	1
 
+// 1mb 128k spiffs gives you ~ 500k for bin file
+#define _OTA_AVAILABLE
+
 #else
 #define NUM_SOCKETS	6
+#define _OTA_AVAILABLE
 
 #endif
 
@@ -59,7 +77,7 @@
 #include <vector>
 #include <algorithm> 
 
-#ifndef _SONOFF_BASIC
+#ifdef _OTA_AVAILABLE
 // sonoff isn't big enough for a decent SPIFFs
 #include <ESP8266httpUpdate.h>
 #endif
@@ -73,7 +91,7 @@
 #endif
 
 
-#define _MYVERSION			_VERSION_ROOT "1.1"
+#define _MYVERSION			_VERSION_ROOT "1.5"
 
 //#define _ERASE_JSON_CONFIG
 #define _JSON_CONFIG_FILE "/config.json"
@@ -86,6 +104,7 @@ StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 #endif
 
 
+//SerialDebug debuglog;
 
 
 
@@ -132,7 +151,11 @@ enum	switchState { swUnknown, swOn, swOff };
 
 struct 
 {
+	// does this need saving
 	bool configDirty;
+
+	// ignore ISRs
+	bool ignoreISRrequests;
 
 	// wifi deets
 	myWifiClass::wifiDetails wifi;
@@ -172,11 +195,12 @@ struct
 
 } Details = {
 
-	false, 
+	false, false,
 
 	{
 		"","",false, true
 	},
+
 	BOUNCE_TIMEOUT_DEFAULT, BOUNCE_TIMEOUT_DEFAULT*3,
 
 	QUICK_SWITCH_TIMEOUT_DEFAULT,
@@ -276,14 +300,19 @@ unsigned MapSwitchToRelay(unsigned switchNumber)
 // ICACHE_RAM_ATTR  makes it ISR safe
 void ICACHE_RAM_ATTR OnSwitchISR2()
 {
+	if (Details.ignoreISRrequests)
+		return;
+
 	// if we're up to our neck in something else (normally WIFI negotiation) ignore this
 	if (wifiInstance.busyDoingSomethingIgnoreSwitch)
 	{
 		DEBUG(DEBUG_INFO, Serial.println("	OnSwitchISR_2 redundant"));
+		//debuglog.println(DEBUG_INFO, "	OnSwitchISR_2 redundant");
 		return;
 	}
 
 	DEBUG(DEBUG_VERBOSE, Serial.println("	OnSwitchISR_2 in"));
+	//debuglog.println(DEBUG_VERBOSE, "	OnSwitchISR_2 in");
 
 
 	// ask what changed, clear interrupt
@@ -302,6 +331,9 @@ void ICACHE_RAM_ATTR OnSwitchISR2()
 
 void ICACHE_RAM_ATTR OnSwitchISR()
 {
+	if (Details.ignoreISRrequests)
+		return;
+
 	// if we're up to our neck in something else (normally WIFI negotiation) ignore this
 	if (wifiInstance.busyDoingSomethingIgnoreSwitch)
 	{
@@ -334,6 +366,16 @@ void ICACHE_RAM_ATTR OnSwitchISR()
 
 	DEBUG(DEBUG_VERBOSE, Serial.println("OnSwitchISR out"));
 
+}
+
+void DoSwitchAntiBounce(int port, bool on)
+{
+	int causeAndState =
+#ifdef _SIMPLE_ONE_SWITCH
+	 (1 << 8) | (on ? 1 : 0) ;
+#else
+#endif
+		HandleCauseAndState(causeAndState);
 }
 
 void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState)
@@ -477,6 +519,10 @@ void DoSwitch(unsigned portNumber, bool on, bool forceSwitchToReflect)
 		return;
 	}
 
+	// saw the switching of the relay create enough microp noise for the toggle switch to be fired
+	Details.ignoreISRrequests = true;
+
+
 	DEBUG(DEBUG_IMPORTANT, Serial.printf("DoSwitch: relay %d %s %s\r\n", portNumber, on ? "ON" : "off", forceSwitchToReflect ? "FORCE" : ""));
 
 #ifdef _SIMPLE_ONE_SWITCH
@@ -507,6 +553,9 @@ void DoSwitch(unsigned portNumber, bool on, bool forceSwitchToReflect)
 		Details.switches[portNumber].lastState = newState;
 		Details.configDirty = true;
 	}
+
+	Details.ignoreISRrequests = false;
+
 }
 
 #ifndef _SIMPLE_ONE_SWITCH
@@ -721,7 +770,7 @@ void setup(void)
 	// mandatory "let it settle" delay
 	Serial.begin(115200);
 
-	DEBUG(DEBUG_INFO, Serial.println("setup() running"));
+	DEBUG(DEBUG_INFO, Serial.printf("Running %s\n\r",_MYVERSION));
 
 
 	SPIFFS.begin();
@@ -835,7 +884,7 @@ void InstallWebServerHandlers()
 		SendServerPage();
 	});
 
-#ifndef _SIMPLE_ONE_SWITCH
+#ifdef _OTA_AVAILABLE
 
 	wifiInstance.server.on("/json/upgrade", HTTP_POST, []() {
 
@@ -858,7 +907,7 @@ void InstallWebServerHandlers()
 		switch (result)
 		{
 		case HTTP_UPDATE_FAILED:
-			DEBUG(DEBUG_ERROR, Serial.println("updated FAILED"));
+			DEBUG(DEBUG_ERROR, Serial.printf("HTTP_UPDATE_FAILD Error (%d): %s", ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str()));
 			break;
 		case HTTP_UPDATE_NO_UPDATES:
 			DEBUG(DEBUG_IMPORTANT, Serial.println("no updates"));
@@ -868,10 +917,28 @@ void InstallWebServerHandlers()
 			break;
 		}
 
+		StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer2;
+		
+		// 'plain' is the secret source to get to the body
+		JsonObject&replyroot = jsonBuffer2.createObject();
+		replyroot["result"] = result;
+		if (result != HTTP_UPDATE_OK)
+		{
+			JsonObject &details = replyroot.createNestedObject("Details");
+			details["espNarrative"] = ESPhttpUpdate.getLastErrorString();
+			details["espResult"] = ESPhttpUpdate.getLastError();
+		}
 
-		wifiInstance.server.send(200, "text/html", "<html></html>");
+		String bodyText;
+		replyroot.printTo(bodyText);
+
+		DEBUG(DEBUG_VERBOSE, Serial.println(bodyText));
+
+		wifiInstance.server.send(200, "application/json", bodyText);
 
 	});
+
+#endif
 
 
 	wifiInstance.server.on("/toggle", []() {
@@ -880,6 +947,11 @@ void InstallWebServerHandlers()
 
 		delay(_WEB_TAR_PIT_DELAY);
 
+#ifdef _SIMPLE_ONE_SWITCH
+
+		DoSwitch(0, (digitalRead(GPIO_RELAY) == HIGH ? false : true), true);
+
+#else
 		// must be an arg
 		if (!wifiInstance.server.args())
 		{
@@ -893,9 +965,8 @@ void InstallWebServerHandlers()
 				wifiInstance.server.send(200, "text/html", "<html></html>");
 			}
 		}
-
-	});
 #endif
+	});
 
 	wifiInstance.server.on("/button", []() {
 
@@ -925,7 +996,10 @@ void InstallWebServerHandlers()
 			}
 
 			if (port != -1)
-				DoSwitch(port, action, true);
+			{
+				DoSwitchAntiBounce(port, action);
+				//DoSwitch(port, action, true);
+			}
 		}
 
 		delay(_WEB_TAR_PIT_DELAY);
@@ -1262,7 +1336,7 @@ void InstallWebServerHandlers()
 		String file = dir.fileName();
 
 		// cache it for an hour
-		wifiInstance.server.serveStatic(file.c_str(), SPIFFS, file.c_str(),"Cache-Control: public, max-age=3600");
+		wifiInstance.server.serveStatic(file.c_str(), SPIFFS, file.c_str(),"Cache-Control: public, max-age=60");
 
 		DEBUG(DEBUG_VERBOSE, Serial.printf("Serving %s\n\r", file.c_str()));
 
@@ -1337,6 +1411,10 @@ void loop(void)
 
 	if (Details.configDirty)
 		WriteJSONconfig();
+
+	// just in case we get into a bool corner
+	Details.ignoreISRrequests = false;
+
 
 	wifiInstance.server.handleClient();
 

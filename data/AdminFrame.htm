@@ -71,6 +71,23 @@
                 xhr.open("POST", url, true);
                 xhr.setRequestHeader("Content-type", "text/plain");
 
+
+                // then wait on a response
+                xhr.onloadend = function () {
+                    // done
+                    // parse it
+                    var jsonResponse = JSON.parse(xhr.responseText);
+                    // HTTP_UPDATE_OK
+                    if (jsonResponse['result'] != 2)
+                     {
+                        alert(jsonResponse['Details']['espNarrative'])
+                    }
+                    else {
+                        // reload the whole site?
+                        window.location.reload(true)
+                    }
+                };
+
                 xhr.send(JSON.stringify(jsonData));
 
             }
