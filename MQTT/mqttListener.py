@@ -55,50 +55,45 @@ def on_subscribe(mosq, obj, mid, granted_qos):
 def on_log(mosq, obj, level, string):
     print(  string)
 
-
-data = json.load(open('config.json'))
-config=data["config"]
-
-
-client_name=config["clientName"]
-hostname=config["host"]
-user=config["user"]
-pwd=config["pwd"]
-hostport=config["port"]
-
-print(client_name,hostname,user,pwd,hostport)
+def ConnectLoop():
+	data = json.load(open('config.json'))
+	config=data["config"]
 
 
-client =mqtt.Client(client_name, clean_session=False)
+	client_name=config["clientName"]
+	hostname=config["host"]
+	user=config["user"]
+	pwd=config["pwd"]
+	hostport=config["port"]
 
-client.username_pw_set(user, pwd)
-
-client.on_message = on_message
-client.on_connect = on_connect
-client.on_publish = on_publish
-client.on_subscribe = on_subscribe
-client.on_disconnect = on_disconnect
-
-# Uncomment to enable debug messages
-client.on_log = on_log
-
-# B64 encoded
-client.tls_set("C:\\Users\\bjf\\Documents\\Arduino\\esp8266\\lightswitch\\adafruit_ca.crt")
-client.connect(hostname, port=hostport)
+	print(client_name,hostname,user,pwd,hostport)
 
 
-client.loop_forever()
+	client =mqtt.Client(client_name, clean_session=False)
 
-#client.subscribe ("/command" ,2 )
-#client.subscribe ("barneyman/f/beachlights" ,2 )
+	client.username_pw_set(user, pwd)
+
+	client.on_message = on_message
+	client.on_connect = on_connect
+	client.on_publish = on_publish
+	client.on_subscribe = on_subscribe
+	client.on_disconnect = on_disconnect
+
+	# Uncomment to enable debug messages
+	client.on_log = on_log
+
+	# B64 encoded
+	client.tls_set("adafruit_ca.crt")
+	client.connect(hostname, port=hostport)
+
+	client.loop_forever()
 
 
 
-#while True:
-	#print (".")
-	#client.publish  ( "barneyman/f/beachlights", "query" )
-	#time.sleep(180)
-#	client.loop()
-
+while(True):
+	try:
+		ConnectLoop()
+	except:
+		print ("exception, hup")
 
 
