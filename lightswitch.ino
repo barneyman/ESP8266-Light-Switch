@@ -1,9 +1,11 @@
 
 #include <WiFiClient.h>
-
+#include <debugLogger.h>
 
 #define _SONOFF_BASIC
 //#define _WEMOS_RELAY_SHIELD
+
+
 
 
 #if defined(_WEMOS_RELAY_SHIELD) && defined(_SONOFF_BASIC)
@@ -15,8 +17,12 @@
 #define _SIMPLE_ONE_SWITCH
 #define NUM_SOCKETS	1
 
+// 1mb 128k spiffs gives you ~ 500k for bin file
+#define _OTA_AVAILABLE
+
 #else
 #define NUM_SOCKETS	6
+#define _OTA_AVAILABLE
 
 #endif
 
@@ -49,8 +55,6 @@
 
 
 
-#include "mcp23017.h"
-
 
 
 #include <ArduinoJson.h>
@@ -59,7 +63,7 @@
 #include <vector>
 #include <algorithm> 
 
-#ifndef _SONOFF_BASIC
+#ifdef _OTA_AVAILABLE
 // sonoff isn't big enough for a decent SPIFFs
 #include <ESP8266httpUpdate.h>
 #endif
@@ -73,7 +77,7 @@
 #endif
 
 
-#define _MYVERSION			_VERSION_ROOT "1.0"
+#define _MYVERSION			_VERSION_ROOT "1.6"
 
 //#define _ERASE_JSON_CONFIG
 #define _JSON_CONFIG_FILE "/config.json"
@@ -96,12 +100,19 @@ StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 // my libs
 #include <myWifi.h>
 
+// for serial
+//SerialDebug dblog;
+
+// for syslog
+syslogDebug dblog(debug::dbInfo, "192.168.50.1", 514, "steve"/*wifiInstance.m_hostName.c_str()*/, "lights");
+
+
 #ifdef _SONOFF_BASIC
-myWifiClass wifiInstance("sonoff_");
+myWifiClass wifiInstance("sonoff_", &dblog);
 #elif defined(_WEMOS_RELAY_SHIELD)
 myWifiClass wifiInstance("wemos_");
 #else
-myWifiClass wifiInstance;
+myWifiClass wifiInstance("6switch_");
 #endif
 
 
@@ -132,7 +143,11 @@ enum	switchState { swUnknown, swOn, swOff };
 
 struct 
 {
+	// does this need saving
 	bool configDirty;
+
+	// ignore ISRs
+	bool ignoreISRrequests;
 
 	// wifi deets
 	myWifiClass::wifiDetails wifi;
@@ -172,11 +187,12 @@ struct
 
 } Details = {
 
-	false, 
+	false, false,
 
 	{
 		"","",false, true
 	},
+
 	BOUNCE_TIMEOUT_DEFAULT, BOUNCE_TIMEOUT_DEFAULT*3,
 
 	QUICK_SWITCH_TIMEOUT_DEFAULT,
@@ -231,6 +247,7 @@ struct
 #ifdef _SIMPLE_ONE_SWITCH
 
 #else
+#include "mcp23017.h"
 
 // light manual trigger IN, driven by the INT pin on the MCP
 int inputSwitchPin = 14; // D5
@@ -249,6 +266,21 @@ mcp23017AndRelay mcp(4, 5, resetMCPpin, powerRelayBoardNPN);
 #define _WEB_TAR_PIT_DELAY 200
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 #ifndef _SIMPLE_ONE_SWITCH
 
 unsigned MapSwitchToRelay(unsigned switchNumber)
@@ -257,14 +289,14 @@ unsigned MapSwitchToRelay(unsigned switchNumber)
 
 	if (relayNumber > NUM_SOCKETS || relayNumber < 0)
 	{
-		DEBUG(DEBUG_ERROR, Serial.printf("MapSwitchToRelay called out of bounds %u\n\r", relayNumber));
+		dblog.printf(debug::dbError, "MapSwitchToRelay called out of bounds %u\n\r", relayNumber);
 	}
 	else
 	{
 		relayNumber=Details.switches[switchNumber].relay;
 	}
 
-	DEBUG(DEBUG_VERBOSE, Serial.printf("	MapSwitchToRelay %u -> %u\r\n", switchNumber, relayNumber));
+	dblog.printf(debug::dbVerbose, "	MapSwitchToRelay %u -> %u\r\n", switchNumber, relayNumber);
 
 	return relayNumber;
 
@@ -276,14 +308,17 @@ unsigned MapSwitchToRelay(unsigned switchNumber)
 // ICACHE_RAM_ATTR  makes it ISR safe
 void ICACHE_RAM_ATTR OnSwitchISR2()
 {
+	if (Details.ignoreISRrequests)
+		return;
+
 	// if we're up to our neck in something else (normally WIFI negotiation) ignore this
 	if (wifiInstance.busyDoingSomethingIgnoreSwitch)
 	{
-		DEBUG(DEBUG_INFO, Serial.println("	OnSwitchISR_2 redundant"));
+		dblog.isr_printf(debug::dbInfo, "	OnSwitchISR_2 redundant\n\r");
 		return;
 	}
 
-	DEBUG(DEBUG_VERBOSE, Serial.println("	OnSwitchISR_2 in"));
+	dblog.isr_println(debug::dbInfo, "	OnSwitchISR_2 in");
 
 
 	// ask what changed, clear interrupt
@@ -291,21 +326,24 @@ void ICACHE_RAM_ATTR OnSwitchISR2()
 	(Details.switches[0].altSwitchType == stMomentary ?
 		// fake the cause and reflect INVERSE state of relay - because MOMENTARY
 		(1 << 8) | (digitalRead(GPIO_RELAY) == HIGH ? 0 : 1) :
-		// fake the cause and rstate of switch - because TOGGLE
-		(1 << 8) | (digitalRead(GPIO_SWITCH2) == HIGH ? 1 : 0));
+		// handle the toggle as a toggle
+		(1 << 8) | (digitalRead(GPIO_RELAY) == HIGH ? 0 : 1));
 
 	HandleCauseAndState(causeAndState);
 
-	DEBUG(DEBUG_VERBOSE, Serial.println("OnSwitchISR2 out"));
+	dblog.isr_printf(debug::dbVerbose, "OnSwitchISR2 out\n\r");
 }
 #endif
 
 void ICACHE_RAM_ATTR OnSwitchISR()
 {
+	if (Details.ignoreISRrequests)
+		return;
+
 	// if we're up to our neck in something else (normally WIFI negotiation) ignore this
 	if (wifiInstance.busyDoingSomethingIgnoreSwitch)
 	{
-		DEBUG(DEBUG_INFO, Serial.println("	OnSwitchISR redundant"));
+		dblog.isr_println(debug::dbInfo, "	OnSwitchISR redundant");
 
 #ifndef _SIMPLE_ONE_SWITCH
 		// ask what changed, clear interrupt, so we don't leave the INTerrupt hanging
@@ -314,7 +352,7 @@ void ICACHE_RAM_ATTR OnSwitchISR()
 		return;
 	}
 
-	DEBUG(DEBUG_VERBOSE, Serial.println("	OnSwitchISR in"));
+	dblog.isr_println(debug::dbInfo,"	OnSwitchISR in");
 
 
 	// ask what changed, clear interrupt
@@ -332,15 +370,26 @@ void ICACHE_RAM_ATTR OnSwitchISR()
 
 	HandleCauseAndState(causeAndState);
 
-	DEBUG(DEBUG_VERBOSE, Serial.println("OnSwitchISR out"));
+	dblog.isr_println(debug::dbVerbose, "OnSwitchISR out");
 
+}
+
+void DoSwitchAntiBounce(int port, bool on)
+{
+	int causeAndState =
+#ifdef _SIMPLE_ONE_SWITCH
+	 (1 << 8) | (on ? 1 : 0) ;
+#else
+		(port << 8) | (on ? 1 : 0);
+#endif
+		HandleCauseAndState(causeAndState);
 }
 
 void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState)
 {
 	for (unsigned switchPort = 0; switchPort < NUM_SOCKETS; switchPort++)
 	{
-		DEBUG(DEBUG_VERBOSE, Serial.printf("Checking port %d [%04x]\r\n", switchPort, causeAndState));
+		dblog.isr_printf(debug::dbVerbose, "Checking port %d [%04x]\r\n", switchPort, causeAndState);
 
 		// +8 to get HIBYTE to see if this port CAUSED the interrupt
 		if (causeAndState & (1 << (switchPort + 8)))
@@ -353,7 +402,7 @@ void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState)
 			// gate against messy tactile/physical switches
 			interval = now - Details.switches[switchPort].last_seen_bounce;
 
-			DEBUG(DEBUG_VERBOSE, Serial.printf("%lu ms ", interval / 1000UL));
+			dblog.isr_printf(debug::dbVerbose, "%lu ms ", interval / 1000UL);
 
 			// if it's been longer than the bounce threshold since we saw this button, honour it
 			unsigned long bounceToHonour = Details.switches[switchPort].switchType == stMomentary ? Details.debounceThresholdmsMomentary : Details.debounceThresholdmsToggle;
@@ -366,14 +415,14 @@ void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState)
 
 				Details.switches[switchPort].lastSwitchesSeen[RESET_ARRAY_SIZE - 1] = now / 1000;
 
-				DEBUG(DEBUG_INFO, Serial.printf("lastSwitchesSeen (ms) "));
+				dblog.isr_printf(debug::dbVerbose, "lastSwitchesSeen (ms) ");
 
 				for (int each = 0; each < RESET_ARRAY_SIZE; each++)
 				{
-					DEBUG(DEBUG_INFO, Serial.printf("%lu ", Details.switches[switchPort].lastSwitchesSeen[each]));
+					dblog.isr_printf(debug::dbVerbose, "%lu ", Details.switches[switchPort].lastSwitchesSeen[each]);
 				}
 
-				DEBUG(DEBUG_INFO, Serial.printf("\n\r"));
+				dblog.isr_printf(debug::dbVerbose, "\n\r");
 #endif
 
 				// having CAUSED the interrupt, reflect its STATE in the DoRelay call
@@ -389,7 +438,7 @@ void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState)
 				{
 					if (Details.switches[switchPort].lastSwitchesSeen[RESET_ARRAY_SIZE - 1] - Details.switches[switchPort].lastSwitchesSeen[0] < (Details.resetWindowms))
 					{
-						DEBUG(DEBUG_IMPORTANT, Serial.println("RESETTING WIFI!\n\r"));
+						dblog.isr_printf(debug::dbImportant, "RESETTING WIFI!\n\r");
 						resetWIFI = true;
 					}
 				}
@@ -397,7 +446,7 @@ void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState)
 			}
 			else
 			{
-				DEBUG(DEBUG_INFO, Serial.printf("bounce ignored\n\r"));
+				dblog.isr_printf(debug::dbInfo, "bounce ignored\n\r");
 			}
 			Details.switches[switchPort].last_seen_bounce = now;
 		}
@@ -454,7 +503,7 @@ void RevertAllSwitch()
 // override switch state
 void DoAllSwitch(bool state, bool force)
 {
-	DEBUG(DEBUG_INFO, Serial.printf("DoAllSwitch: %s %s\r\n", state ? "ON" : "off", force ? "FORCE" : ""));
+	dblog.printf(debug::dbInfo, "DoAllSwitch: %s %s\r\n", state ? "ON" : "off", force ? "FORCE" : "");
 
 #ifdef _SIMPLE_ONE_SWITCH
 	DoSwitch(0, state, force);
@@ -473,15 +522,15 @@ void DoSwitch(unsigned portNumber, bool on, bool forceSwitchToReflect)
 {
 	if (portNumber > 7 || portNumber < 0)
 	{
-		DEBUG(DEBUG_ERROR, Serial.printf("DoSwitch called out of bounds %u\n\r", portNumber));
+		dblog.isr_printf(debug::dbError, "DoSwitch called out of bounds %u\n\r", portNumber);
 		return;
 	}
 
-	DEBUG(DEBUG_IMPORTANT, Serial.printf("DoSwitch: relay %d %s %s\r\n", portNumber, on ? "ON" : "off", forceSwitchToReflect ? "FORCE" : ""));
+	// saw the switching of the relay create enough microp noise for the toggle switch to be fired
+	Details.ignoreISRrequests = true;
 
-	Details.switches[portNumber].lastState = on ? swOn : swOff;
-	Details.configDirty = true;
 
+	dblog.isr_printf(debug::dbImportant, "DoSwitch: relay %d %s %s\r\n", portNumber, on ? "ON" : "off", forceSwitchToReflect ? "FORCE" : "");
 
 #ifdef _SIMPLE_ONE_SWITCH
 
@@ -503,6 +552,17 @@ void DoSwitch(unsigned portNumber, bool on, bool forceSwitchToReflect)
 		mcp.SetSwitch(portNumber, on);
 	}
 #endif
+
+	enum switchState newState = on ? swOn : swOff;;
+	// reflect in state
+	if (newState != Details.switches[portNumber].lastState)
+	{
+		Details.switches[portNumber].lastState = newState;
+		Details.configDirty = true;
+	}
+
+	Details.ignoreISRrequests = false;
+
 }
 
 #ifndef _SIMPLE_ONE_SWITCH
@@ -512,12 +572,12 @@ void DoRelay(unsigned portNumber, bool on)
 {
 	if (portNumber > 7 || portNumber < 0)
 	{
-		DEBUG(DEBUG_ERROR, Serial.printf("DoRelay called out of bounds %u\n\r", portNumber));
+		dblog.printf(debug::dbError, "DoRelay called out of bounds %u\n\r", portNumber);
 		return;
 	}
 
 
-	DEBUG(DEBUG_IMPORTANT, Serial.printf("DoRelay: relay %d %s\r\n", portNumber, on?"ON":"off"));
+	dblog.printf(debug::dbImportant, "DoRelay: relay %d %s\r\n", portNumber, on ? "ON" : "off");
 
 	mcp.SetRelay(portNumber, on);
 
@@ -529,14 +589,14 @@ void DoRelay(unsigned portNumber, bool on)
 
 void WriteJSONconfig()
 {
-	DEBUG(DEBUG_INFO, Serial.println("WriteJSONconfig"));
+	dblog.printf(debug::dbInfo, "WriteJSONconfig");
 
 	// try to create it
 	fs::File json = SPIFFS.open("/config.json", "w");
 
 	if (!json)
 	{
-		DEBUG(DEBUG_ERROR, Serial.println("failed to create json"));
+		dblog.printf(debug::dbError, "failed to create json\n\r");
 		return;
 	}
 
@@ -554,22 +614,22 @@ void WriteJSONconfig()
 
 	AddMapToJSON(root, NUM_SOCKETS);
 
-	DEBUG(DEBUG_VERBOSE, Serial.printf("jsonBuffer.size used : %d\n\r", jsonBuffer.size()));
+	dblog.printf(debug::dbVerbose, "jsonBuffer.size used : %d\n\r", jsonBuffer.size());
 
 	///////////////////// written here
 
 	String jsonText;
 	root.prettyPrintTo(jsonText);
 
-	DEBUG(DEBUG_VERBOSE, Serial.printf("JSON : -- %s --\n\r", jsonText.c_str()));
+	dblog.printf(debug::dbVerbose, "JSON : -- %s --\n\r", jsonText.c_str());
 
 	json.write((byte*)jsonText.c_str(), jsonText.length());
 
-	DEBUG(DEBUG_VERBOSE, Serial.println("JSON : written"));
+	dblog.printf(debug::dbVerbose, "JSON : written\n\r");
 
 	json.close();
 
-	DEBUG(DEBUG_VERBOSE, Serial.println("JSON : closed"));
+	dblog.printf(debug::dbVerbose, "JSON : closed\n\r");
 
 	Details.configDirty = false;
 }
@@ -577,16 +637,16 @@ void WriteJSONconfig()
 
 void ReadJSONconfig()
 {
-	DEBUG(DEBUG_INFO, Serial.println("ReadJSON"));
+	dblog.printf(debug::dbInfo, "ReadJSON\n\r");
 
 #ifdef _ERASE_JSON_CONFIG
-	DEBUG(DEBUG_IMPORTANT, Serial.println("erasing JSON file"));
+	dblog.printf(debug::dbImportant, "erasing JSON file\n\r");
 	SPIFFS.remove(_JSON_CONFIG_FILE);
 #endif
 
 	if (!SPIFFS.exists(_JSON_CONFIG_FILE))
 	{
-		DEBUG(DEBUG_IMPORTANT, Serial.printf("'%s' does not exist\n\r", _JSON_CONFIG_FILE));
+		dblog.printf(debug::dbImportant, "'%s' does not exist\n\r", _JSON_CONFIG_FILE);
 		// file does not exist
 		WriteJSONconfig();
 
@@ -600,7 +660,7 @@ void ReadJSONconfig()
 
 	json.close();
 
-	DEBUG(DEBUG_INFO, Serial.printf("JSON: (%d) -- %s --\n\r",jsonString.length(), jsonString.c_str()));
+	dblog.printf(debug::dbInfo, "JSON: (%d) -- %s --\n\r", jsonString.length(), jsonString.c_str());
 
 	//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 	jsonBuffer.clear();
@@ -608,12 +668,12 @@ void ReadJSONconfig()
 
 	if (!root.success())
 	{
-		DEBUG(DEBUG_ERROR, Serial.println("JSON parse failed"));
+		dblog.printf(debug::dbError, "JSON parse failed\n\r");
 
 		// kill it - and write it again
 		SPIFFS.remove(_JSON_CONFIG_FILE);
 
-		DEBUG(DEBUG_VERBOSE, Serial.println("JSON file deleted"));
+		dblog.printf(debug::dbVerbose, "JSON file deleted\n\r");
 
 		WriteJSONconfig();
 
@@ -622,7 +682,7 @@ void ReadJSONconfig()
 	}
 	else
 	{
-		DEBUG(DEBUG_VERBOSE, Serial.println("JSON parsed"));
+		dblog.printf(debug::dbVerbose, "JSON parsed\n\r");
 	}
 
 	Details.configDirty = false;
@@ -648,7 +708,7 @@ void ReadJSONconfig()
 			}
 			else
 			{
-				DEBUG(DEBUG_IMPORTANT, Serial.printf("switchMap switch %d not found\n\r",each));
+				dblog.printf(debug::dbImportant, "switchMap switch %d not found\n\r", each);
 			}
 		}
 	}
@@ -682,7 +742,7 @@ void RebootMe()
 
 void ResetMe()
 {
-	DEBUG(DEBUG_IMPORTANT, Serial.println("Resetting"));
+	dblog.printf(debug::dbImportant, "Resetting\n\r");
 
 	resetWIFI = false;
 	// clear the credentials
@@ -696,6 +756,11 @@ void ResetMe()
 }
 
 #endif
+
+
+
+
+
 
 
 
@@ -717,31 +782,30 @@ void setup(void)
 	// mandatory "let it settle" delay
 	Serial.begin(115200);
 
-	DEBUG(DEBUG_INFO, Serial.println("setup() running"));
+	dblog.printf(debug::dbImportant, "Running %s\n\r", _MYVERSION);
 
 
 	SPIFFS.begin();
 
 	ReadJSONconfig();
 
-	DEBUG(DEBUG_VERBOSE, Serial.println("starting"));
-	DEBUG(DEBUG_IMPORTANT, Serial.println(wifiInstance.m_hostName.c_str()));
-	DEBUG(DEBUG_VERBOSE, Serial.printf("bounceMomentary %lu\n\r",Details.debounceThresholdmsMomentary));
-	DEBUG(DEBUG_VERBOSE, Serial.printf("bounceToggle %lu\n\r", Details.debounceThresholdmsToggle));
-	DEBUG(DEBUG_VERBOSE, Serial.printf("reset %lu\n\r",Details.resetWindowms));
+	dblog.println(debug::dbImportant, wifiInstance.m_hostName.c_str());
+	dblog.printf(debug::dbVerbose, "bounceMomentary %lu\n\r", Details.debounceThresholdmsMomentary);
+	dblog.printf(debug::dbVerbose, "bounceToggle %lu\n\r", Details.debounceThresholdmsToggle);
+	dblog.printf(debug::dbVerbose, "reset %lu\n\r", Details.resetWindowms);
 
 	enum myWifiClass::wifiMode intent = myWifiClass::wifiMode::modeUnknown;
 
 	if (Details.wifi.configured)
 	{
-		DEBUG(DEBUG_INFO, Serial.println("credentials found"));
-		DEBUG(DEBUG_VERBOSE, Serial.println(Details.wifi.ssid));
-		DEBUG(DEBUG_VERBOSE, Serial.println(Details.wifi.password));
+		dblog.println(debug::dbInfo, "wifi credentials found");
+		dblog.println(debug::dbVerbose, Details.wifi.ssid);
+		dblog.println(debug::dbVerbose, Details.wifi.password);
 		intent = myWifiClass::wifiMode::modeSTA;
 	}
 	else
 	{
-		DEBUG(DEBUG_WARN, Serial.println("WiFi not configured"));
+		dblog.println(debug::dbWarning, "WiFi not configured");
 		intent = myWifiClass::wifiMode::modeAP;
 
 	}
@@ -757,18 +821,20 @@ void setup(void)
 	// and the switch pin to input - pullup
 	pinMode(GPIO_SWITCH, INPUT_PULLUP);
 	// for momentary switches we just look for low
-	attachInterrupt(GPIO_SWITCH, OnSwitchISR, Details.switches[0].switchType==stMomentary?ONLOW:CHANGE);
+//	attachInterrupt(GPIO_SWITCH, OnSwitchISR, Details.switches[0].switchType==stMomentary?ONLOW:CHANGE);
+	attachInterrupt(GPIO_SWITCH, OnSwitchISR, Details.switches[0].switchType == stMomentary ? FALLING : CHANGE);
 
 #ifdef GPIO_SWITCH2
 	// and the switch pin to input - pullup
 	pinMode(GPIO_SWITCH2, INPUT_PULLUP);
 	// for toggle switches we just look for change
-	attachInterrupt(GPIO_SWITCH2, OnSwitchISR2, Details.switches[0].altSwitchType == stMomentary ? ONLOW : CHANGE);
+//	attachInterrupt(GPIO_SWITCH2, OnSwitchISR2, Details.switches[0].altSwitchType == stMomentary ? ONLOW : CHANGE);
+	attachInterrupt(GPIO_SWITCH2, OnSwitchISR2, Details.switches[0].altSwitchType == stMomentary ? FALLING : CHANGE);
 #endif
 
 #else
 	// initialise the MCP
-	DEBUG(DEBUG_VERBOSE, Serial.println("Initialising MCP"));
+	dblog.println(debug::dbVerbose, "Initialising MCP");
 	mcp.Initialise();
 
 
@@ -797,7 +863,7 @@ void setup(void)
 // set up all the handlers for the web server
 void InstallWebServerHandlers()
 {
-	DEBUG(DEBUG_VERBOSE, Serial.println("InstallWebServerHandlers IN"));
+	dblog.println(debug::dbVerbose, "InstallWebServerHandlers IN");
 
 	// set up the json handlers
 	// POST
@@ -806,6 +872,8 @@ void InstallWebServerHandlers()
 	// revert
 
 	wifiInstance.server.on("/revert", []() {
+
+		dblog.println(debug::dbImportant, "/revert");
 
 		RevertAllSwitch();
 
@@ -816,7 +884,7 @@ void InstallWebServerHandlers()
 
 	wifiInstance.server.on("/all", []() {
 
-		DEBUG(DEBUG_VERBOSE, Serial.println("/all"));
+		dblog.println(debug::dbImportant, "/all");
 
 		for (uint8_t i = 0; i < wifiInstance.server.args(); i++)
 		{
@@ -831,12 +899,12 @@ void InstallWebServerHandlers()
 		SendServerPage();
 	});
 
-#ifndef _SIMPLE_ONE_SWITCH
+#ifdef _OTA_AVAILABLE
 
 	wifiInstance.server.on("/json/upgrade", HTTP_POST, []() {
 
-		DEBUG(DEBUG_INFO, Serial.println("json upgrade posted"));
-		DEBUG(DEBUG_INFO, Serial.println(wifiInstance.server.arg("plain")));
+		dblog.println(debug::dbImportant, "json upgrade posted");
+		dblog.println(debug::dbImportant, wifiInstance.server.arg("plain"));
 
 		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 		jsonBuffer.clear();
@@ -854,28 +922,51 @@ void InstallWebServerHandlers()
 		switch (result)
 		{
 		case HTTP_UPDATE_FAILED:
-			DEBUG(DEBUG_ERROR, Serial.println("updated FAILED"));
+			dblog.printf(debug::dbError, "HTTP_UPDATE_FAILD Error (%d): %s", ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
 			break;
 		case HTTP_UPDATE_NO_UPDATES:
-			DEBUG(DEBUG_IMPORTANT, Serial.println("no updates"));
+			dblog.println(debug::dbImportant, "no updates");
 			break;
 		case HTTP_UPDATE_OK:
-			DEBUG(DEBUG_IMPORTANT, Serial.println("update succeeded"));
+			dblog.println(debug::dbImportant, "update succeeded");
 			break;
 		}
 
+		StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer2;
+		
+		// 'plain' is the secret source to get to the body
+		JsonObject&replyroot = jsonBuffer2.createObject();
+		replyroot["result"] = result;
+		if (result != HTTP_UPDATE_OK)
+		{
+			JsonObject &details = replyroot.createNestedObject("Details");
+			details["espNarrative"] = ESPhttpUpdate.getLastErrorString();
+			details["espResult"] = ESPhttpUpdate.getLastError();
+		}
 
-		wifiInstance.server.send(200, "text/html", "<html></html>");
+		String bodyText;
+		replyroot.printTo(bodyText);
+
+		dblog.println(debug::dbVerbose, bodyText);
+
+		wifiInstance.server.send(200, "application/json", bodyText);
 
 	});
+
+#endif
 
 
 	wifiInstance.server.on("/toggle", []() {
 
-		DEBUG(DEBUG_VERBOSE, Serial.println("/toggle"));
+		dblog.println(debug::dbImportant, "/toggle");
 
 		delay(_WEB_TAR_PIT_DELAY);
 
+#ifdef _SIMPLE_ONE_SWITCH
+
+		DoSwitch(0, (digitalRead(GPIO_RELAY) == HIGH ? false : true), true);
+
+#else
 		// must be an arg
 		if (!wifiInstance.server.args())
 		{
@@ -889,13 +980,12 @@ void InstallWebServerHandlers()
 				wifiInstance.server.send(200, "text/html", "<html></html>");
 			}
 		}
-
-	});
 #endif
+	});
 
 	wifiInstance.server.on("/button", []() {
 
-		DEBUG(DEBUG_VERBOSE, Serial.println("/button"));
+		dblog.println(debug::dbImportant, "/button");
 
 		// these have to be in port/action pairs
 		if (wifiInstance.server.args() % 2)
@@ -921,7 +1011,10 @@ void InstallWebServerHandlers()
 			}
 
 			if (port != -1)
-				DoSwitch(port, action, true);
+			{
+				DoSwitchAntiBounce(port, action);
+				//DoSwitch(port, action, true);
+			}
 		}
 
 		delay(_WEB_TAR_PIT_DELAY);
@@ -932,7 +1025,7 @@ void InstallWebServerHandlers()
 
 	wifiInstance.server.on("/resetCounts", []() {
 
-		DEBUG(DEBUG_VERBOSE, Serial.println("/resetCounts"));
+		dblog.println(debug::dbImportant, "/resetCounts");
 
 		delay(_WEB_TAR_PIT_DELAY);
 
@@ -947,7 +1040,7 @@ void InstallWebServerHandlers()
 
 	wifiInstance.server.on("/reboot", []() {
 
-		DEBUG(DEBUG_VERBOSE, Serial.println("/reboot"));
+		dblog.println(debug::dbImportant, "/reboot");
 
 		RebootMe();
 
@@ -956,7 +1049,7 @@ void InstallWebServerHandlers()
 
 	wifiInstance.server.on("/resetWIFI", []() {
 
-		DEBUG(DEBUG_VERBOSE, Serial.println("/resetWIFI"));
+		dblog.println(debug::dbImportant, "/resetWIFI");
 
 		ResetMe();
 
@@ -964,7 +1057,7 @@ void InstallWebServerHandlers()
 
 	wifiInstance.server.on("/stopAP", []() {
 
-		DEBUG(DEBUG_VERBOSE, Serial.println("/stopAP"));
+		dblog.println(debug::dbImportant, "/stopAP");
 
 		if (wifiInstance.currentMode == myWifiClass::wifiMode::modeSTAandAP)
 		{
@@ -982,7 +1075,7 @@ void InstallWebServerHandlers()
 
 	wifiInstance.server.on("/", []() {
 
-		DEBUG(DEBUG_VERBOSE, Serial.println("/"));
+		dblog.println(debug::dbImportant, "/");
 
 		delay(_WEB_TAR_PIT_DELAY);
 
@@ -994,8 +1087,8 @@ void InstallWebServerHandlers()
 	// posted config
 	wifiInstance.server.on("/json/config", HTTP_POST, []() {
 
-		DEBUG(DEBUG_INFO, Serial.println("json config posted"));
-		DEBUG(DEBUG_INFO, Serial.println(wifiInstance.server.arg("plain")));
+		dblog.println(debug::dbImportant, "json config posted");
+		dblog.println(debug::dbImportant, wifiInstance.server.arg("plain"));
 
 		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 		jsonBuffer.clear();
@@ -1025,8 +1118,8 @@ void InstallWebServerHandlers()
 
 	wifiInstance.server.on("/json/wifi", HTTP_POST, []() {
 
-		DEBUG(DEBUG_INFO, Serial.println("json wifi posted"));
-		DEBUG(DEBUG_INFO, Serial.println(wifiInstance.server.arg("plain")));
+		dblog.println(debug::dbImportant, "json wifi posted");
+		dblog.println(debug::dbImportant, wifiInstance.server.arg("plain"));
 
 		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 		jsonBuffer.clear();
@@ -1080,7 +1173,7 @@ void InstallWebServerHandlers()
 	wifiInstance.server.on("/json/state", HTTP_GET, []() {
 		// give them back the port / switch map
 
-		DEBUG(DEBUG_INFO, Serial.println("json state called"));
+		dblog.println(debug::dbImportant, "json state called");
 
 		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 		jsonBuffer.clear();
@@ -1111,7 +1204,7 @@ void InstallWebServerHandlers()
 		String jsonText;
 		root.prettyPrintTo(jsonText);
 
-		DEBUG(DEBUG_VERBOSE, Serial.println(jsonText));
+		dblog.println(debug::dbVerbose, jsonText);
 
 		wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
 		wifiInstance.server.send(200, "application/json", jsonText);
@@ -1120,7 +1213,7 @@ void InstallWebServerHandlers()
 	wifiInstance.server.on("/json/maxSwitchCount", HTTP_GET, []() {
 		// give them back the port / switch map
 
-		DEBUG(DEBUG_INFO, Serial.println("json maxSwitchCount called"));
+		dblog.println(debug::dbImportant, "json maxSwitchCount called");
 
 		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 		jsonBuffer.clear();
@@ -1146,14 +1239,14 @@ void InstallWebServerHandlers()
 			root["maxSwitch"] = maxSwitch;
 			root["maxSwitchCount"] = maxSwitchCount;
 
-			DEBUG(DEBUG_INFO, Serial.printf("maxSwitch %u count %u \n\r",maxSwitch, maxSwitch));
+			dblog.printf(debug::dbInfo, "maxSwitch %u count %u \n\r", maxSwitch, maxSwitch);
 
 		}
 
 		String jsonText;
 		root.prettyPrintTo(jsonText);
 
-		DEBUG(DEBUG_VERBOSE, Serial.println(jsonText));
+		dblog.println(debug::dbVerbose, jsonText);
 
 		wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
 		wifiInstance.server.send(200, "application/json", jsonText);
@@ -1164,7 +1257,7 @@ void InstallWebServerHandlers()
 	wifiInstance.server.on("/json/config", HTTP_GET, []() {
 		// give them back the port / switch map
 
-		DEBUG(DEBUG_INFO, Serial.println("json config called"));
+		dblog.println(debug::dbImportant, "json config called");
 
 		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 		jsonBuffer.clear();
@@ -1172,6 +1265,7 @@ void InstallWebServerHandlers()
 		JsonObject &root = jsonBuffer.createObject();
 
 		root["name"] = wifiInstance.m_hostName.c_str();
+		root["version"] = _MYVERSION;
 		root["bouncemsMomentary"] = Details.debounceThresholdmsMomentary;
 		root["bouncemsToggle"] = Details.debounceThresholdmsToggle;
 		root["resetms"] = Details.resetWindowms;
@@ -1179,7 +1273,7 @@ void InstallWebServerHandlers()
 		String jsonText;
 		root.prettyPrintTo(jsonText);
 
-		DEBUG(DEBUG_VERBOSE, Serial.println(jsonText));
+		dblog.println(debug::dbVerbose, jsonText);
 
 		wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
 		wifiInstance.server.send(200, "application/json", jsonText);
@@ -1188,7 +1282,7 @@ void InstallWebServerHandlers()
 	wifiInstance.server.on("/json/wificonfig", HTTP_GET, []() {
 		// give them back the port / switch map
 
-		DEBUG(DEBUG_INFO, Serial.println("json wificonfig called"));
+		dblog.println(debug::dbImportant, "json wificonfig called");
 
 		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 		jsonBuffer.clear();
@@ -1202,7 +1296,7 @@ void InstallWebServerHandlers()
 		String jsonText;
 		root.prettyPrintTo(jsonText);
 
-		DEBUG(DEBUG_VERBOSE, Serial.println(jsonText));
+		dblog.println(debug::dbVerbose, jsonText);
 
 		wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
 		wifiInstance.server.send(200, "application/json", jsonText);
@@ -1212,7 +1306,7 @@ void InstallWebServerHandlers()
 	wifiInstance.server.on("/json/wifi", HTTP_GET, []() {
 		// give them back the port / switch map
 
-		DEBUG(DEBUG_INFO, Serial.println("json wifi called"));
+		dblog.println(debug::dbImportant, "json wifi called");
 
 		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 		jsonBuffer.clear();
@@ -1234,7 +1328,7 @@ void InstallWebServerHandlers()
 			wifi["ssid"] = allWifis[each].first;
 			wifi["sig"] = allWifis[each].second;
 
-			DEBUG(DEBUG_INFO, Serial.printf("%d '%s' %d \n\r",each+1, allWifis[each].first.c_str(), allWifis[each].second));
+			dblog.printf(debug::dbInfo, "%d '%s' %d \n\r", each + 1, allWifis[each].first.c_str(), allWifis[each].second);
 
 		}
 		
@@ -1242,7 +1336,7 @@ void InstallWebServerHandlers()
 		String jsonText;
 		root.prettyPrintTo(jsonText);
 
-		DEBUG(DEBUG_VERBOSE, Serial.println(jsonText));
+		dblog.println(debug::dbVerbose, jsonText);
 
 		// do not cache
 		wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
@@ -1257,13 +1351,13 @@ void InstallWebServerHandlers()
 		String file = dir.fileName();
 
 		// cache it for an hour
-		wifiInstance.server.serveStatic(file.c_str(), SPIFFS, file.c_str(),"Cache-Control: public, max-age=3600");
+		wifiInstance.server.serveStatic(file.c_str(), SPIFFS, file.c_str(),"Cache-Control: public, max-age=60");
 
-		DEBUG(DEBUG_VERBOSE, Serial.printf("Serving %s\n\r", file.c_str()));
+		dblog.printf(debug::dbVerbose, "Serving %s\n\r", file.c_str());
 
 	}
 
-	DEBUG(DEBUG_VERBOSE, Serial.println("InstallWebServerHandlers OUT"));
+	dblog.printf(debug::dbVerbose, "InstallWebServerHandlers OUT\n\r");
 
 }
 
@@ -1298,7 +1392,7 @@ void SendServerPage()
 void AddMapToJSON(JsonObject &root, unsigned numSockets)
 {
 
-	DEBUG(DEBUG_VERBOSE, Serial.printf("AddMapToJSON %d\n\r", numSockets));
+	dblog.printf(debug::dbVerbose, "AddMapToJSON %d\n\r", numSockets);
 
 	root["switchCount"] = numSockets;
 
@@ -1333,7 +1427,13 @@ void loop(void)
 	if (Details.configDirty)
 		WriteJSONconfig();
 
+	// just in case we get into a bool corner
+	Details.ignoreISRrequests = false;
+
+
 	wifiInstance.server.handleClient();
+
+	dblog.isr_pump();
 
 #ifdef _TEST_WFI_STATE
 
@@ -1343,7 +1443,7 @@ void loop(void)
 	{
 		WiFiMode_t currentState = WiFi.getMode();
 
-		DEBUG(DEBUG_VERBOSE, Serial.printf("================ WIFI %d\n\r", currentState));
+		dblog.printf(debug::dbVerbose, "================ WIFI %d\n\r", currentState)''
 
 		WiFi.printDiag(Serial);
 

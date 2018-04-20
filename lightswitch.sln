@@ -7,17 +7,25 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "lightswitch", "lightswitch.
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "espBasic", "C:\Users\bflint\Documents\Arduino\espBasic\espBasic.vcxproj", "{36AB683B-DD6B-4171-923E-228BA242134D}"
 EndProject
+<<<<<<< HEAD
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TankSensor", "..\..\tank sensor\Tank-Sensor\TankSensor.vcxproj", "{B70ECBC9-ED23-4F45-8AAA-A96FA35DD49D}"
+=======
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "i2cscanner", "..\i2cscanner\i2cscanner.vcxproj", "{6DC50F42-0C6D-4A6F-96B7-E4472FDCEDFC}"
+>>>>>>> aa44e832067d055fd6e559d7310179b1c9b185f1
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "basicSD", "..\..\basicSD\basicSD.vcxproj", "{C5C110E1-B0CA-4393-8649-AB7A41069887}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "powerMeter", "..\powerMeter\powerMeter.vcxproj", "{C8811A6B-C576-44F1-858D-672111F68BAC}"
 EndProject
+<<<<<<< HEAD
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "attinyLED", "C:\Users\bflint.HOME\Documents\Arduino\attinyLED\attinyLED.vcxproj", "{74F7D8B0-690A-419D-A91D-DA93AE274382}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "LED", "LED", "{D073D42C-D133-4DAD-B6C7-5CCE11B20971}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "espMaster", "C:\Users\bflint.HOME\Documents\Arduino\espMaster\espMaster.vcxproj", "{C9DD96E0-5318-4AAD-B6FA-316B22276F6E}"
+=======
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TankSensor", "..\..\tank sensor\TankSensor\TankSensor.vcxproj", "{B70ECBC9-ED23-4F45-8AAA-A96FA35DD49D}"
+>>>>>>> aa44e832067d055fd6e559d7310179b1c9b185f1
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -33,10 +41,17 @@ Global
 		{36AB683B-DD6B-4171-923E-228BA242134D}.Debug|x86.Build.0 = Debug|Win32
 		{36AB683B-DD6B-4171-923E-228BA242134D}.Release|x86.ActiveCfg = Release|Win32
 		{36AB683B-DD6B-4171-923E-228BA242134D}.Release|x86.Build.0 = Release|Win32
+<<<<<<< HEAD
 		{B70ECBC9-ED23-4F45-8AAA-A96FA35DD49D}.Debug|x86.ActiveCfg = Debug|Win32
 		{B70ECBC9-ED23-4F45-8AAA-A96FA35DD49D}.Debug|x86.Build.0 = Debug|Win32
 		{B70ECBC9-ED23-4F45-8AAA-A96FA35DD49D}.Release|x86.ActiveCfg = Release|Win32
 		{B70ECBC9-ED23-4F45-8AAA-A96FA35DD49D}.Release|x86.Build.0 = Release|Win32
+=======
+		{6DC50F42-0C6D-4A6F-96B7-E4472FDCEDFC}.Debug|x86.ActiveCfg = Debug|Win32
+		{6DC50F42-0C6D-4A6F-96B7-E4472FDCEDFC}.Debug|x86.Build.0 = Debug|Win32
+		{6DC50F42-0C6D-4A6F-96B7-E4472FDCEDFC}.Release|x86.ActiveCfg = Release|Win32
+		{6DC50F42-0C6D-4A6F-96B7-E4472FDCEDFC}.Release|x86.Build.0 = Release|Win32
+>>>>>>> aa44e832067d055fd6e559d7310179b1c9b185f1
 		{C5C110E1-B0CA-4393-8649-AB7A41069887}.Debug|x86.ActiveCfg = Debug|Win32
 		{C5C110E1-B0CA-4393-8649-AB7A41069887}.Debug|x86.Build.0 = Debug|Win32
 		{C5C110E1-B0CA-4393-8649-AB7A41069887}.Release|x86.ActiveCfg = Release|Win32
@@ -45,6 +60,7 @@ Global
 		{C8811A6B-C576-44F1-858D-672111F68BAC}.Debug|x86.Build.0 = Debug|Win32
 		{C8811A6B-C576-44F1-858D-672111F68BAC}.Release|x86.ActiveCfg = Release|Win32
 		{C8811A6B-C576-44F1-858D-672111F68BAC}.Release|x86.Build.0 = Release|Win32
+<<<<<<< HEAD
 		{74F7D8B0-690A-419D-A91D-DA93AE274382}.Debug|x86.ActiveCfg = Debug|Win32
 		{74F7D8B0-690A-419D-A91D-DA93AE274382}.Debug|x86.Build.0 = Debug|Win32
 		{74F7D8B0-690A-419D-A91D-DA93AE274382}.Release|x86.ActiveCfg = Release|Win32
@@ -53,6 +69,12 @@ Global
 		{C9DD96E0-5318-4AAD-B6FA-316B22276F6E}.Debug|x86.Build.0 = Debug|Win32
 		{C9DD96E0-5318-4AAD-B6FA-316B22276F6E}.Release|x86.ActiveCfg = Release|Win32
 		{C9DD96E0-5318-4AAD-B6FA-316B22276F6E}.Release|x86.Build.0 = Release|Win32
+=======
+		{B70ECBC9-ED23-4F45-8AAA-A96FA35DD49D}.Debug|x86.ActiveCfg = Debug|Win32
+		{B70ECBC9-ED23-4F45-8AAA-A96FA35DD49D}.Debug|x86.Build.0 = Debug|Win32
+		{B70ECBC9-ED23-4F45-8AAA-A96FA35DD49D}.Release|x86.ActiveCfg = Release|Win32
+		{B70ECBC9-ED23-4F45-8AAA-A96FA35DD49D}.Release|x86.Build.0 = Release|Win32
+>>>>>>> aa44e832067d055fd6e559d7310179b1c9b185f1
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -4,8 +4,7 @@
 
 #include "mcp23017.h"
 
-#include "debug_defines.h"
-
+#define DEBUG(a,b) ;
 
 byte mcp23017::readOneRegister(byte command)
 {
