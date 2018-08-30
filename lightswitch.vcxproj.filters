@@ -19,9 +19,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="lightswitch.ino" />
-    <None Include="data\config.json">
-      <Filter>data</Filter>
-    </None>
     <None Include="data\APmode.htm">
       <Filter>data</Filter>
     </None>
@@ -56,6 +53,12 @@
       <Filter>data</Filter>
     </None>
     <None Include="data\STAAPmode.htm">
+      <Filter>data</Filter>
+    </None>
+    <None Include="data\config.json">
+      <Filter>data</Filter>
+    </None>
+    <None Include="data\html.json">
       <Filter>data</Filter>
     </None>
   </ItemGroup>

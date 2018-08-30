@@ -66,3 +66,5 @@ Debug
 /data/web.config
 /tools
 /Release
+/eagle/6switch
+/MQTT

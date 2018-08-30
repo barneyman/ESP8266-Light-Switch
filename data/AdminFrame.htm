@@ -4,24 +4,37 @@
 <TITLE></TITLE>
     <link rel="stylesheet" type="text/css" href="switch.css">
 </HEAD>
-<BODY>
+<BODY onload="OnLoad()">
 
     <table>
         <tr>
             <th>Host</th>
-            <td><input type="text" id="host"/></td>
+            <td><input type="text" id="host" value="192.168.51.1"></td>
+            <td rowspan="3"><button onclick="OTAupdate()">Update OTA</button></td>
         </tr>
         <tr>
             <th>Port</th>
-            <td><input type="text" id="port" /></td>
+            <td><input type="text" id="port" value="5000" /></td>
         </tr>
         <tr>
             <th>Url</th>
-            <td><input type="text" id="url" /></td>
+            <td><input type="text" id="url" value="/upgrades/"/></td>
         </tr>
     </table>
-    <button onclick="OTAupdate()">Update OTA</button>
-
+    
+    <hr />
+    <span id="scanning"></span>
+        <div id="htmlUpdate" hidden>
+            <table>
+                <tr>
+                    <th>Peers</th>
+                    <td><select id="peers" /></td>
+                    <td><button onclick="OTA_HTMLupdate()">Update HTML</button></td>
+                </tr>
+            </table>
+        </div>
+    
+    <button onclick="fetchPeersWithHTML()" id="rescanPeers" hidden>Rescan for HTML Updates</button>
     <hr />
 
     <button onclick="ResetWIFI()">vanilla reset</button>
@@ -29,6 +42,45 @@
     <script src="common.js"></script>
 
     <script>
+
+        function OnLoad() {
+            fetchPeersWithHTML();
+        }
+
+        function fetchPeersWithHTML()
+        {
+            document.getElementById('rescanPeers').hidden = true;
+            document.getElementById('scanning').innerText="Scanning for Peers ...";
+
+            let url = base + '/json/htmlPeers'
+            var numPages = 0;
+            fetch(url)
+                .then(function (response) { return response.json(); })
+                .then(function (data) {
+                    // populate the peers
+                    var peers = document.getElementById('peers')
+                    // clear the list
+                    peers.innerHTML = ""
+                    if (data["peerCount"] > 0)
+                    {
+                        var peerArray = data["peers"]
+
+                        for (var eachNode in peerArray)
+                        {
+                            var opt = document.createElement("option")
+                            opt.setAttribute("value", peerArray[eachNode]["host"])
+                            opt.innerText = peerArray[eachNode]["host"];
+                            peers.appendChild(opt);
+                        }
+
+                        document.getElementById('htmlUpdate').hidden = false;
+                    }
+
+                    document.getElementById('rescanPeers').hidden = false;
+                    document.getElementById('scanning').innerText = "";
+
+                })
+        }
 
         function ResetWIFI() {
 

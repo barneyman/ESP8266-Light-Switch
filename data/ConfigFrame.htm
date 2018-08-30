@@ -46,7 +46,20 @@
                         The window in which N repeated on/off switch changes force the device to reset itself
                     </td>
                 </tr>
-            </table>
+                <tr>
+                    <td>Logging Level</td>
+                    <td>
+                        <select id="debugLevel" >
+                            <option value="0">Verbose</option>
+                            <option value="1">Info</option>
+                            <option value="2">Important</option>
+                            <option value="3">Warning</option>
+                            <option value="4">Error</option>
+                        </select>
+                    </td>
+                    <td>Change the debug level</td>
+                </tr>
+                </table>
             <hr />
             <button onclick="OnSave()">Save</button>
 
@@ -69,9 +82,14 @@
                                 // depends on the type
                                 if (document.getElementById(eachNode) != null) {
 
+                                    // if we can find a field with the same name as json item
                                     if (document.getElementById(eachNode).nodeName == 'INPUT') {
                                         document.getElementById(eachNode).value = data[eachNode];
                                         document.getElementById(eachNode).disabled = false;
+                                    }
+                                    else if (document.getElementById(eachNode).nodeName == 'SELECT')
+                                    {
+                                        document.getElementById(eachNode).value = data[eachNode]
                                     }
                                     else {
                                         document.getElementById(eachNode).innerText = data[eachNode];
@@ -103,8 +121,6 @@
                 var inputs = document.getElementsByTagName('input')
                 var inputValid = true;
                 for (index = 0; index < inputs.length; ++index) {
-
-
                     if (inputs[index].id != '') {
 
                         if (inputs[index].value == '')
@@ -113,6 +129,15 @@
                         jsonData[inputs[index].id] = inputs[index].value;
                     }
                 }
+
+                var selects = document.getElementsByTagName('select')
+                for (index = 0; index < selects.length; ++index) {
+                    if (selects[index].id != '') {
+                        jsonData[selects[index].id] = selects[index].value;
+                    }
+                }
+
+
                 if (inputValid == true) {
 
                     let url = base + '/json/config'

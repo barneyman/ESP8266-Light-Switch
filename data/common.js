@@ -1,4 +1,6 @@
-//let base = "http://192.168.42.18"
+// when testing these web pages from the PC ...
+// chrome --disable-web-security --user-data-dir="[some directory here]"
+//let base = "http://192.168.81.117"
 let base = "."
 
 
@@ -15,6 +17,8 @@ function headerLoaded() {
             // get the name
             iframe.document.getElementById('name').innerText = data['name']
             iframe.document.getElementById('version').innerText = data['version']
+            iframe.document.getElementById('versionHTML').innerText = data['versionHTML']
+            
         })
 
 
