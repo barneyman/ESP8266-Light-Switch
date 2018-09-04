@@ -1,6 +1,6 @@
 # ESP8266-Light-Switch
 
-Replacement firmware for Sonoff Basic, or firmware for your own build of eso8266 and solenoids 
+Replacement firmware for Sonoff Basic, or firmware for your own build of esp8266 and solenoids 
 
 This can handle (with #defines) 1 to 6 switches
 
