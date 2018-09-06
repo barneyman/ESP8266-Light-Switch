@@ -1,0 +1,176 @@
+<HTML>
+<HEAD>
+<META NAME="GENERATOR" Content="Microsoft Visual Studio">
+<TITLE>ESP8266 Provisioning</TITLE>
+    <link rel="stylesheet" type="text/css" href="switch.css">
+</HEAD>
+<BODY onload="OnLoad()">
+
+    <iframe src="HeaderFrame.htm" id="header" name="header" onload="headerLoaded()"></iframe>
+
+    <h2>Wifi Details</h2>
+    After successful configuration, this device will join that network and be available
+    as either <b><span id="devicename">???</span></b> or via configured IP address<br />
+    If configuration fails, this screen, on this AP, will be available again
+    <hr />
+    <table>
+        <tr>
+            <td>
+                ssid (2.4Ghz)
+            </td>
+            <td id="wifis">
+               
+            </td>
+        </tr>
+        <tr>
+            <td>
+                password
+            </td>
+            <td>
+                <input name="pwd" size="15" type="password" id="pwd" />
+            </td>
+        </tr>
+        <tr>
+            <td>Type</td>
+            <td>
+                <select id="dhcp" onchange="chooseDHCP()">
+                    <option value="1">DHCP</option>
+                    <option value="0">Static</option>
+                </select>
+            </td>
+        </tr>
+        <tr hidden id="staticInfo"> 
+            <td>
+                IP Address<br />Gateway<br />Netmask<br />
+            </td>
+            <td>
+                <input type="text" id="ip"/><br />
+                <input type="text" id="gateway"/><br />
+                <input type="text" id="netmask" value="255.255.255.0"><br />
+            </td>
+        </tr>
+    </table>        
+    <button id="rescan" onclick="OnLoad()" disabled>Rescan</button>
+    <button id="join" onclick="JoinWifi()" disabled>Join WiFi</button>
+
+
+    <script src="common.js"></script>
+
+    <script>
+
+        function chooseDHCP() {
+
+            var select = document.getElementById("dhcp");
+            var dhcp = select.options[select.selectedIndex].value
+
+            if (dhcp == "1") {
+                document.getElementById('staticInfo').hidden=true
+            }
+            else {
+                document.getElementById('staticInfo').hidden = false
+            }
+
+
+        }
+
+        function OnLoad()
+        {
+            let url = base+'/json/wifi'
+            var wifis = document.getElementById("wifis");
+            wifis.innerText = "Searching .... [" + url+"]"
+
+            // disable scan
+            document.getElementById("rescan").disabled = true;
+            document.getElementById("join").disabled = true;
+
+            fetch(url)
+                .then(function (response) {
+                    if(response.ok)
+                        return response.json();
+                    throw new Error('network err')
+                })
+                .then(function (data) {
+
+                    document.getElementById("devicename").innerText=data["name"]+".local"
+
+                    wifis.innerText = ""
+                    select = document.createElement("select")
+                    select.setAttribute('id','wifisids')
+                    wifis.appendChild(select)
+
+                    var wifiArray = data["wifi"]
+
+                    for (var eachNode in wifiArray)
+                    {
+                        var wifi = document.createElement("option")
+                        wifi.setAttribute("value", wifiArray[eachNode]["ssid"])
+                        wifi.innerText = wifiArray[eachNode]["ssid"];
+                        select.appendChild(wifi);
+                    }
+
+
+                document.getElementById("rescan").disabled = false;
+                document.getElementById("join").disabled = false;
+                }).catch(function (error) {
+                    wifis.innerText = "Error"
+                })
+
+
+        }
+
+        function JoinWifi() {
+
+            // check there are proper values
+            var jsonData = {};
+
+            // get all inputs
+            var pwd = document.getElementById('pwd')
+            var selects = document.getElementById('wifisids')
+            var ssid=selects.options[selects.selectedIndex].value;
+
+            jsonData['pwd'] = pwd.value;
+            jsonData['ssid'] = ssid;
+
+            var select = document.getElementById("dhcp");
+            var dhcp = select.options[select.selectedIndex].value
+
+            jsonData['dhcp'] = dhcp
+
+            if (dhcp == "0")
+            {
+                jsonData['ip']=document.getElementById('ip').value;
+                jsonData['gateway'] = document.getElementById('gateway').value;
+                jsonData['netmask'] = document.getElementById('netmask').value;
+            }
+
+            var inputValid = true;
+
+            if(inputValid==true) {
+
+                let url = base + '/json/wifi'
+
+                var xhr = new XMLHttpRequest();
+                
+                xhr.open("POST", url, true);
+                xhr.setRequestHeader("Content-type", "text/plain");
+
+                xhr.onloadend = function () {
+                    // done
+                    // we should delay for a couple of seconds, then try to 
+                    // go to the .local domain again
+                    window.location.reload(true)
+                };
+
+                xhr.send(JSON.stringify(jsonData));
+
+            }
+            else
+                alert('values cannot be empty')
+        }
+
+
+    </script>
+
+
+</BODY>
+</HTML>
