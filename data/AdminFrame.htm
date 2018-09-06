@@ -1,0 +1,156 @@
+<HTML>
+<HEAD>
+<META NAME="GENERATOR" Content="Microsoft Visual Studio">
+<TITLE></TITLE>
+    <link rel="stylesheet" type="text/css" href="switch.css">
+</HEAD>
+<BODY onload="OnLoad()">
+
+    <table>
+        <tr>
+            <th>Host</th>
+            <td><input type="text" id="host" value="192.168.51.1"></td>
+            <td rowspan="3"><button onclick="OTAupdate()">Update OTA</button></td>
+        </tr>
+        <tr>
+            <th>Port</th>
+            <td><input type="text" id="port" value="5000" /></td>
+        </tr>
+        <tr>
+            <th>Url</th>
+            <td><input type="text" id="url" value="/upgrades/"/></td>
+        </tr>
+    </table>
+    
+    <hr />
+    <span id="scanning"></span>
+        <div id="htmlUpdate" hidden>
+            <table>
+                <tr>
+                    <th>Peers</th>
+                    <td><select id="peers" /></td>
+                    <td><button onclick="OTA_HTMLupdate()">Update HTML</button></td>
+                </tr>
+            </table>
+        </div>
+    
+    <button onclick="fetchPeersWithHTML()" id="rescanPeers" hidden>Rescan for HTML Updates</button>
+    <hr />
+
+    <button onclick="ResetWIFI()">vanilla reset</button>
+
+    <script src="common.js"></script>
+
+    <script>
+
+        function OnLoad() {
+            fetchPeersWithHTML();
+        }
+
+        function fetchPeersWithHTML()
+        {
+            document.getElementById('rescanPeers').hidden = true;
+            document.getElementById('scanning').innerText="Scanning for Peers ...";
+
+            let url = base + '/json/htmlPeers'
+            var numPages = 0;
+            fetch(url)
+                .then(function (response) { return response.json(); })
+                .then(function (data) {
+                    // populate the peers
+                    var peers = document.getElementById('peers')
+                    // clear the list
+                    peers.innerHTML = ""
+                    if (data["peerCount"] > 0)
+                    {
+                        var peerArray = data["peers"]
+
+                        for (var eachNode in peerArray)
+                        {
+                            var opt = document.createElement("option")
+                            opt.setAttribute("value", peerArray[eachNode]["host"])
+                            opt.innerText = peerArray[eachNode]["host"];
+                            peers.appendChild(opt);
+                        }
+
+                        document.getElementById('htmlUpdate').hidden = false;
+                    }
+
+                    document.getElementById('rescanPeers').hidden = false;
+                    document.getElementById('scanning').innerText = "";
+
+                })
+        }
+
+        function ResetWIFI() {
+
+            let url = base + '/resetWIFI'
+
+            var xhr = new XMLHttpRequest();
+
+            xhr.open("GET", url, true);
+            xhr.setRequestHeader("Content-type", "text/plain");
+
+            xhr.send();
+
+        }
+
+        function OTAupdate() {
+
+
+            var jsonData = {};
+
+            // get all inputs
+            var inputs = document.getElementsByTagName('input')
+            var inputValid = true;
+            for (index = 0; index < inputs.length; ++index) {
+
+
+                if (inputs[index].id != '') {
+
+                    if (inputs[index].value == '')
+                        inputValid = false;
+
+                    jsonData[inputs[index].id] = inputs[index].value;
+                }
+            }
+            if (inputValid == true) {
+
+                let url = base + '/json/upgrade'
+
+                var xhr = new XMLHttpRequest();
+
+                xhr.open("POST", url, true);
+                xhr.setRequestHeader("Content-type", "text/plain");
+
+
+                // then wait on a response
+                xhr.onloadend = function () {
+                    // done
+                    // parse it
+                    var jsonResponse = JSON.parse(xhr.responseText);
+                    // HTTP_UPDATE_OK
+                    if (jsonResponse['result'] != 2)
+                     {
+                        alert(jsonResponse['Details']['espNarrative'])
+                    }
+                    else {
+                        // reload the whole site?
+                        window.location.reload(true)
+                    }
+                };
+
+                xhr.send(JSON.stringify(jsonData));
+
+            }
+            else
+                alert('values cannot be empty')
+        }
+
+
+
+
+    </script>
+
+</BODY>
+</HTML>

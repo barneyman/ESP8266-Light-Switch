@@ -1,0 +1,162 @@
+<HTML>
+<HEAD>
+    <META NAME="GENERATOR" Content="Microsoft Visual Studio">
+    <TITLE></TITLE>
+    <link rel="stylesheet" type="text/css" href="switch.css">
+</HEAD>
+<BODY onload="OnLoad()">
+    <div>
+        <div id="loading">Loading</div>
+        <div id="found" hidden>
+
+            <h2>Configuration</h2>
+            <table>
+                <tr>
+                    <td>
+                        Rebounce Guard - Momentary Switch
+                    </td>
+                    <td>
+                        <input name="bounceMomentary" size="15" type="number" id="bouncemsMomentary" disabled />ms
+                    </td>
+                    <td>
+                        How long to guard against 'dirty' physical switch rebounces
+                    </td>
+                </tr>
+                <tr>
+                    <td>
+                        Rebounce Guard - Toggle Switch
+                    </td>
+                    <td>
+                        <input name="bounceToggle" size="15" type="number" id="bouncemsToggle" disabled />ms
+                    </td>
+                    <td>
+                        How long to guard against 'dirty' physical switch rebounces
+                    </td>
+
+
+                </tr>
+                <tr>
+                    <td>
+                        Reset Window
+                    </td>
+                    <td>
+                        <input name="reset" size="15" type="number" id="resetms" disabled />ms
+                    </td>
+                    <td>
+                        The window in which N repeated on/off switch changes force the device to reset itself
+                    </td>
+                </tr>
+                <tr>
+                    <td>Logging Level</td>
+                    <td>
+                        <select id="debugLevel" >
+                            <option value="0">Verbose</option>
+                            <option value="1">Info</option>
+                            <option value="2">Important</option>
+                            <option value="3">Warning</option>
+                            <option value="4">Error</option>
+                        </select>
+                    </td>
+                    <td>Change the debug level</td>
+                </tr>
+                </table>
+            <hr />
+            <button onclick="OnSave()">Save</button>
+
+        </div>
+        <div id="error" hidden>problem loading content</div>
+    </div>
+        <script src="common.js"></script>
+
+        <script>
+
+
+            function OnLoad() {
+                let url = base + '/json/config'
+
+                fetch(url)
+                    .then(function (response) { return response.json(); })
+                    .then(function (data) {
+                        for (var eachNode in data) {
+                            if (data.hasOwnProperty(eachNode)) {
+                                // depends on the type
+                                if (document.getElementById(eachNode) != null) {
+
+                                    // if we can find a field with the same name as json item
+                                    if (document.getElementById(eachNode).nodeName == 'INPUT') {
+                                        document.getElementById(eachNode).value = data[eachNode];
+                                        document.getElementById(eachNode).disabled = false;
+                                    }
+                                    else if (document.getElementById(eachNode).nodeName == 'SELECT')
+                                    {
+                                        document.getElementById(eachNode).value = data[eachNode]
+                                    }
+                                    else {
+                                        document.getElementById(eachNode).innerText = data[eachNode];
+                                    }
+                                }
+                            }
+
+                            document.getElementById('loading').hidden = true;
+                            document.getElementById('found').hidden = false;
+
+                        }
+
+
+                    }).catch(function (error) {
+
+                        document.getElementById('loading').hidden = true;
+                        document.getElementById('error').hidden = false;
+
+                    })
+            }
+
+
+            function OnSave() {
+
+                // check there are proper values
+                var jsonData = {};
+
+                // get all inputs
+                var inputs = document.getElementsByTagName('input')
+                var inputValid = true;
+                for (index = 0; index < inputs.length; ++index) {
+                    if (inputs[index].id != '') {
+
+                        if (inputs[index].value == '')
+                            inputValid = false;
+
+                        jsonData[inputs[index].id] = inputs[index].value;
+                    }
+                }
+
+                var selects = document.getElementsByTagName('select')
+                for (index = 0; index < selects.length; ++index) {
+                    if (selects[index].id != '') {
+                        jsonData[selects[index].id] = selects[index].value;
+                    }
+                }
+
+
+                if (inputValid == true) {
+
+                    let url = base + '/json/config'
+
+                    var xhr = new XMLHttpRequest();
+
+                    xhr.open("POST", url, true);
+                    xhr.setRequestHeader("Content-type", "text/plain");
+
+                    xhr.send(JSON.stringify(jsonData));
+
+                }
+                else
+                    alert('values cannot be empty')
+            }
+
+
+        </script>
+
+
+</BODY>
+</HTML>
