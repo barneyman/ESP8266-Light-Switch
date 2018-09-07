@@ -16,3 +16,6 @@ it was written using the Visual Micro addin for VS2015, but should compile perfe
 
 I drive this from a Google Home, talking to Home Assistant ( https://www.home-assistant.io/ ) running on an RPI-3B
 
+
+![Board - 6switch](https://github.com/barneyman/ESP8266-Light-Switch/blob/master/6switch.jpg)
+
