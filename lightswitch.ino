@@ -1115,6 +1115,7 @@ void InstallWebServerHandlers()
 
 		dblog.println(debug::dbImportant, "/button");
 
+#ifdef _WEMOS_RELAY_SHIELD
 		// these have to be in port/action pairs
 		if (wifiInstance.server.args() % 2)
 		{
@@ -1149,6 +1150,17 @@ void InstallWebServerHandlers()
 				dblog.println(debug::dbWarning, "/button didn't get a port");
 			}
 		}
+
+#else
+		// one trick pony
+		if (wifiInstance.server.hasArg("action"))
+		{
+			bool action = wifiInstance.server.arg("action") == "on" ? true : false;
+			DoSwitchAntiBounce(0, action);
+		}
+
+#endif
+
 
 		delay(_WEB_TAR_PIT_DELAY);
 
