@@ -238,7 +238,6 @@ struct
 		unsigned relay;
 		enum switchState lastState;
 
-
 		// not persisted
 		enum switchState preferredDefault;
 		enum  typeOfSwitch switchType;
@@ -248,12 +247,21 @@ struct
 		// when we saw this switch change state - used to debounce the switch
 		unsigned long last_seen_bounce;
 
+		// how many times we've see this PHYSICAL switch .. er ... switch
+		unsigned long switchCount;
+
+#ifdef _AT_RGBSTRIP
+		unsigned long lastRGB;
+#endif
+
+
+// this must be last in the array (it gets cleaned specifically)
 #ifdef _RESET_VIA_QUICK_SWITCH
 		unsigned long lastSwitchesSeen[RESET_ARRAY_SIZE];
 #endif
 
-		// how many times we've see this PHYSICAL switch .. er ... switch
-		unsigned long switchCount;
+
+
 
 	} switches[NUM_SOCKETS];
 
@@ -286,7 +294,7 @@ struct
 #elif defined( _AT_RGBSTRIP )
 
 {
-	{ "RGB",0, swUnknown, swOff, stVirtual, 0,0 }
+	{ "RGB",0, swUnknown, swOff, stVirtual, 0,0, 0xffffff }
 }
 
 #elif defined( _PHYSICAL_SWITCH_EXISTS )
@@ -465,6 +473,7 @@ void DoRGBSwitch(bool on, int rgb)
 	{
 		rgbHandler.SetUserPalette(_COLOR_PALLETE_USER1, (rgb & 0xff0000) >> 16, (rgb & 0xff00) >> 8, (rgb & 0xff));
 		rgbHandler.SetAllPalette(_COLOR_PALLETE_USER1);
+		Details.switches[0].lastRGB = rgb;
 	}
 
 
@@ -915,6 +924,11 @@ void ReadJSONconfig()
 				Details.switches[each].relay = theSwitch["relay"];
 				Details.switches[each].name = (const char*)theSwitch["name"];
 				Details.switches[each].lastState = (enum switchState)(int)theSwitch["lastState"];
+
+#ifdef _AT_RGBSTRIP
+				if(theSwitch.containsKey("lastRGB"))
+					Details.switches[each].lastRGB = theSwitch["lastRGB"];
+#endif
 			}
 			else
 			{
@@ -1315,8 +1329,6 @@ void InstallWebServerHandlers()
 
 #if defined( _AT_RGBSTRIP )
 
-			int paletteColour = _COLOR_PALLETE_WHITE;
-
 			if (wifiInstance.server.hasArg("rgb") || wifiInstance.server.hasArg("r") || wifiInstance.server.hasArg("g") || wifiInstance.server.hasArg("b"))
 			{
 				unsigned rgb = 0;
@@ -1339,7 +1351,8 @@ void InstallWebServerHandlers()
 			}
 			else
 			{ 
-				DoRGBPaletteSwitch(action, paletteColour);
+				// what it last was
+				DoRGBSwitch(action, Details.switches[0].lastRGB);
 			}
 #else
 			DoSwitchAntiBounce(0, action);
@@ -1601,6 +1614,11 @@ void InstallWebServerHandlers()
 				// reflect the relay, not the switch
 				Details.switches[0].lastState== swOn?1:0;
 #endif
+
+#ifdef _AT_RGBSTRIP
+			switchRelay["lastRGB"] = Details.switches[each].lastRGB;
+#endif
+
 			switchRelay["stateChanges"] = Details.switches[each].switchCount;
 		}
 
@@ -2046,6 +2064,10 @@ void AddMapToJSON(JsonObject &root, unsigned numSockets)
 		theSwitch["name"] = Details.switches[each].name.c_str();
 		theSwitch["relay"] = Details.switches[each].relay;
 		theSwitch["lastState"] = (int)Details.switches[each].lastState;
+
+#ifdef _AT_RGBSTRIP
+		theSwitch["lastRGB"]=Details.switches[each].lastRGB;
+#endif
 
 	}
 
