@@ -1,13 +1,17 @@
 #include <WiFiClient.h>
 #include <debugLogger.h>
 
-// define one of the following ... or none
-//#define _SONOFF_BASIC
-#define _SONOFF_BASIC_EXTRA_SWITCH
-//#define _WEMOS_RELAY_SHIELD
+// define one of the following ... 
+// nothing defined == 6 switch nodemcu
+//#define _SONOFF_BASIC					// the basic normal sonoff
+//#define _SONOFF_BASIC_EXTRA_SWITCH	// one with the extra GPIO pin wired as a switch
+//#define _WEMOS_RELAY_SHIELD			// simple d1 with a relay shield on it
+#define _AT_RGBSTRIP					// a strip of RGBs
+//#define _6SWITCH						// my nodemcu with a 6 relay board attached
+
+
 
 // turn these OFF for the 6 switch one
-
 // the sonoff units
 // normal
 // #define _SONOFF_BASIC
@@ -19,41 +23,40 @@
 
 
 
-#if defined(_WEMOS_RELAY_SHIELD) && (defined(_SONOFF_BASIC) || defined(_SONOFF_BASIC_EXTRA_SWITCH))
-#error "Cannot have BOTH types of modules defined!"
+#if !defined(_SONOFF_BASIC) && !defined(_SONOFF_BASIC_EXTRA_SWITCH) && !defined(_WEMOS_RELAY_SHIELD) && !defined(_AT_RGBSTRIP) && !defined(_6SWITCH)
+#error "Something MUST be defined!"
 #endif
 
 #if defined(_WEMOS_RELAY_SHIELD) || defined(_SONOFF_BASIC) || defined(_SONOFF_BASIC_EXTRA_SWITCH)
 
 // without this, we use a MUXer
-#define _SIMPLE_ONE_SWITCH
-
+#define _PHYSICAL_SWITCH_EXISTS
 #define NUM_SOCKETS	1
 
 // 1mb 128k spiffs gives you ~ 500k for bin file
 #define _OTA_AVAILABLE
 
-#elif defined(_SONOFF_BASIC_EXTRA_SWITCH)
+#elif defined(_AT_RGBSTRIP)
 
+#define _OTA_AVAILABLE
 #define NUM_SOCKETS	1
 
-// 1mb 128k spiffs gives you ~ 500k for bin file
-#define _OTA_AVAILABLE
 
+#elif defined(_6SWITCH)
 
-#else
+// the 6switch board
 #define NUM_SOCKETS	6
 #define _OTA_AVAILABLE
-#define _OTA_AVAILABLE
+#define _USE_SWITCH_MUXER
 
 #endif
 
 #if defined (_WEMOS_RELAY_SHIELD)
 
-#define GPIO_RELAY	D1
-#define GPIO_LED		BUILTIN_LED
+#define GPIO_RELAY		D1
+#define GPIO_LED		LED_BUILTIN
 // whatever you want it to be!
-#define GPIO_SWITCH D2
+#define GPIO_SWITCH		D2
 
 #elif defined (_SONOFF_BASIC) || defined (_SONOFF_BASIC_EXTRA_SWITCH)
 
@@ -66,7 +69,7 @@
 // a number of exceptions in 2.4.0 & LWIP2 - currently only works reliably with 2.3.0 and LWIP1.4
 
 #define GPIO_RELAY		12	// GPIO12
-#define GPIO_LED			13
+#define GPIO_LED		13
 #define GPIO_SWITCH		0	// GPIO0 is existing button, GPIO14/D5 for the one on the header
 
 #ifdef _SONOFF_BASIC_EXTRA_SWITCH
@@ -74,7 +77,16 @@
 #define GPIO_SWITCH2		14
 
 #endif
+
+#elif defined(_AT_RGBSTRIP)
+
+#define _NUM_LEDS	15
 	
+#define GPIO_LED		LED_BUILTIN
+// whatever you want it to be!
+//#define GPIO_SWITCH		D2
+
+
 #endif
 
 
@@ -101,6 +113,8 @@
 #define _VERSION_ROOT	"lightE_"
 #elif defined (_WEMOS_RELAY_SHIELD)
 #define _VERSION_ROOT	"lightW_"
+#elif defined(_AT_RGBSTRIP)
+#define _VERSION_ROOT	"lightRGB_"
 #else
 #define _VERSION_ROOT	"light6_"
 #endif
@@ -148,10 +162,19 @@ syslogDebug dblog(debug::dbWarning, "192.168.51.1", 514, "temp", "lights");
 myWifiClass wifiInstance("sonoff_", &dblog, mdsnNAME);
 #elif defined(_WEMOS_RELAY_SHIELD)
 myWifiClass wifiInstance("wemos_", &dblog, mdsnNAME);
-#else
+#elif defined(_6SWITCH)
 // for serial
 SerialDebug dblog(debug::dbWarning);
 myWifiClass wifiInstance("6switch_", &dblog, mdsnNAME);
+#elif defined(_AT_RGBSTRIP)
+SerialDebug dblog(debug::dbVerbose);
+myWifiClass wifiInstance("rgb_", &dblog, mdsnNAME);
+
+// pull in the AT handler
+#include <atLEDS.h>
+#define _AT85_ADDR	0x10
+ATleds rgbHandler(_AT85_ADDR,&dblog);
+
 #endif
 
 
@@ -176,8 +199,11 @@ bool resetWIFI = false;
 
 
 
-
-enum	typeOfSwitch { stNone, stMomentary, stToggle };
+// none, is nothing (sort of logic hole)
+// Momentary push switch
+// Toggle switch
+// Virtual means nothing, just code reflected
+enum	typeOfSwitch { stUndefined, stMomentary, stToggle, stVirtual };
 enum	switchState { swUnknown, swOn, swOff };
 
 struct 
@@ -187,6 +213,12 @@ struct
 
 	// ignore ISRs
 	bool ignoreISRrequests;
+
+#ifdef _AT_RGBSTRIP
+
+	unsigned rgbLedCount;
+
+#endif
 
 	// wifi deets
 	myWifiClass::wifiDetails wifi;
@@ -205,6 +237,7 @@ struct
 		String name;
 		unsigned relay;
 		enum switchState lastState;
+
 
 		// not persisted
 		enum switchState preferredDefault;
@@ -228,6 +261,12 @@ struct
 
 	false, false,
 
+#ifdef _AT_RGBSTRIP
+
+	_NUM_LEDS,
+
+#endif
+
 	{
 		"","",false, true
 	},
@@ -244,13 +283,18 @@ struct
 		{ "Sonoff",0, swUnknown, swOff, stMomentary, 0,0 }
 #endif
 	}
+#elif defined( _AT_RGBSTRIP )
 
-#elif defined _SIMPLE_ONE_SWITCH
+{
+	{ "RGB",0, swUnknown, swOff, stVirtual, 0,0 }
+}
 
+#elif defined( _PHYSICAL_SWITCH_EXISTS )
 	{
 		{ "Device A",0, swUnknown,swOff, stMomentary, 0,0 }
 	}
-#else
+
+#elif defined(_6SWITCH)
 
 #ifdef _BOARD_VER_1_1
 	{
@@ -285,9 +329,9 @@ std::vector<myWifiClass::mdnsService> services;
 
 
 
-#ifdef _SIMPLE_ONE_SWITCH
+#ifdef _6SWITCH
 
-#else
+
 #include "mcp23017.h"
 
 // light manual trigger IN, driven by the INT pin on the MCP
@@ -303,26 +347,13 @@ mcp23017AndRelay mcp(4, 5, resetMCPpin, powerRelayBoardNPN);
 #endif
 
 
+
 // how long we slow the web hots down for (millis)
 #define _WEB_TAR_PIT_DELAY 200
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-#ifndef _SIMPLE_ONE_SWITCH
+#ifndef _PHYSICAL_SWITCH_EXISTS
 
 unsigned MapSwitchToRelay(unsigned switchNumber)
 {
@@ -376,6 +407,7 @@ void ICACHE_RAM_ATTR OnSwitchISR2()
 }
 #endif
 
+#ifdef GPIO_SWITCH
 void ICACHE_RAM_ATTR OnSwitchISR()
 {
 	if (Details.ignoreISRrequests)
@@ -386,7 +418,7 @@ void ICACHE_RAM_ATTR OnSwitchISR()
 	{
 		dblog.isr_println(debug::dbInfo, "	OnSwitchISR redundant");
 
-#ifndef _SIMPLE_ONE_SWITCH
+#ifndef _PHYSICAL_SWITCH_EXISTS
 		// ask what changed, clear interrupt, so we don't leave the INTerrupt hanging
 		mcp.InterruptCauseAndCurrentState(true);
 #endif
@@ -398,10 +430,14 @@ void ICACHE_RAM_ATTR OnSwitchISR()
 
 	// ask what changed, clear interrupt
 	int causeAndState =
-#ifdef _SIMPLE_ONE_SWITCH
+#ifdef _PHYSICAL_SWITCH_EXISTS
 		(Details.switches[0].switchType == stMomentary ?
 		// fake the cause and reflect INVERSE state of relay - because MOMENTARY
+#ifdef GPIO_RELAY
 		(1 << 8) | (digitalRead(GPIO_RELAY) == HIGH ? 0 : 1) :
+#else
+			0:
+#endif
 		// fake the cause and rstate of switch - because TOGGLE
 		(1 << 8) | (digitalRead(GPIO_SWITCH) == HIGH ? 1 : 0));
 
@@ -414,11 +450,33 @@ void ICACHE_RAM_ATTR OnSwitchISR()
 	dblog.isr_println(debug::dbVerbose, "OnSwitchISR out");
 
 }
+#endif
+
+
+#ifdef _AT_RGBSTRIP
+void DoRGBSwitch(bool on, unsigned rgb)
+{
+	rgbHandler.SetAllPalette(rgb);
+	rgbHandler.DisplayAndWait(true);
+
+	Details.switches[0].switchCount++;
+
+	enum switchState newState = on ? swOn : swOff;;
+	// reflect in state
+	if (newState != Details.switches[0].lastState)
+	{
+		Details.switches[0].lastState = newState;
+		Details.configDirty = true;
+	}
+
+}
+
+#endif
 
 void DoSwitchAntiBounce(int port, bool on)
 {
 	int causeAndState =
-#ifdef _SIMPLE_ONE_SWITCH
+#ifdef _PHYSICAL_SWITCH_EXISTS
 	 (1 << 8) | (on ? 1 : 0) ;
 #else
 		// the switch numbers are 0 based, but needs to be 1 based to make the bit math work
@@ -499,7 +557,7 @@ void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState)
 void RevertAllSwitch()
 {
 
-#ifdef _SIMPLE_ONE_SWITCH
+#ifdef _PHYSICAL_SWITCH_EXISTS
 
 	// read the current switch state, and reflect that in the relay state
 	enum switchState requestState = swUnknown;
@@ -509,7 +567,11 @@ void RevertAllSwitch()
 		if (Details.switches[0].switchType == stToggle)
 		{
 			// found a toggle, believe it
+#ifdef GPIO_SWITCH
 			requestState = (digitalRead(GPIO_SWITCH) == HIGH)?swOn:swOff;
+#else
+			requestState = (requestState == swOn?swOff:swOn);
+#endif
 		}
 #ifdef GPIO_SWITCH2
 		else if (Details.switches[0].altSwitchType == stToggle)
@@ -530,7 +592,7 @@ void RevertAllSwitch()
 	DoSwitch(0, requestState == swOn ? true : false, false);
 
 
-#else
+#elif defined(_6SWITCH)
 	// get the switch state
 	for (int port = 0; port < NUM_SOCKETS; port++)
 	{
@@ -539,6 +601,11 @@ void RevertAllSwitch()
 			false);
 
 	}
+
+#else
+
+	dblog.isr_printf(debug::dbError, "no impl for RevertAllSwitch");
+
 #endif
 }
 
@@ -547,7 +614,7 @@ void DoAllSwitch(bool state, bool force)
 {
 	dblog.printf(debug::dbInfo, "DoAllSwitch: %s %s\r\n", state ? "ON" : "off", force ? "FORCE" : "");
 
-#ifdef _SIMPLE_ONE_SWITCH
+#ifdef _PHYSICAL_SWITCH_EXISTS
 	DoSwitch(0, state, force);
 #else
 
@@ -574,10 +641,11 @@ void DoSwitch(unsigned portNumber, bool on, bool forceSwitchToReflect)
 
 	dblog.isr_printf(debug::dbImportant, "DoSwitch: relay %d %s %s\r\n", portNumber, on ? "ON" : "off", forceSwitchToReflect ? "FORCE" : "");
 
-#ifdef _SIMPLE_ONE_SWITCH
+#ifdef _PHYSICAL_SWITCH_EXISTS
 
+#ifdef GPIO_RELAY
 	digitalWrite(GPIO_RELAY, on ? HIGH : LOW);
-
+#endif
 
 
 #ifdef _SONOFF_BASIC
@@ -587,12 +655,18 @@ void DoSwitch(unsigned portNumber, bool on, bool forceSwitchToReflect)
 	digitalWrite(GPIO_LED, on ? HIGH : LOW);
 #endif
 
-#else
+#elif defined(_6SWITCH)
 	DoRelay(MapSwitchToRelay(portNumber), on);
 	if (forceSwitchToReflect)
 	{
 		mcp.SetSwitch(portNumber, on);
 	}
+
+#else
+
+	dblog.isr_printf(debug::dbError, "no impl for DoSwitch");
+
+
 #endif
 
 	enum switchState newState = on ? swOn : swOff;;
@@ -607,7 +681,7 @@ void DoSwitch(unsigned portNumber, bool on, bool forceSwitchToReflect)
 
 }
 
-#ifndef _SIMPLE_ONE_SWITCH
+#ifdef _6SWITCH
 
 // do, portNumber is 0 thru 7
 void DoRelay(unsigned portNumber, bool on)
@@ -668,6 +742,10 @@ void WriteJSONconfig()
 	jsonBuffer.clear();
 
 	JsonObject &root = jsonBuffer.createObject();
+
+#ifdef _AT_RGBSTRIP
+	root["rgbCount"] = Details.rgbLedCount;
+#endif
 
 	root["debounceThresholdmsMomentary"] = Details.debounceThresholdmsMomentary;	
 	root["debounceThresholdmsToggle"] = Details.debounceThresholdmsToggle;
@@ -768,6 +846,16 @@ void ReadJSONconfig()
 	}
 
 	Details.configDirty = false;
+
+#ifdef _AT_RGBSTRIP
+	if(root.containsKey("rgbCount"))
+		Details.rgbLedCount=root["rgbCount"];
+
+	// tell the handler how big it is
+	rgbHandler.SetSize(Details.rgbLedCount);
+	rgbHandler.DisplayAndWait(true);
+
+#endif
 
 	Details.debounceThresholdmsMomentary= root["debounceThresholdmsMomentary"];
 	Details.debounceThresholdmsToggle=root["debounceThresholdmsToggle"];
@@ -897,19 +985,26 @@ void setup(void)
 
 	}
 
+#ifdef _AT_RGBSTRIP
 
+	rgbHandler.begin();
 
-#ifdef _SIMPLE_ONE_SWITCH
+#endif
+
+#ifdef _PHYSICAL_SWITCH_EXISTS
 
 	// set the relay pin to output
+#ifdef GPIO_RELAY
 	pinMode(GPIO_RELAY, OUTPUT);
-	pinMode(GPIO_LED, OUTPUT);
+#endif
 
+
+#ifdef GPIO_SWITCH
 	// and the switch pin to input - pullup
 	pinMode(GPIO_SWITCH, INPUT_PULLUP);
 	// for momentary switches we just look for low
-//	attachInterrupt(GPIO_SWITCH, OnSwitchISR, Details.switches[0].switchType==stMomentary?ONLOW:CHANGE);
 	attachInterrupt(GPIO_SWITCH, OnSwitchISR, Details.switches[0].switchType == stMomentary ? FALLING : CHANGE);
+#endif
 
 #ifdef GPIO_SWITCH2
 	// and the switch pin to input - pullup
@@ -919,17 +1014,20 @@ void setup(void)
 	attachInterrupt(GPIO_SWITCH2, OnSwitchISR2, Details.switches[0].altSwitchType == stMomentary ? FALLING : CHANGE);
 #endif
 
-#else
+#elif defined(_6SWITCH)
 	// initialise the MCP
 	dblog.println(debug::dbVerbose, "Initialising MCP");
 	mcp.Initialise();
-
-
 	// preparing GPIOs
 	pinMode(inputSwitchPin, INPUT_PULLUP);
 	// the MCP interrupt is configured to fire on change, and goes LOW when fired
 	attachInterrupt(inputSwitchPin, OnSwitchISR, ONLOW);
 #endif
+
+#ifdef GPIO_LED
+	pinMode(GPIO_LED, OUTPUT);
+#endif
+
 
 	// default off, and don't force switches
 	DoAllSwitch(false,false);
@@ -981,6 +1079,7 @@ void InstallWebServerHandlers()
 	// switch ON/OFF
 	// revert
 
+	// make all the relays reflect their switches
 	wifiInstance.server.on("/revert", []() {
 
 		dblog.println(debug::dbImportant, "/revert");
@@ -992,6 +1091,7 @@ void InstallWebServerHandlers()
 		SendServerPage();
 	});
 
+	// do something to all of them
 	wifiInstance.server.on("/all", []() {
 
 		dblog.println(debug::dbImportant, "/all");
@@ -1009,11 +1109,11 @@ void InstallWebServerHandlers()
 		SendServerPage();
 	});
 
-
+	// fetch the latest set of html pages from a peer
 	wifiInstance.server.on("/json/updatehtml", HTTP_POST, []() {
 
 		// we need the host
-		dblog.println(debug::dbImportant, "json upgrade posted");
+		dblog.println(debug::dbImportant, "json updatehtml posted");
 		dblog.println(debug::dbImportant, wifiInstance.server.arg("plain"));
 
 		jsonBuffer.clear();
@@ -1029,6 +1129,7 @@ void InstallWebServerHandlers()
 
 #ifdef _OTA_AVAILABLE
 
+	// do an OTA update from a provided URL
 	wifiInstance.server.on("/json/upgrade", HTTP_POST, []() {
 
 		dblog.println(debug::dbImportant, "json upgrade posted");
@@ -1083,18 +1184,20 @@ void InstallWebServerHandlers()
 
 #endif
 
-
+	// inverse of whatever it's currently doing
 	wifiInstance.server.on("/toggle", []() {
 
 		dblog.println(debug::dbImportant, "/toggle");
 
 		delay(_WEB_TAR_PIT_DELAY);
 
-#ifdef _SIMPLE_ONE_SWITCH
+#ifdef _PHYSICAL_SWITCH_EXISTS
 
+#ifdef GPIO_RELAY
 		DoSwitch(0, (digitalRead(GPIO_RELAY) == HIGH ? false : true), true);
+#endif
 
-#else
+#elif defined(_6SWITCH)
 		// must be an arg
 		if (!wifiInstance.server.args())
 		{
@@ -1108,6 +1211,8 @@ void InstallWebServerHandlers()
 				wifiInstance.server.send(200, "text/html", "<html></html>");
 			}
 		}
+#else
+		dblog.isr_printf(debug::dbError, "no impl for /toggle");
 #endif
 	});
 
@@ -1115,7 +1220,7 @@ void InstallWebServerHandlers()
 
 		dblog.println(debug::dbImportant, "/button");
 
-#ifdef _WEMOS_RELAY_SHIELD
+#ifdef _6SWITCH
 		// these have to be in port/action pairs
 		if (wifiInstance.server.args() % 2)
 		{
@@ -1150,6 +1255,17 @@ void InstallWebServerHandlers()
 				dblog.println(debug::dbWarning, "/button didn't get a port");
 			}
 		}
+
+#elif defined( _AT_RGBSTRIP )
+
+		// one trick pony
+		if (wifiInstance.server.hasArg("action"))
+		{
+			bool action = wifiInstance.server.arg("action") == "on" ? true : false;
+			DoRGBSwitch(action, action? _COLOR_PALLETE_BLUE : _COLOR_PALLETE_RED);
+			
+		}
+
 
 #else
 		// one trick pony
@@ -1379,15 +1495,30 @@ void InstallWebServerHandlers()
 		{
 			JsonObject &switchRelay = switchState.createNestedObject();
 			switchRelay["switch"] = each;
-			switchRelay["type"] = Details.switches[each].switchType==stMomentary?"Momentary":"Toggle";
+			switch (Details.switches[each].switchType)
+			{
+			case stUndefined:
+				switchRelay["type"] = "!UNDEFINED!";
+				break;
+
+			case stMomentary:
+				switchRelay["type"] = "Momentary";
+				break;
+			case stToggle:
+				switchRelay["type"] = "Toggle";
+				break;
+			case stVirtual:
+				switchRelay["type"] = "Virtual";
+				break;
+			}
 			switchRelay["name"] = Details.switches[each].name;
 			switchRelay["relay"] = Details.switches[each].relay;
 			switchRelay["state"] = 
-#ifdef _SIMPLE_ONE_SWITCH
+#ifdef _6SWITCH
+				mcp.readSwitch(each) ? 1 : 0;
+#else
 				// reflect the relay, not the switch
 				Details.switches[0].lastState== swOn?1:0;
-#else
-				mcp.readSwitch(each) ? 1 : 0;
 #endif
 			switchRelay["stateChanges"] = Details.switches[each].switchCount;
 		}

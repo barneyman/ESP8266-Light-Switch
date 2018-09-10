@@ -19,48 +19,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="lightswitch.ino" />
-    <None Include="data\APmode.htm">
-      <Filter>data</Filter>
-    </None>
-    <None Include="data\Error.htm">
-      <Filter>data</Filter>
-    </None>
-    <None Include="data\HeaderFrame.htm">
-      <Filter>data</Filter>
-    </None>
-    <None Include="data\STAmode.htm">
-      <Filter>data</Filter>
-    </None>
-    <None Include="data\switch.css">
-      <Filter>data</Filter>
-    </None>
-    <None Include="data\ConfigFrame.htm">
-      <Filter>data</Filter>
-    </None>
-    <None Include="data\common.js">
-      <Filter>data</Filter>
-    </None>
-    <None Include="data\SwitchAssignFrame.htm">
-      <Filter>data</Filter>
-    </None>
-    <None Include="data\CurrentStateFrame.htm">
-      <Filter>data</Filter>
-    </None>
-    <None Include="data\AdminFrame.htm">
-      <Filter>data</Filter>
-    </None>
-    <None Include="data\HomeFrame.htm">
-      <Filter>data</Filter>
-    </None>
-    <None Include="data\STAAPmode.htm">
-      <Filter>data</Filter>
-    </None>
-    <None Include="data\config.json">
-      <Filter>data</Filter>
-    </None>
-    <None Include="data\html.json">
-      <Filter>data</Filter>
-    </None>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="__vm\.lightswitch.vsarduino.h">
@@ -74,10 +32,5 @@
     <ClCompile Include="mcp23017.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-  </ItemGroup>
-  <ItemGroup>
-    <Image Include="data\favicon.ico">
-      <Filter>data</Filter>
-    </Image>
   </ItemGroup>
 </Project>
