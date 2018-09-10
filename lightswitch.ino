@@ -454,9 +454,46 @@ void ICACHE_RAM_ATTR OnSwitchISR()
 
 
 #ifdef _AT_RGBSTRIP
-void DoRGBSwitch(bool on, unsigned rgb)
+
+void DoRGBSwitch(bool on, int rgb)
 {
-	rgbHandler.SetAllPalette(rgb);
+	if (!on)
+	{
+		rgbHandler.Clear();
+	}
+	else
+	{
+		rgbHandler.SetUserPalette(_COLOR_PALLETE_USER1, (rgb & 0xff0000) >> 16, (rgb & 0xff00) >> 8, (rgb & 0xff));
+		rgbHandler.SetAllPalette(_COLOR_PALLETE_USER1);
+	}
+
+
+	rgbHandler.DisplayAndWait(true);
+
+	Details.switches[0].switchCount++;
+
+	enum switchState newState = on ? swOn : swOff;;
+	// reflect in state
+	if (newState != Details.switches[0].lastState)
+	{
+		Details.switches[0].lastState = newState;
+		Details.configDirty = true;
+	}
+}
+
+
+void DoRGBPaletteSwitch(bool on, unsigned rgbPalette)
+{
+	if (!on)
+	{
+		rgbHandler.Clear();
+	}
+	else
+	{
+		rgbHandler.SetAllPalette(rgbPalette);
+	}
+
+
 	rgbHandler.DisplayAndWait(true);
 
 	Details.switches[0].switchCount++;
@@ -851,7 +888,10 @@ void ReadJSONconfig()
 	if(root.containsKey("rgbCount"))
 		Details.rgbLedCount=root["rgbCount"];
 
+	dblog.printf(debug::dbInfo,"Changing LED count to %d\n\r", Details.rgbLedCount);
+
 	// tell the handler how big it is
+	rgbHandler.Clear();
 	rgbHandler.SetSize(Details.rgbLedCount);
 	rgbHandler.DisplayAndWait(true);
 
@@ -1218,7 +1258,17 @@ void InstallWebServerHandlers()
 
 	wifiInstance.server.on("/button", []() {
 
-		dblog.println(debug::dbImportant, "/button");
+		dblog.println(debug::dbInfo, "/button");
+
+		for (int count = 0; count < wifiInstance.server.args(); count++)
+		{
+			dblog.printf(debug::dbInfo, "%d. %s = %s \n\r", 
+				count+1, 
+				wifiInstance.server.argName(count).c_str(), 
+				wifiInstance.server.arg(count).c_str()
+			);
+		}
+
 
 #ifdef _6SWITCH
 		// these have to be in port/action pairs
@@ -1256,24 +1306,46 @@ void InstallWebServerHandlers()
 			}
 		}
 
-#elif defined( _AT_RGBSTRIP )
-
-		// one trick pony
-		if (wifiInstance.server.hasArg("action"))
-		{
-			bool action = wifiInstance.server.arg("action") == "on" ? true : false;
-			DoRGBSwitch(action, action? _COLOR_PALLETE_BLUE : _COLOR_PALLETE_RED);
-			
-		}
-
-
 #else
+
 		// one trick pony
 		if (wifiInstance.server.hasArg("action"))
 		{
 			bool action = wifiInstance.server.arg("action") == "on" ? true : false;
+
+#if defined( _AT_RGBSTRIP )
+
+			int paletteColour = _COLOR_PALLETE_WHITE;
+
+			if (wifiInstance.server.hasArg("rgb") || wifiInstance.server.hasArg("r") || wifiInstance.server.hasArg("g") || wifiInstance.server.hasArg("b"))
+			{
+				unsigned rgb = 0;
+				if (wifiInstance.server.hasArg("rgb"))
+				{
+					rgb = wifiInstance.server.arg("rgb").toInt();
+				}
+				else
+				{
+					rgb = ((wifiInstance.server.arg("r").toInt()&0xff) << 16) |
+							((wifiInstance.server.arg("g").toInt() & 0xff) << 8) |
+							(wifiInstance.server.arg("b").toInt() & 0xff) ;
+				}
+
+				dblog.printf(debug::dbInfo, "DoRGBSwitch 0x%06x\n\r", rgb);
+
+
+				// squirt that down as user palette
+				DoRGBSwitch(action, rgb);
+			}
+			else
+			{ 
+				DoRGBPaletteSwitch(action, paletteColour);
+			}
+#else
 			DoSwitchAntiBounce(0, action);
+#endif		
 		}
+
 
 #endif
 
@@ -1369,6 +1441,15 @@ void InstallWebServerHandlers()
 		long bounceToggle = root["bouncemsToggle"];
 		long reset = root["resetms"];
 		int debugLevel = root["debugLevel"];
+
+#ifdef _AT_RGBSTRIP
+		Details.rgbLedCount=root["ledCount"];
+		dblog.printf(debug::dbImportant, "Changing LED count to %d\n\r", Details.rgbLedCount);
+		rgbHandler.Clear();
+		rgbHandler.SetSize(Details.rgbLedCount);
+		rgbHandler.DisplayAndWait(true);
+#endif
+
 
 		// sanity check these values!
 
@@ -1593,6 +1674,11 @@ void InstallWebServerHandlers()
 		root["bouncemsToggle"] = Details.debounceThresholdmsToggle;
 		root["resetms"] = Details.resetWindowms;
 		root["debugLevel"] = (int)dblog.m_currentLevel;
+
+#ifdef _AT_RGBSTRIP
+		root["ledCount"] = Details.rgbLedCount;
+#endif
+
 
 		String jsonText;
 		root.prettyPrintTo(jsonText);

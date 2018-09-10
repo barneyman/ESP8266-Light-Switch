@@ -14,8 +14,8 @@
 
             <hr />
 
-            <button id="on" onclick="All('on')">All On</button>
-            <button id="off" onclick="All('off')">All Off</button>
+            <button id="allon" onclick="All('on')" hidden>All On</button>
+            <button id="alloff" onclick="All('off')" hidden>All Off</button>
             <button id="refresh" onclick="PopulateList(true)">Refresh</button>
 
         </div>
@@ -76,11 +76,18 @@
                                 tdName.innerText = switchName;
 
                                 table.appendChild(tr)
-
-
-
                             }
                         }
+
+                        // if there's more than one, unhide on/off all
+                        // the header row counts as 1 
+                        if (table.rows.length > 2)
+                        {
+                            document.getElementById('allon').hidden=false
+                            document.getElementById('alloff').hidden = false
+                        }
+
+
 
                         document.getElementById('loading').hidden = true;
                         document.getElementById('found').hidden = false;

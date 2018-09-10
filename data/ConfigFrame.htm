@@ -10,7 +10,8 @@
         <div id="found" hidden>
 
             <h2>Configuration</h2>
-            <table>
+            <table id'"switch">
+			<tr><th colmerge="3">General Timings</th></tr>
                 <tr>
                     <td>
                         Rebounce Guard - Momentary Switch
@@ -32,8 +33,6 @@
                     <td>
                         How long to guard against 'dirty' physical switch rebounces
                     </td>
-
-
                 </tr>
                 <tr>
                     <td>
@@ -46,6 +45,24 @@
                         The window in which N repeated on/off switch changes force the device to reset itself
                     </td>
                 </tr>
+			</table>
+			<table id="led" hidden>	
+			<tr><th colmerge="3">LED string</th></tr>
+				<tr>
+                    <td>
+                        Number of LEDs 
+                    </td>
+                    <td>
+                        <input name="led" size="15" type="number" id="ledCount" disabled />
+                    </td>
+                    <td>
+                        How many LEDs are in the strip
+                    </td>
+
+				</tr>
+			</table>
+			<table id="debug">
+			<tr><th colmerge="3">Debug</th></tr>
                 <tr>
                     <td>Logging Level</td>
                     <td>
@@ -99,6 +116,13 @@
 
                             document.getElementById('loading').hidden = true;
                             document.getElementById('found').hidden = false;
+
+                            // if we saw rgbledcount, turn the div on
+                            if ("ledCount" in data)
+                            {
+                                document.getElementById('led').hidden = false;
+                            }
+
 
                         }
 
