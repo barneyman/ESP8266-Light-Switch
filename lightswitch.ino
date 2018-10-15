@@ -4,11 +4,15 @@
 // define one of the following ... 
 // nothing defined == 6 switch nodemcu
 //#define _SONOFF_BASIC					// the basic normal sonoff
-//#define _SONOFF_BASIC_EXTRA_SWITCH	// one with the extra GPIO pin wired as a switch
+//#define _SONOFF_BASIC_EXTRA_SWITCH		// one with the extra GPIO pin wired as a switch
 //#define _WEMOS_RELAY_SHIELD			// simple d1 with a relay shield on it
 #define _AT_RGBSTRIP					// a strip of RGBs
 //#define _6SWITCH						// my nodemcu with a 6 relay board attached
 
+#ifdef _AT_RGBSTRIP
+	#define _TMP_SENSOR_DATA_PIN		D7
+#endif
+//#define _TMP_SENSOR_PWR_PIN		2
 
 
 // turn these OFF for the 6 switch one
@@ -80,7 +84,11 @@
 
 #elif defined(_AT_RGBSTRIP)
 
+#ifdef _DEBUG
 #define _NUM_LEDS	15
+#else
+#define _NUM_LEDS	135
+#endif
 	
 #define GPIO_LED		LED_BUILTIN
 // whatever you want it to be!
@@ -88,9 +96,6 @@
 
 
 #endif
-
-
-
 
 
 
@@ -120,7 +125,7 @@
 #endif
 
 
-#define _MYVERSION			_VERSION_ROOT "2.53"
+#define _MYVERSION			_VERSION_ROOT "2.54"
 
 #define _HTML_VER_FILE	"/html.json"
 unsigned _MYVERSION_HTML = 0;
@@ -152,7 +157,7 @@ StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 
 
 // for syslog
-#if defined(_SONOFF_BASIC) || defined(_WEMOS_RELAY_SHIELD) || defined(_SONOFF_BASIC_EXTRA_SWITCH)
+#if defined(_SONOFF_BASIC) || defined(_WEMOS_RELAY_SHIELD) || defined(_SONOFF_BASIC_EXTRA_SWITCH) || defined(_AT_RGBSTRIP)
 syslogDebug dblog(debug::dbWarning, "192.168.51.1", 514, "temp", "lights");
 #endif
 
@@ -167,7 +172,7 @@ myWifiClass wifiInstance("wemos_", &dblog, mdsnNAME);
 SerialDebug dblog(debug::dbWarning);
 myWifiClass wifiInstance("6switch_", &dblog, mdsnNAME);
 #elif defined(_AT_RGBSTRIP)
-SerialDebug dblog(debug::dbVerbose);
+//SerialDebug dblog(debug::dbWarning);
 myWifiClass wifiInstance("rgb_", &dblog, mdsnNAME);
 
 // pull in the AT handler
@@ -175,9 +180,19 @@ myWifiClass wifiInstance("rgb_", &dblog, mdsnNAME);
 #define _AT85_ADDR	0x10
 ATleds rgbHandler(_AT85_ADDR,&dblog);
 
+
 #endif
 
 
+#ifdef _TMP_SENSOR_DATA_PIN
+#include <onewire.h>
+#include <DallasTemperature.h>
+
+OneWire oneWire(_TMP_SENSOR_DATA_PIN);
+// Pass our oneWire reference to Dallas Temperature. 
+DallasTemperature ds18b20(&oneWire);
+
+#endif
 
 
 
@@ -230,11 +245,16 @@ struct
 	// 6 switches in this time force an AP reset
 	unsigned long resetWindowms;
 
+	// persisted - *USER* supplied
+	String friendlyName;
+
+
 	// the switches are named
 	struct {
 
-		// persisted
+		// persisted - RO
 		String name;
+
 		unsigned relay;
 		enum switchState lastState;
 
@@ -283,6 +303,16 @@ struct
 
 	QUICK_SWITCH_TIMEOUT_DEFAULT,
 
+#ifdef _AT_RGBSTRIP
+	"Undefined RGB",
+#elif defined( _SONOFF_BASIC )
+	"Undefined SonoffS",
+#elif defined( _SONOFF_BASIC_EXTRA_SWITCH )
+	"Undefined SonoffE",
+#else
+	"Undefined",
+#endif
+
 #if defined(_SONOFF_BASIC) || defined(_SONOFF_BASIC_EXTRA_SWITCH)
 	{
 #ifdef _SONOFF_BASIC_EXTRA_SWITCH
@@ -294,7 +324,7 @@ struct
 #elif defined( _AT_RGBSTRIP )
 
 {
-	{ "RGB",0, swUnknown, swOff, stVirtual, 0,0, 0xffffff }
+	{ "RGB",0, swUnknown, swOff, stVirtual, 0,0, 0x7f7f7f }
 }
 
 #elif defined( _PHYSICAL_SWITCH_EXISTS )
@@ -797,6 +827,7 @@ void WriteJSONconfig()
 	root["debounceThresholdmsToggle"] = Details.debounceThresholdmsToggle;
 
 	root["resetWindowms"] = Details.resetWindowms;
+	root["friendlyName"] = Details.friendlyName;
 
 	wifiInstance.WriteDetailsToJSON(root, Details.wifi);
 
@@ -909,6 +940,12 @@ void ReadJSONconfig()
 	Details.debounceThresholdmsMomentary= root["debounceThresholdmsMomentary"];
 	Details.debounceThresholdmsToggle=root["debounceThresholdmsToggle"];
 	Details.resetWindowms= root["resetWindowms"];
+	if (root.containsKey("friendlyName"))
+	{
+		String interim = root["friendlyName"].asString();
+		if (interim.length())
+			Details.friendlyName = interim;
+	}
 
 	wifiInstance.ReadDetailsFromJSON(root, Details.wifi);
 
@@ -991,7 +1028,7 @@ void ResetMe()
 void setup(void) 
 {
 	// tell the debugger its name
-#if defined(_SONOFF_BASIC) || defined(_WEMOS_RELAY_SHIELD) || defined(_SONOFF_BASIC_EXTRA_SWITCH)
+#if defined(_SONOFF_BASIC) || defined(_WEMOS_RELAY_SHIELD) || defined(_SONOFF_BASIC_EXTRA_SWITCH) || defined(_AT_RGBSTRIP)
 	dblog.SetHostname(wifiInstance.m_hostName.c_str());
 #else
 	dblog.begin(9600);
@@ -1044,6 +1081,20 @@ void setup(void)
 	rgbHandler.begin();
 
 #endif
+
+#ifdef _TMP_SENSOR_DATA_PIN
+	dblog.printf(debug::dbVerbose, "Starting DS18B Thermometer ... ");
+	ds18b20.begin();
+	if (!ds18b20.getDS18Count())
+	{
+		dblog.println(debug::dbError, "Did not find ANY");
+	}
+	else
+	{
+		dblog.printf(debug::dbVerbose, "found %d\n\r");
+	}
+#endif
+
 
 #ifdef _PHYSICAL_SWITCH_EXISTS
 
@@ -1105,7 +1156,7 @@ void FindPeers()
 {
 	dblog.printf(debug::dbInfo, "Looking for '%s' siblings ...\n\r", mdsnNAME);
 	// get a list of what's out there
-	
+	services.clear();
 	if (wifiInstance.QueryServices(mdsnNAME, services))
 	{
 		dblog.printf(debug::dbInfo, "Found %d brethren!!\n\r", (int)services.size());
@@ -1113,7 +1164,7 @@ void FindPeers()
 		{
 			dblog.printf(debug::dbInfo, "\t%s.local @ %s\n\r", iterator->hostName.c_str(), iterator->IP.toString().c_str());
 		}
-		//services.clear();
+		
 	}
 	else
 	{
@@ -1450,27 +1501,45 @@ void InstallWebServerHandlers()
 		// 'plain' is the secret source to get to the body
 		JsonObject& root = jsonBuffer.parseObject(wifiInstance.server.arg("plain"));
 
-		long bounceMomentary = root["bouncemsMomentary"];
-		long bounceToggle = root["bouncemsToggle"];
-		long reset = root["resetms"];
-		int debugLevel = root["debugLevel"];
+		if (root.containsKey("bouncemsMomentary"))
+		{
+			Details.debounceThresholdmsMomentary = root["bouncemsMomentary"];
+		}
+		if (root.containsKey("bouncemsToggle"))
+		{
+			Details.debounceThresholdmsToggle = root["bouncemsToggle"];
+		}
+		if (root.containsKey("resetms"))
+		{
+			Details.resetWindowms = root["resetms"];
+		}
+		if (root.containsKey("debugLevel"))
+		{
+			int debugLevel = root["debugLevel"];
+			dblog.printf(debug::dbAlways, "Debug logging changed to %d (was %d)\n\r", dblog.m_currentLevel, (int)debugLevel);
+			dblog.m_currentLevel = (debug::dbLevel) debugLevel;
+		}
+		if (root.containsKey("friendlyName"))
+		{
+			Details.friendlyName = root["friendlyName"].asString();
+		}
+
 
 #ifdef _AT_RGBSTRIP
-		Details.rgbLedCount=root["ledCount"];
-		dblog.printf(debug::dbImportant, "Changing LED count to %d\n\r", Details.rgbLedCount);
-		rgbHandler.Clear();
-		rgbHandler.SetSize(Details.rgbLedCount);
-		rgbHandler.DisplayAndWait(true);
+
+		if (root.containsKey("ledCount"))
+		{
+			Details.rgbLedCount = root["ledCount"];
+			dblog.printf(debug::dbImportant, "Changing LED count to %d\n\r", Details.rgbLedCount);
+			rgbHandler.Clear();
+			rgbHandler.SetSize(Details.rgbLedCount);
+			rgbHandler.DisplayAndWait(true);
+		}
+
 #endif
 
 
-		// sanity check these values!
-
-		Details.debounceThresholdmsToggle = bounceToggle;
-		Details.debounceThresholdmsMomentary = bounceMomentary;
-		Details.resetWindowms = reset;
-		dblog.printf(debug::dbAlways, "Debug logging changed to %d (was %d)\n\r", debugLevel,(int)dblog.m_currentLevel);
-		dblog.m_currentLevel=(debug::dbLevel)debugLevel;
+		
 
 		// extract the details
 		WriteJSONconfig();
@@ -1582,7 +1651,24 @@ void InstallWebServerHandlers()
 		JsonObject &root = jsonBuffer.createObject();
 
 		root["name"] = wifiInstance.m_hostName.c_str();
+		root["friendlyName"] = Details.friendlyName;
+		root["ip"] = wifiInstance.localIP().toString();
 		root["switchCount"] = NUM_SOCKETS;
+
+#ifdef _TMP_SENSOR_DATA_PIN
+		if (ds18b20.getDS18Count())
+		{
+			ds18b20.requestTemperatures();
+			float temp= ds18b20.getTempCByIndex(0);
+			// sanity
+			if (temp > -10.0 && temp < 100.0)
+			{
+				root["temperature"] = temp;
+			}
+		}
+		
+#endif
+
 
 		JsonArray &switchState = root.createNestedArray("switchState");
 		for (unsigned each = 0; each < NUM_SOCKETS; each++)
@@ -1691,6 +1777,7 @@ void InstallWebServerHandlers()
 		root["bouncemsMomentary"] = Details.debounceThresholdmsMomentary;
 		root["bouncemsToggle"] = Details.debounceThresholdmsToggle;
 		root["resetms"] = Details.resetWindowms;
+		root["friendlyName"] = Details.friendlyName;
 		root["debugLevel"] = (int)dblog.m_currentLevel;
 
 #ifdef _AT_RGBSTRIP
@@ -2080,7 +2167,8 @@ unsigned long lastTested = 0;
 #define _TEST_WIFI_MILLIS	(15*60*1000)
 #endif
 
-#define _FETCH_PEERS_TIMEOUT_MS	(15*60*1000)
+#define _FETCH_PEERS_TIMEOUT_MS	(15*60*1000)	// 15 mins
+//#define _FETCH_PEERS_TIMEOUT_MS	(1*60*1000)	// 1 min
 unsigned long lastCheckedForPeers = 0;
 
 void loop(void) 
@@ -2106,7 +2194,7 @@ void loop(void)
 
 	if (!lastCheckedForPeers || ((now - lastCheckedForPeers) > _FETCH_PEERS_TIMEOUT_MS))
 	{
-		//FindPeers();
+		FindPeers();
 		lastCheckedForPeers = now;
 	}
 

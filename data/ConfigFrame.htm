@@ -46,6 +46,16 @@
                     </td>
                 </tr>
 			</table>
+            <table>
+                <tr><th colmerge="3">Host</th></tr>
+                <tr>
+                    <td>Friendly Name</td>
+                    <td>
+                        <input name="reset" size="15" type="text" id="friendlyName" disabled />
+                    </td>
+                </tr>
+
+            </table>
 			<table id="led" hidden>	
 			<tr><th colmerge="3">LED string</th></tr>
 				<tr>
@@ -58,7 +68,6 @@
                     <td>
                         How many LEDs are in the strip
                     </td>
-
 				</tr>
 			</table>
 			<table id="debug">
@@ -112,6 +121,10 @@
                                         document.getElementById(eachNode).innerText = data[eachNode];
                                     }
                                 }
+                                else
+                                {
+                                    console.log("could not find id ", eachNode)
+                                }
                             }
 
                             document.getElementById('loading').hidden = true;
@@ -146,9 +159,9 @@
                 var inputValid = true;
                 for (index = 0; index < inputs.length; ++index) {
                     if (inputs[index].id != '') {
-
-                        if (inputs[index].value == '')
-                            inputValid = false;
+                        if (!inputs[index].disabled)
+                            if (inputs[index].value == '')
+                                inputValid = false;
 
                         jsonData[inputs[index].id] = inputs[index].value;
                     }

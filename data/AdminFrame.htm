@@ -5,8 +5,8 @@
     <link rel="stylesheet" type="text/css" href="switch.css">
 </HEAD>
 <BODY onload="OnLoad()">
-
-    <table>
+    <span id="otaUpdating" hidden></span>
+    <table id="otaDetails">
         <tr>
             <th>Host</th>
             <td><input type="text" id="host" value="192.168.51.1"></td>
@@ -27,7 +27,7 @@
         <div id="htmlUpdate" hidden>
             <table>
                 <tr>
-                    <th>Peers</th>
+                    <th>Peers to Push to</th>
                     <td><select id="peers" /></td>
                     <td><button onclick="OTA_HTMLupdate()">Update HTML</button></td>
                 </tr>
@@ -37,7 +37,7 @@
     <button onclick="fetchPeersWithHTML()" id="rescanPeers" hidden>Rescan for HTML Updates</button>
     <hr />
 
-    <button onclick="ResetWIFI()">vanilla reset</button>
+    <button onclick="ResetWIFI()">WiFi Reset</button>
 
     <script src="common.js"></script>
 
@@ -67,6 +67,12 @@
 
                         for (var eachNode in peerArray)
                         {
+                            // we should find out if it's html version beats ours
+                            // todo
+
+
+
+
                             var opt = document.createElement("option")
                             opt.setAttribute("value", peerArray[eachNode]["host"])
                             opt.innerText = peerArray[eachNode]["host"];
@@ -95,8 +101,22 @@
 
         }
 
+
+        function OTA_HTMLupdate() {
+            // get the server we are going to push to - actually, we tell it, 'ME' and it pulls
+
+
+
+        }
+
+
         function OTAupdate() {
 
+            // clear
+            // otaDetails
+            document.getElementById('otaDetails').hidden = true;
+            document.getElementById('otaUpdating').hidden = false;
+            document.getElementById('otaUpdating').innerText="Trying update ..."
 
             var jsonData = {};
 
