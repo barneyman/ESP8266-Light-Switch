@@ -6,10 +6,11 @@
 //#define _SONOFF_BASIC					// the basic normal sonoff
 //#define _SONOFF_BASIC_EXTRA_SWITCH		// one with the extra GPIO pin wired as a switch
 //#define _WEMOS_RELAY_SHIELD			// simple d1 with a relay shield on it
-#define _AT_RGBSTRIP					// a strip of RGBs
+//#define _AT_RGBSTRIP					// a strip of RGBs
+#define _THERMOMETER					// simple thermo
 //#define _6SWITCH						// my nodemcu with a 6 relay board attached
 
-#ifdef _AT_RGBSTRIP
+#ifdef _THERMOMETER
 	#define _TMP_SENSOR_DATA_PIN		D7
 #endif
 //#define _TMP_SENSOR_PWR_PIN		2
@@ -27,7 +28,7 @@
 
 
 
-#if !defined(_SONOFF_BASIC) && !defined(_SONOFF_BASIC_EXTRA_SWITCH) && !defined(_WEMOS_RELAY_SHIELD) && !defined(_AT_RGBSTRIP) && !defined(_6SWITCH)
+#if !defined(_SONOFF_BASIC) && !defined(_SONOFF_BASIC_EXTRA_SWITCH) && !defined(_WEMOS_RELAY_SHIELD) && !defined(_AT_RGBSTRIP) && !defined(_6SWITCH) && !defined(_THERMOMETER)
 #error "Something MUST be defined!"
 #endif
 
@@ -44,6 +45,11 @@
 
 #define _OTA_AVAILABLE
 #define NUM_SOCKETS	1
+
+#elif defined(_THERMOMETER)
+
+#define _OTA_AVAILABLE
+//#define NUM_SOCKETS	0
 
 
 #elif defined(_6SWITCH)
@@ -120,6 +126,8 @@
 #define _VERSION_ROOT	"lightW_"
 #elif defined(_AT_RGBSTRIP)
 #define _VERSION_ROOT	"lightRGB_"
+#elif defined(_THERMOMETER)
+#define _VERSION_ROOT	"therm_"
 #else
 #define _VERSION_ROOT	"light6_"
 #endif
@@ -157,7 +165,7 @@ StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 
 
 // for syslog
-#if defined(_SONOFF_BASIC) || defined(_WEMOS_RELAY_SHIELD) || defined(_SONOFF_BASIC_EXTRA_SWITCH) || defined(_AT_RGBSTRIP)
+#if defined(_SONOFF_BASIC) || defined(_WEMOS_RELAY_SHIELD) || defined(_SONOFF_BASIC_EXTRA_SWITCH) //|| defined(_AT_RGBSTRIP) 
 syslogDebug dblog(debug::dbWarning, "192.168.51.1", 514, "temp", "lights");
 #endif
 
@@ -172,7 +180,7 @@ myWifiClass wifiInstance("wemos_", &dblog, mdsnNAME);
 SerialDebug dblog(debug::dbWarning);
 myWifiClass wifiInstance("6switch_", &dblog, mdsnNAME);
 #elif defined(_AT_RGBSTRIP)
-//SerialDebug dblog(debug::dbWarning);
+SerialDebug dblog(debug::dbVerbose);
 myWifiClass wifiInstance("rgb_", &dblog, mdsnNAME);
 
 // pull in the AT handler
@@ -180,6 +188,9 @@ myWifiClass wifiInstance("rgb_", &dblog, mdsnNAME);
 #define _AT85_ADDR	0x10
 ATleds rgbHandler(_AT85_ADDR,&dblog);
 
+#elif defined(_THERMOMETER)
+SerialDebug dblog(debug::dbVerbose);
+myWifiClass wifiInstance("thrm_", &dblog, mdsnNAME);
 
 #endif
 
@@ -248,7 +259,7 @@ struct
 	// persisted - *USER* supplied
 	String friendlyName;
 
-
+#ifdef NUM_SOCKETS
 	// the switches are named
 	struct {
 
@@ -284,6 +295,7 @@ struct
 
 
 	} switches[NUM_SOCKETS];
+#endif
 
 } Details = {
 
@@ -393,6 +405,8 @@ mcp23017AndRelay mcp(4, 5, resetMCPpin, powerRelayBoardNPN);
 
 #ifndef _PHYSICAL_SWITCH_EXISTS
 
+#ifdef NUM_SOCKETS
+
 unsigned MapSwitchToRelay(unsigned switchNumber)
 {
 	unsigned relayNumber = switchNumber;
@@ -411,6 +425,8 @@ unsigned MapSwitchToRelay(unsigned switchNumber)
 	return relayNumber;
 
 }
+
+#endif
 
 #endif
 
@@ -549,6 +565,8 @@ void DoRGBPaletteSwitch(bool on, unsigned rgbPalette)
 
 #endif
 
+#ifdef NUM_SOCKETS
+
 void DoSwitchAntiBounce(int port, bool on)
 {
 	int causeAndState =
@@ -560,6 +578,7 @@ void DoSwitchAntiBounce(int port, bool on)
 #endif
 		HandleCauseAndState(causeAndState);
 }
+
 
 void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState)
 {
@@ -629,6 +648,8 @@ void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState)
 	}
 }
 
+#endif
+
 // honour current switch state
 void RevertAllSwitch()
 {
@@ -685,9 +706,11 @@ void RevertAllSwitch()
 #endif
 }
 
+
 // override switch state
 void DoAllSwitch(bool state, bool force)
 {
+#ifdef NUM_SOCKETS
 	dblog.printf(debug::dbInfo, "DoAllSwitch: %s %s\r\n", state ? "ON" : "off", force ? "FORCE" : "");
 
 #ifdef _PHYSICAL_SWITCH_EXISTS
@@ -700,7 +723,11 @@ void DoAllSwitch(bool state, bool force)
 		DoSwitch((Switch), state, force);
 	}
 #endif
+#endif
 }
+
+
+#ifdef NUM_SOCKETS
 
 // if forceSwitchToReflect change polarity of input switch if necessary to reflect this request
 void DoSwitch(unsigned portNumber, bool on, bool forceSwitchToReflect)
@@ -756,6 +783,9 @@ void DoSwitch(unsigned portNumber, bool on, bool forceSwitchToReflect)
 	Details.ignoreISRrequests = false;
 
 }
+
+#endif
+
 
 #ifdef _6SWITCH
 
@@ -831,7 +861,11 @@ void WriteJSONconfig()
 
 	wifiInstance.WriteDetailsToJSON(root, Details.wifi);
 
+#ifdef NUM_SOCKETS
+
 	AddMapToJSON(root, NUM_SOCKETS);
+
+#endif
 
 	dblog.printf(debug::dbVerbose, "jsonBuffer.size used : %d\n\r", jsonBuffer.size());
 
@@ -942,12 +976,16 @@ void ReadJSONconfig()
 	Details.resetWindowms= root["resetWindowms"];
 	if (root.containsKey("friendlyName"))
 	{
-		String interim = root["friendlyName"].asString();
+		//String interim = root["friendlyName"].asString();
+		String interim = root["friendlyName"].as<char*>();
+		
 		if (interim.length())
 			Details.friendlyName = interim;
 	}
 
 	wifiInstance.ReadDetailsFromJSON(root, Details.wifi);
+
+#ifdef NUM_SOCKETS
 
 	// add the switch map
 	JsonArray &switchMap = root["switchMap"];
@@ -973,6 +1011,7 @@ void ReadJSONconfig()
 			}
 		}
 	}
+#endif
 
 }
 
@@ -1028,11 +1067,13 @@ void ResetMe()
 void setup(void) 
 {
 	// tell the debugger its name
-#if defined(_SONOFF_BASIC) || defined(_WEMOS_RELAY_SHIELD) || defined(_SONOFF_BASIC_EXTRA_SWITCH) || defined(_AT_RGBSTRIP)
+#if defined(_SONOFF_BASIC) || defined(_WEMOS_RELAY_SHIELD) || defined(_SONOFF_BASIC_EXTRA_SWITCH) //|| defined(_AT_RGBSTRIP) || defined(_THERMOMETER)
 	dblog.SetHostname(wifiInstance.m_hostName.c_str());
 #else
 	dblog.begin(9600);
 #endif
+
+#ifdef NUM_SOCKETS
 
 	// reset the bounce thresh-holds
 	for (int eachSwitch = 0; eachSwitch < NUM_SOCKETS; eachSwitch++)
@@ -1046,7 +1087,10 @@ void setup(void)
 		Details.switches[eachSwitch].last_seen_bounce = 0;
 	}
 
-	dblog.printf(debug::dbImportant, "Running %s\n\r", _MYVERSION);
+#endif
+
+	dblog.printf(debug::dbImportant, "\r\n\n\nRunning %s\n\r", _MYVERSION);
+	dblog.printf(debug::dbImportant, "Hostname %s\n\r", wifiInstance.hostname().c_str());
 
 
 	SPIFFS.begin();
@@ -1087,7 +1131,7 @@ void setup(void)
 	ds18b20.begin();
 	if (!ds18b20.getDS18Count())
 	{
-		dblog.println(debug::dbError, "Did not find ANY");
+		dblog.println(debug::dbError, "Did not find ANY thermometers");
 	}
 	else
 	{
@@ -1251,7 +1295,8 @@ void InstallWebServerHandlers()
 
 		delay(_WEB_TAR_PIT_DELAY);
 
-		enum HTTPUpdateResult result = ESPhttpUpdate.update(host, port, url, _MYVERSION);
+		//enum HTTPUpdateResult result = ESPhttpUpdate.update(host, port, url, _MYVERSION);
+		enum HTTPUpdateResult result = ESPhttpUpdate.update(wifiInstance.m_wificlient, host, port, url, _MYVERSION);
 
 		switch (result)
 		{
@@ -1376,9 +1421,9 @@ void InstallWebServerHandlers()
 		// one trick pony
 		if (wifiInstance.server.hasArg("action"))
 		{
-			bool action = wifiInstance.server.arg("action") == "on" ? true : false;
 
 #if defined( _AT_RGBSTRIP )
+			bool action = wifiInstance.server.arg("action") == "on" ? true : false;
 
 			if (wifiInstance.server.hasArg("rgb") || wifiInstance.server.hasArg("r") || wifiInstance.server.hasArg("g") || wifiInstance.server.hasArg("b"))
 			{
@@ -1405,7 +1450,8 @@ void InstallWebServerHandlers()
 				// what it last was
 				DoRGBSwitch(action, Details.switches[0].lastRGB);
 			}
-#else
+#elif defined(NUM_SOCKETS)
+			bool action = wifiInstance.server.arg("action") == "on" ? true : false;
 			DoSwitchAntiBounce(0, action);
 #endif		
 		}
@@ -1426,10 +1472,12 @@ void InstallWebServerHandlers()
 
 		delay(_WEB_TAR_PIT_DELAY);
 
+#ifdef NUM_SOCKETS
 		for (int eachSwitch = 0; eachSwitch < NUM_SOCKETS; eachSwitch++)
 		{
 			Details.switches[eachSwitch].switchCount = 0;
 		}
+#endif
 
 		wifiInstance.server.send(200,"text/html","<html/>");
 
@@ -1521,7 +1569,7 @@ void InstallWebServerHandlers()
 		}
 		if (root.containsKey("friendlyName"))
 		{
-			Details.friendlyName = root["friendlyName"].asString();
+			Details.friendlyName = root["friendlyName"].as<char*>();
 		}
 
 
@@ -1615,7 +1663,9 @@ void InstallWebServerHandlers()
 		JsonObject &root = jsonBuffer.createObject();
 
 		root["name"] = wifiInstance.m_hostName.c_str();
+#ifdef NUM_SOCKETS
 		root["switchCount"] = NUM_SOCKETS;
+#endif
 		root["pageCount"] = servedFiles.size();
 		root["version"] = _MYVERSION;
 		root["versionHTML"] = _MYVERSION_HTML;
@@ -1653,8 +1703,10 @@ void InstallWebServerHandlers()
 		root["name"] = wifiInstance.m_hostName.c_str();
 		root["friendlyName"] = Details.friendlyName;
 		root["ip"] = wifiInstance.localIP().toString();
+#ifdef NUM_SOCKETS
 		root["switchCount"] = NUM_SOCKETS;
-
+#endif
+		
 #ifdef _TMP_SENSOR_DATA_PIN
 		if (ds18b20.getDS18Count())
 		{
@@ -1666,10 +1718,15 @@ void InstallWebServerHandlers()
 				root["temperature"] = temp;
 			}
 		}
+		else
+		{
+			root["Error"] = "NO Thermometers detected";
+			dblog.println(debug::dbError, "No thermometers detected when expected");
+		}
 		
 #endif
 
-
+#ifdef NUM_SOCKETS
 		JsonArray &switchState = root.createNestedArray("switchState");
 		for (unsigned each = 0; each < NUM_SOCKETS; each++)
 		{
@@ -1707,6 +1764,7 @@ void InstallWebServerHandlers()
 
 			switchRelay["stateChanges"] = Details.switches[each].switchCount;
 		}
+#endif
 
 		String jsonText;
 		root.prettyPrintTo(jsonText);
@@ -1716,6 +1774,8 @@ void InstallWebServerHandlers()
 		wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
 		wifiInstance.server.send(200, "application/json", jsonText);
 	});
+
+#ifdef NUM_SOCKETS
 
 	wifiInstance.server.on("/json/maxSwitchCount", HTTP_GET, []() {
 		// give them back the port / switch map
@@ -1759,7 +1819,7 @@ void InstallWebServerHandlers()
 		wifiInstance.server.send(200, "application/json", jsonText);
 	});
 
-
+#endif
 
 	wifiInstance.server.on("/json/config", HTTP_GET, []() {
 		// give them back the port / switch map
@@ -1839,7 +1899,7 @@ void InstallWebServerHandlers()
 			url += services[each].hostName + "/json/config";
 			HTTPClient http;
 			dblog.printf(debug::dbVerbose, "querying %s for htmlver\n\r", url.c_str());
-			if (!http.begin(url))
+			if (!http.begin(wifiInstance.m_wificlient,url))
 			{
 				dblog.println(debug::dbError, "Failed begin");
 				continue;
@@ -1969,7 +2029,7 @@ void FetchNewPages(String src)
 	dblog.printf(debug::dbVerbose, "About to query %s\n\r", url.c_str());
 	// query for the pages available
 	HTTPClient http;
-	if (!http.begin(url))
+	if (!http.begin(wifiInstance.m_wificlient, url))
 	{
 		dblog.println(debug::dbError, "Failed in http.begin()");
 	}
@@ -2022,7 +2082,7 @@ void FetchNewPages(String src)
 		url += src;
 		url += fileToFetch;
 
-		if (!http.begin(url))
+		if (!http.begin(wifiInstance.m_wificlient, url))
 		{
 			dblog.println(debug::dbError, "\n\rFailed in http.begin()");
 			return;
@@ -2134,6 +2194,7 @@ void SendServerPage()
 
 }
 
+#ifdef NUM_SOCKETS
 
 void AddMapToJSON(JsonObject &root, unsigned numSockets)
 {
@@ -2160,7 +2221,7 @@ void AddMapToJSON(JsonObject &root, unsigned numSockets)
 
 }
 
-
+#endif
 
 #ifdef _TEST_WFI_STATE
 unsigned long lastTested = 0;

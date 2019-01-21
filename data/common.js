@@ -1,6 +1,6 @@
 // when testing these web pages from the PC ...
 // chrome --disable-web-security --user-data-dir="[some directory here]"
-//let base = "http://192.168.81.117"
+//let base = "http://192.168.82.135"
 let base = "."
 
 
