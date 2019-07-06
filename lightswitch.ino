@@ -12,6 +12,7 @@
 
 #ifdef _THERMOMETER
 	#define _TMP_SENSOR_DATA_PIN		D7
+	#define _SENSOR_TYPE	THERMOMETER
 #endif
 //#define _TMP_SENSOR_PWR_PIN		2
 
@@ -169,7 +170,12 @@ StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 syslogDebug dblog(debug::dbWarning, "192.168.51.1", 514, "temp", "lights");
 #endif
 
+
+#ifdef _SENSOR_TYPE
+#define mdsnNAME	"bjfSensors"
+#else
 #define mdsnNAME	"bjfLights"
+#endif
 
 #if defined(_SONOFF_BASIC) || defined(_SONOFF_BASIC_EXTRA_SWITCH)
 myWifiClass wifiInstance("sonoff_", &dblog, mdsnNAME);
@@ -1090,7 +1096,7 @@ void setup(void)
 #endif
 
 	dblog.printf(debug::dbImportant, "\r\n\n\nRunning %s\n\r", _MYVERSION);
-	dblog.printf(debug::dbImportant, "Hostname %s\n\r", wifiInstance.hostname().c_str());
+	dblog.printf(debug::dbImportant, "Hostname %s\n\r", wifiInstance.m_hostName.c_str());
 
 
 	SPIFFS.begin();
