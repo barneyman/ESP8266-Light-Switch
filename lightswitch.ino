@@ -1301,8 +1301,8 @@ void InstallWebServerHandlers()
 
 		delay(_WEB_TAR_PIT_DELAY);
 
-		//enum HTTPUpdateResult result = ESPhttpUpdate.update(host, port, url, _MYVERSION);
-		enum HTTPUpdateResult result = ESPhttpUpdate.update(wifiInstance.m_wificlient, host, port, url, _MYVERSION);
+		enum HTTPUpdateResult result = ESPhttpUpdate.update(host, port, url, _MYVERSION);
+		//enum HTTPUpdateResult result = ESPhttpUpdate.update(wifiInstance.m_wificlient, host, port, url, _MYVERSION);
 
 		switch (result)
 		{
@@ -1709,6 +1709,7 @@ void InstallWebServerHandlers()
 		root["name"] = wifiInstance.m_hostName.c_str();
 		root["friendlyName"] = Details.friendlyName;
 		root["ip"] = wifiInstance.localIP().toString();
+
 #ifdef NUM_SOCKETS
 		root["switchCount"] = NUM_SOCKETS;
 #endif
@@ -1905,7 +1906,8 @@ void InstallWebServerHandlers()
 			url += services[each].hostName + "/json/config";
 			HTTPClient http;
 			dblog.printf(debug::dbVerbose, "querying %s for htmlver\n\r", url.c_str());
-			if (!http.begin(wifiInstance.m_wificlient,url))
+			//if (!http.begin(wifiInstance.m_wificlient,url))
+			if (!http.begin(url))
 			{
 				dblog.println(debug::dbError, "Failed begin");
 				continue;
@@ -2035,7 +2037,8 @@ void FetchNewPages(String src)
 	dblog.printf(debug::dbVerbose, "About to query %s\n\r", url.c_str());
 	// query for the pages available
 	HTTPClient http;
-	if (!http.begin(wifiInstance.m_wificlient, url))
+	//if (!http.begin(wifiInstance.m_wificlient, url))
+	if (!http.begin(url))
 	{
 		dblog.println(debug::dbError, "Failed in http.begin()");
 	}
@@ -2088,7 +2091,8 @@ void FetchNewPages(String src)
 		url += src;
 		url += fileToFetch;
 
-		if (!http.begin(wifiInstance.m_wificlient, url))
+		//if (!http.begin(wifiInstance.m_wificlient, url))
+		if (!http.begin( url))
 		{
 			dblog.println(debug::dbError, "\n\rFailed in http.begin()");
 			return;
