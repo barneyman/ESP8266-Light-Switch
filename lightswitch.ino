@@ -3,11 +3,11 @@
 
 // define one of the following ... 
 // nothing defined == 6 switch nodemcu
-//#define _SONOFF_BASIC					// the basic normal sonoff
+#define _SONOFF_BASIC					// the basic normal sonoff
 //#define _SONOFF_BASIC_EXTRA_SWITCH		// one with the extra GPIO pin wired as a switch
 //#define _WEMOS_RELAY_SHIELD			// simple d1 with a relay shield on it
 //#define _AT_RGBSTRIP					// a strip of RGBs
-#define _THERMOMETER					// simple thermo
+//#define _THERMOMETER					// simple thermo
 //#define _6SWITCH						// my nodemcu with a 6 relay board attached
 
 #ifdef _THERMOMETER
@@ -75,7 +75,10 @@
 // https://github.com/arendst/Sonoff-Tasmota/wiki/Arduino-IDE
 // Generic ESP8266 (beware, some 8255s out there!)
 // Flashmode DOUT
-// 1M 128k SPIFFS
+// FlashSize 1M 128k SPIFFS
+// Upload Sketch AND Publish Server Files
+// Connect the internal header up to an FTDI
+// With it off, hold the button down and power it up, keep the button down for a second or two
 
 // a number of exceptions in 2.4.0 & LWIP2 - currently only works reliably with 2.3.0 and LWIP1.4
 
@@ -906,11 +909,27 @@ void ReadJSONconfig()
 	// check for legacy!
 	if (SPIFFS.exists(_LEGACY_JSON_CONFIG_FILE))
 	{
-		dblog.println(debug::dbImportant, "Legacy config file found ... renaming");
-		if (!SPIFFS.rename(_LEGACY_JSON_CONFIG_FILE, _JSON_CONFIG_FILE))
+		dblog.println(debug::dbImportant, "Legacy config file found ... ");
+
+		// check for co-existence!
+		if (SPIFFS.exists(_JSON_CONFIG_FILE))
 		{
-			dblog.println(debug::dbError, "Rename failed ... bad");
-			return;
+			dblog.println(debug::dbImportant, "coexist ... deleting legacy");
+			if (!SPIFFS.remove(_LEGACY_JSON_CONFIG_FILE))
+			{
+				dblog.println(debug::dbError, "delete failed ... bad");
+				return;
+			}
+		}
+		else
+		{
+			dblog.println(debug::dbImportant, "migration ... renaming");
+
+			if (!SPIFFS.rename(_LEGACY_JSON_CONFIG_FILE, _JSON_CONFIG_FILE))
+			{
+				dblog.println(debug::dbError, "Rename failed ... bad");
+				return;
+			}
 		}
 
 	}
