@@ -156,8 +156,8 @@ StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 #define _TEST_WFI_STATE	
 #endif
 
-
-
+// forward
+void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState);
 
 
 // first board that worked, although the pins were swapped around on the output
@@ -170,7 +170,11 @@ StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 
 // for syslog
 #if defined(_SONOFF_BASIC) || defined(_WEMOS_RELAY_SHIELD) || defined(_SONOFF_BASIC_EXTRA_SWITCH) //|| defined(_AT_RGBSTRIP) 
+#ifdef _USE_SYSLOG
 syslogDebug dblog(debug::dbWarning, "192.168.51.1", 514, "temp", "lights");
+#else
+SerialDebug dblog(debug::dbVerbose);
+#endif
 #endif
 
 
@@ -193,6 +197,7 @@ SerialDebug dblog(debug::dbVerbose);
 myWifiClass wifiInstance("rgb_", &dblog, mdsnNAME);
 
 // pull in the AT handler
+#include <wire.h>
 #include <atLEDS.h>
 #define _AT85_ADDR	0x10
 ATleds rgbHandler(_AT85_ADDR,&dblog);
@@ -1092,7 +1097,7 @@ void ResetMe()
 void setup(void) 
 {
 	// tell the debugger its name
-#if defined(_SONOFF_BASIC) || defined(_WEMOS_RELAY_SHIELD) || defined(_SONOFF_BASIC_EXTRA_SWITCH) //|| defined(_AT_RGBSTRIP) || defined(_THERMOMETER)
+#if defined(_USE_SYSLOG)
 	dblog.SetHostname(wifiInstance.m_hostName.c_str());
 #else
 	dblog.begin(9600);
@@ -2276,6 +2281,7 @@ void loop(void)
 
 
 	wifiInstance.server.handleClient();
+	wifiInstance.mdns.update();
 
 	dblog.isr_pump();
 
