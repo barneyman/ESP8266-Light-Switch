@@ -71,7 +71,7 @@
 
 #elif defined (_SONOFF_BASIC) || defined (_SONOFF_BASIC_EXTRA_SWITCH)
 
-// IMPORTANT
+// IMPORTANT - for programming SONOFF Basics
 // https://github.com/arendst/Sonoff-Tasmota/wiki/Arduino-IDE
 // Generic ESP8266 (beware, some 8255s out there!)
 // Flashmode DOUT
@@ -167,15 +167,16 @@ void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState);
 // my libs
 #include <myWifi.h>
 
-
+//#define _USE_SYSLOG
 // for syslog
-#if defined(_SONOFF_BASIC) || defined(_WEMOS_RELAY_SHIELD) || defined(_SONOFF_BASIC_EXTRA_SWITCH) //|| defined(_AT_RGBSTRIP) 
 #ifdef _USE_SYSLOG
 syslogDebug dblog(debug::dbWarning, "192.168.51.1", 514, "temp", "lights");
 #else
 SerialDebug dblog(debug::dbVerbose);
 #endif
-#endif
+
+//#define _OLD_WAY
+#ifdef _OLD_WAY
 
 
 #ifdef _SENSOR_TYPE
@@ -208,6 +209,14 @@ myWifiClass wifiInstance("thrm_", &dblog, mdsnNAME);
 
 #endif
 
+#else
+
+#define mdsnNAME	"barneyman"
+myWifiClass wifiInstance("esp_", &dblog, mdsnNAME);
+
+#endif
+
+
 
 #ifdef _TMP_SENSOR_DATA_PIN
 #include <onewire.h>
@@ -220,7 +229,7 @@ DallasTemperature ds18b20(&oneWire);
 #endif
 
 
-
+#ifdef _OLD_WAY
 
 
 // millis timeouts
@@ -243,8 +252,6 @@ bool resetWIFI = false;
 // Momentary push switch
 // Toggle switch
 // Virtual means nothing, just code reflected
-enum	typeOfSwitch { stUndefined, stMomentary, stToggle, stVirtual };
-enum	switchState { swUnknown, swOn, swOff };
 
 struct 
 {
@@ -385,6 +392,250 @@ struct
 };
 
 
+#else
+
+class baseThing
+{
+
+public:
+
+	baseThing(debugBaseClass*dbg):dblog(dbg)
+	{
+
+	}
+
+protected:
+
+	unsigned long GetMillis()
+	{
+		return micros() / 1000;
+	}
+
+	debugBaseClass *dblog;
+};
+
+class baseSensor : public baseThing
+{
+
+};
+
+
+class baseSwitch : public baseThing
+{
+
+public:
+
+	enum typeOfSwitch { stUndefined, stMomentary, stToggle, stVirtual };
+	//enum switchState { swUnknown, swOn, swOff };
+	
+protected:	
+
+	enum typeOfSwitch m_type;
+
+public:
+
+	baseSwitch(unsigned long bounceThreshold, debugBaseClass*dbg):switchCount(0),last_seen_bounce(0),bounce_threshhold(bounceThreshold),
+		baseThing(dbg), m_type(stUndefined),
+		switchName("Default")
+	{
+
+	}
+
+	// TODO rename DoRelay
+	virtual void ICACHE_RAM_ATTR DoSwitch(bool on, bool forceSwitchToReflect=false)
+	{
+		dblog->isr_printf(debug::dbImportant, "DoSwitch: %s %s\r\n", on ? "ON" : "off", forceSwitchToReflect ? "FORCE" : "");		
+	}
+
+	virtual void ICACHE_RAM_ATTR ToggleRelay()
+	{
+		DoSwitch(!GetSwitch());
+	}
+
+	// TODO rename GetRelay
+	virtual bool ICACHE_RAM_ATTR GetSwitch()=0;
+
+	virtual bool ICACHE_RAM_ATTR IsSwitchBounce()
+	{
+		unsigned long now=GetMillis();
+		unsigned long bounceTime=now-last_seen_bounce;
+
+		last_seen_bounce=now;
+
+		if(bounceTime<bounce_threshhold)
+			return true;
+
+		return false;
+	}
+
+	void ResetTransitionCount()
+	{
+		switchCount=0;	
+	}
+
+	unsigned long GetTransitionCount()
+	{
+		return switchCount;
+	}
+
+	enum typeOfSwitch GetSwitchType()
+	{
+		return m_type;
+	}
+
+	String GetSwitchName()
+	{
+		return switchName;
+	}
+
+protected:
+
+	unsigned long switchCount;	// TODO rename to switchTransitionCount
+	unsigned long last_seen_bounce, bounce_threshhold;
+	String switchName;
+
+};
+
+#define _DEBOUNCE_WINDOW_MOMENTARY	300
+#define _DEBOUNCE_WINDOW_TOGGLE		100
+
+class momentarySwitch : public baseSwitch
+{
+public:
+	momentarySwitch(debugBaseClass *dblog):baseSwitch(_DEBOUNCE_WINDOW_MOMENTARY,dblog)
+	{
+		m_type=stMomentary;
+	}
+};
+
+class toggleSwitch : public baseSwitch
+{
+public:
+	toggleSwitch(debugBaseClass *dblog):baseSwitch(_DEBOUNCE_WINDOW_TOGGLE,dblog)
+	{
+		m_type=stToggle;
+	}
+};
+
+
+class SonoffBasic : public momentarySwitch
+{
+
+public:
+
+	SonoffBasic(debugBaseClass *dblog,int digitalPinInput=0, int digitalPinOutput=12,int digitalPinLED=13):
+		m_ioPinIn(digitalPinInput), m_ioPinOut(digitalPinOutput), m_ioPinLED(digitalPinLED),
+		ignoreISRrequests(false),
+		momentarySwitch(dblog)
+	{
+		// and remember shit
+		m_singleton=this;
+
+		// pull up in
+		pinMode(digitalPinInput, INPUT_PULLUP);
+		// and attach to it, it's momentary, so get if falling low
+		attachInterrupt(GPIO_SWITCH, SonoffBasic::staticOnSwitchISR, FALLING );
+
+		// relay is output
+		pinMode(digitalPinOutput, OUTPUT);
+
+		// LED is output
+		pinMode(digitalPinLED, OUTPUT);
+
+	}
+
+	static void ICACHE_RAM_ATTR staticOnSwitchISR()
+	{
+		m_singleton->OnSwitchISR();
+
+	}
+
+	void ICACHE_RAM_ATTR OnSwitchISR()
+	{
+		if(ignoreISRrequests)
+			return;
+
+		dblog->isr_println(debug::dbInfo,"OnSwitchISR in");			
+
+		if(IsSwitchBounce())
+			return;
+
+		// just alternate
+		ToggleRelay();
+
+	}
+
+	virtual bool ICACHE_RAM_ATTR GetSwitch()
+	{
+		return digitalRead(m_ioPinOut)==HIGH;
+	}
+
+	virtual void ICACHE_RAM_ATTR DoSwitch(bool on, bool forceSwitchToReflect=false)
+	{
+		// have seen instances where firing this relay contributes enough
+		// noise to get detected as an inpout switch - so guard
+		ignoreISRrequests=true;
+
+		// closely tied
+		digitalWrite(m_ioPinOut, on ? HIGH : LOW);
+
+		// LED is inverted on the sonoff
+		digitalWrite(m_ioPinLED, on ? LOW : HIGH);
+
+		// and inc
+		switchCount++;
+
+		ignoreISRrequests=false;
+	}
+
+protected:
+
+	unsigned m_ioPinIn, m_ioPinOut, m_ioPinLED;
+	volatile bool ignoreISRrequests;
+
+public:
+  static SonoffBasic* m_singleton;
+
+};
+
+SonoffBasic* SonoffBasic::m_singleton=NULL;
+
+
+// main config
+struct 
+{
+	// does this need saving
+	bool configDirty;
+	// wifi deets
+	myWifiClass::wifiDetails wifi;
+	// persisted - *USER* supplied
+	// TODO - change this to device friendly name
+	String friendlyName;
+
+	// sensors
+	std::vector<baseSensor*>	sensors;
+
+	// switches
+	std::vector<baseSwitch*>	switches;
+
+} Details=
+{
+	false,	// dirty
+
+	// wifi deets
+	{
+		"","",false, true
+	},
+
+	"Undefined"	// friendly name
+
+
+};
+
+
+#endif
+
+
 
 // where we store the files we serve, statically
 std::vector<std::pair<String,size_t>> servedFiles;
@@ -412,8 +663,8 @@ mcp23017AndRelay mcp(4, 5, resetMCPpin, powerRelayBoardNPN);
 
 
 
-// how long we slow the web hots down for (millis)
-#define _WEB_TAR_PIT_DELAY 200
+// how long we slow the web hits down for (millis)
+#define _WEB_TAR_PIT_DELAY 20
 
 
 
@@ -475,6 +726,8 @@ void ICACHE_RAM_ATTR OnSwitchISR2()
 }
 #endif
 
+#ifdef _OLD_WAY
+
 #ifdef GPIO_SWITCH
 void ICACHE_RAM_ATTR OnSwitchISR()
 {
@@ -518,6 +771,8 @@ void ICACHE_RAM_ATTR OnSwitchISR()
 	dblog.isr_println(debug::dbVerbose, "OnSwitchISR out");
 
 }
+#endif
+
 #endif
 
 
@@ -580,6 +835,7 @@ void DoRGBPaletteSwitch(bool on, unsigned rgbPalette)
 #endif
 
 #ifdef NUM_SOCKETS
+#ifdef _OLD_WAY
 
 void DoSwitchAntiBounce(int port, bool on)
 {
@@ -592,7 +848,6 @@ void DoSwitchAntiBounce(int port, bool on)
 #endif
 		HandleCauseAndState(causeAndState);
 }
-
 
 void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState)
 {
@@ -661,12 +916,14 @@ void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState)
 		}
 	}
 }
-
+#endif
 #endif
 
 // honour current switch state
 void RevertAllSwitch()
 {
+
+#ifdef _OLD_WAY
 
 #ifdef _PHYSICAL_SWITCH_EXISTS
 
@@ -718,12 +975,16 @@ void RevertAllSwitch()
 	dblog.isr_printf(debug::dbError, "no impl for RevertAllSwitch");
 
 #endif
+
+#endif
+
 }
 
 
 // override switch state
 void DoAllSwitch(bool state, bool force)
 {
+#ifdef _OLD_WAY	
 #ifdef NUM_SOCKETS
 	dblog.printf(debug::dbInfo, "DoAllSwitch: %s %s\r\n", state ? "ON" : "off", force ? "FORCE" : "");
 
@@ -738,11 +999,24 @@ void DoAllSwitch(bool state, bool force)
 	}
 #endif
 #endif
+
+#else
+
+	dblog.printf(debug::dbInfo, "DoAllSwitch: %s %s\r\n", state ? "ON" : "off", force ? "FORCE" : "");
+
+	for(auto each=Details.switches.begin();each!=Details.switches.end();each++)
+	{
+		(*each)->DoSwitch(state, force);
+	}
+
+#endif
+
 }
 
 
 #ifdef NUM_SOCKETS
 
+#ifdef _OLD_WAY
 // if forceSwitchToReflect change polarity of input switch if necessary to reflect this request
 void DoSwitch(unsigned portNumber, bool on, bool forceSwitchToReflect)
 {
@@ -797,7 +1071,7 @@ void DoSwitch(unsigned portNumber, bool on, bool forceSwitchToReflect)
 	Details.ignoreISRrequests = false;
 
 }
-
+#endif
 #endif
 
 
@@ -867,10 +1141,13 @@ void WriteJSONconfig()
 	root["rgbCount"] = Details.rgbLedCount;
 #endif
 
+#ifdef _OLD_WAY
 	root["debounceThresholdmsMomentary"] = Details.debounceThresholdmsMomentary;	
 	root["debounceThresholdmsToggle"] = Details.debounceThresholdmsToggle;
 
 	root["resetWindowms"] = Details.resetWindowms;
+#endif
+
 	root["friendlyName"] = Details.friendlyName;
 
 	wifiInstance.WriteDetailsToJSON(root, Details.wifi);
@@ -904,7 +1181,7 @@ void WriteJSONconfig()
 
 void ReadJSONconfig()
 {
-	dblog.printf(debug::dbInfo, "ReadJSON\n\r");
+	dblog.printf(debug::dbInfo, "ReadJSONconfig\n\r");
 
 #ifdef _ERASE_JSON_CONFIG
 	dblog.printf(debug::dbImportant, "erasing JSON file\n\r");
@@ -1001,9 +1278,13 @@ void ReadJSONconfig()
 
 #endif
 
+#ifdef _OLD_WAY
 	Details.debounceThresholdmsMomentary= root["debounceThresholdmsMomentary"];
 	Details.debounceThresholdmsToggle=root["debounceThresholdmsToggle"];
 	Details.resetWindowms= root["resetWindowms"];
+
+#endif
+
 	if (root.containsKey("friendlyName"))
 	{
 		//String interim = root["friendlyName"].asString();
@@ -1017,6 +1298,7 @@ void ReadJSONconfig()
 
 #ifdef NUM_SOCKETS
 
+#ifdef _OLD_WAY
 	// add the switch map
 	JsonArray &switchMap = root["switchMap"];
 	if (switchMap.success())
@@ -1041,6 +1323,8 @@ void ReadJSONconfig()
 			}
 		}
 	}
+#endif
+
 #endif
 
 }
@@ -1103,6 +1387,9 @@ void setup(void)
 	dblog.begin(9600);
 #endif
 
+
+#ifdef _OLD_WAY
+
 #ifdef NUM_SOCKETS
 
 	// reset the bounce thresh-holds
@@ -1121,6 +1408,7 @@ void setup(void)
 
 	dblog.printf(debug::dbImportant, "\r\n\n\nRunning %s\n\r", _MYVERSION);
 	dblog.printf(debug::dbImportant, "Hostname %s\n\r", wifiInstance.m_hostName.c_str());
+
 
 
 	SPIFFS.begin();
@@ -1220,6 +1508,52 @@ void setup(void)
 
 	// set up the callback handlers for the webserver
 	InstallWebServerHandlers();
+
+
+#else
+
+	dblog.printf(debug::dbImportant, "\r\n\n\nRunning %s\n\r", _MYVERSION);
+	dblog.printf(debug::dbImportant, "Hostname %s\n\r", wifiInstance.m_hostName.c_str());
+
+	SPIFFS.begin();
+
+	ReadJSONconfig();
+
+	ReadHTLMversion();
+
+	dblog.println(debug::dbImportant, wifiInstance.m_hostName.c_str());
+
+	enum myWifiClass::wifiMode intent = myWifiClass::wifiMode::modeUnknown;
+
+	if (Details.wifi.configured)
+	{
+		dblog.println(debug::dbInfo, "wifi credentials found");
+		dblog.println(debug::dbVerbose, Details.wifi.ssid);
+		dblog.println(debug::dbVerbose, Details.wifi.password);
+		intent = myWifiClass::wifiMode::modeSTA;
+	}
+	else
+	{
+		dblog.println(debug::dbWarning, "WiFi not configured");
+		intent = myWifiClass::wifiMode::modeAP;
+
+	}
+
+	// load up the sensors and switches
+	Details.switches.push_back(new SonoffBasic(&dblog));
+
+	// default off, and don't force switches
+	DoAllSwitch(false,false);
+
+	// try to connect to the wifi
+	wifiInstance.ConnectWifi(intent, Details.wifi);
+
+
+	// set up the callback handlers for the webserver
+	InstallWebServerHandlers();
+
+
+#endif
 
 
 
@@ -1371,6 +1705,9 @@ void InstallWebServerHandlers()
 
 		delay(_WEB_TAR_PIT_DELAY);
 
+
+#ifdef _OLD_WAY		
+
 #ifdef _PHYSICAL_SWITCH_EXISTS
 
 #ifdef GPIO_RELAY
@@ -1394,6 +1731,18 @@ void InstallWebServerHandlers()
 #else
 		dblog.isr_printf(debug::dbError, "no impl for /toggle");
 #endif
+
+#else
+
+		// just go thru them all
+		for(auto each=Details.switches.begin();each!=Details.switches.end();each)
+			(*each)->ToggleRelay();
+
+
+#endif
+
+
+
 	});
 
 	wifiInstance.server.on("/button", []() {
@@ -1409,6 +1758,8 @@ void InstallWebServerHandlers()
 			);
 		}
 
+
+#ifdef _OLD_WAY
 
 #ifdef _6SWITCH
 		// these have to be in port/action pairs
@@ -1489,6 +1840,16 @@ void InstallWebServerHandlers()
 
 #endif
 
+#endif
+
+		if (wifiInstance.server.hasArg("action"))
+		{
+			bool action = wifiInstance.server.arg("action") == "on" ? true : false;
+			// just go thru them all
+			for(auto each=Details.switches.begin();each!=Details.switches.end();each++)
+				(*each)->DoSwitch(action);
+
+		}
 
 		delay(_WEB_TAR_PIT_DELAY);
 
@@ -1502,11 +1863,18 @@ void InstallWebServerHandlers()
 
 		delay(_WEB_TAR_PIT_DELAY);
 
+#ifdef _OLD_WAY
 #ifdef NUM_SOCKETS
 		for (int eachSwitch = 0; eachSwitch < NUM_SOCKETS; eachSwitch++)
 		{
 			Details.switches[eachSwitch].switchCount = 0;
 		}
+#endif
+
+#else
+		for(auto each=Details.switches.begin();each!=Details.switches.end();each)
+			(*each)->ResetTransitionCount();
+
 #endif
 
 		wifiInstance.server.send(200,"text/html","<html/>");
@@ -1521,6 +1889,7 @@ void InstallWebServerHandlers()
 
 	});
 
+#ifdef _RESET_VIA_QUICK_SWITCH
 
 	wifiInstance.server.on("/resetWIFI", []() {
 
@@ -1529,6 +1898,8 @@ void InstallWebServerHandlers()
 		ResetMe();
 
 	});
+
+#endif
 
 	wifiInstance.server.on("/stopAP", []() {
 
@@ -1579,6 +1950,7 @@ void InstallWebServerHandlers()
 		// 'plain' is the secret source to get to the body
 		JsonObject& root = jsonBuffer.parseObject(wifiInstance.server.arg("plain"));
 
+#ifdef _OLD_WAY
 		if (root.containsKey("bouncemsMomentary"))
 		{
 			Details.debounceThresholdmsMomentary = root["bouncemsMomentary"];
@@ -1597,6 +1969,8 @@ void InstallWebServerHandlers()
 			dblog.printf(debug::dbAlways, "Debug logging changed to %d (was %d)\n\r", dblog.m_currentLevel, (int)debugLevel);
 			dblog.m_currentLevel = (debug::dbLevel) debugLevel;
 		}
+#endif
+
 		if (root.containsKey("friendlyName"))
 		{
 			Details.friendlyName = root["friendlyName"].as<char*>();
@@ -1725,7 +2099,6 @@ void InstallWebServerHandlers()
 
 		dblog.println(debug::dbInfo, "json state called");
 
-		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 		jsonBuffer.clear();
 
 		JsonObject &root = jsonBuffer.createObject();
@@ -1733,6 +2106,8 @@ void InstallWebServerHandlers()
 		root["name"] = wifiInstance.m_hostName.c_str();
 		root["friendlyName"] = Details.friendlyName;
 		root["ip"] = wifiInstance.localIP().toString();
+
+#ifdef _OLD_WAY
 
 #ifdef NUM_SOCKETS
 		root["switchCount"] = NUM_SOCKETS;
@@ -1797,6 +2172,41 @@ void InstallWebServerHandlers()
 		}
 #endif
 
+#endif
+
+		root["switchCount"] = Details.switches.size();
+
+		JsonArray &switchState = root.createNestedArray("switchState");
+		int count=0;
+		for(auto each=Details.switches.begin();each!=Details.switches.end();each++, count++)
+		{
+			JsonObject &switchRelay = switchState.createNestedObject();
+			switchRelay["switch"] = count;
+			// html js expects 1 or 0
+			switchRelay["state"] = (*each)->GetSwitch()?1:0;
+			switchRelay["stateChanges"] = (*each)->GetTransitionCount();
+
+			switch ((*each)->GetSwitchType())
+			{
+			case baseSwitch::stUndefined:
+				switchRelay["type"] = "!UNDEFINED!";
+				break;
+
+			case baseSwitch::stMomentary:
+				switchRelay["type"] = "Momentary";
+				break;
+			case baseSwitch::stToggle:
+				switchRelay["type"] = "Toggle";
+				break;
+			case baseSwitch::stVirtual:
+				switchRelay["type"] = "Virtual";
+				break;
+			}
+
+			switchRelay["name"] = (*each)->GetSwitchName();
+		}
+
+
 		String jsonText;
 		root.prettyPrintTo(jsonText);
 
@@ -1819,6 +2229,9 @@ void InstallWebServerHandlers()
 		JsonObject &root = jsonBuffer.createObject();
 
 		root["name"] = wifiInstance.m_hostName.c_str();
+
+#ifdef _OLD_WAY
+
 		root["switchCount"] = NUM_SOCKETS;
 
 		unsigned maxSwitch = -1, maxSwitchCount = 0;
@@ -1840,6 +2253,8 @@ void InstallWebServerHandlers()
 			dblog.printf(debug::dbInfo, "maxSwitch %u count %u \n\r", maxSwitch, maxSwitch);
 
 		}
+
+#endif
 
 		String jsonText;
 		root.prettyPrintTo(jsonText);
@@ -1865,11 +2280,15 @@ void InstallWebServerHandlers()
 		root["name"] = wifiInstance.m_hostName.c_str();
 		root["version"] = _MYVERSION;
 		root["versionHTML"] = _MYVERSION_HTML;
+
+#ifdef _OLD_WAY		
 		root["bouncemsMomentary"] = Details.debounceThresholdmsMomentary;
 		root["bouncemsToggle"] = Details.debounceThresholdmsToggle;
 		root["resetms"] = Details.resetWindowms;
-		root["friendlyName"] = Details.friendlyName;
 		root["debugLevel"] = (int)dblog.m_currentLevel;
+#endif
+
+		root["friendlyName"] = Details.friendlyName;
 
 #ifdef _AT_RGBSTRIP
 		root["ledCount"] = Details.rgbLedCount;
@@ -2232,7 +2651,7 @@ void SendServerPage()
 
 void AddMapToJSON(JsonObject &root, unsigned numSockets)
 {
-
+#ifdef _OLD_WAY
 	dblog.printf(debug::dbVerbose, "AddMapToJSON %d\n\r", numSockets);
 
 	root["switchCount"] = numSockets;
@@ -2252,7 +2671,7 @@ void AddMapToJSON(JsonObject &root, unsigned numSockets)
 #endif
 
 	}
-
+#endif
 }
 
 #endif
@@ -2276,9 +2695,10 @@ void loop(void)
 	if (Details.configDirty)
 		WriteJSONconfig();
 
+#ifdef _OLD_WAY
 	// just in case we get into a bool corner
 	Details.ignoreISRrequests = false;
-
+#endif
 
 	wifiInstance.server.handleClient();
 	wifiInstance.mdns.update();

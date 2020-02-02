@@ -1,6 +1,2 @@
 {
-  "debounceThresholdmsMomentary": 300,
-  "debounceThresholdmsToggle": 100,
-
-  "resetWindowms": 6000
 }
