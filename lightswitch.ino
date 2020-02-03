@@ -161,7 +161,6 @@ StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 // forward
 void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState);
 
-
 // first board that worked, although the pins were swapped around on the output
 #define _BOARD_VER_1_1
 
@@ -1338,9 +1337,12 @@ void setup(void)
 	}
 
 	// load up the sensors and switches
-	Details.switches.push_back(new SonoffBasic(&dblog));
+	Details.switches.push_back(new SonoffBasicNoLED(&dblog));
 
+	// OF COURSE i reused D7 which is used by Sonoff! duh!
 	Details.sensors.push_back(new DallasSingleSensor(D7, &dblog));
+	Details.sensors.push_back(new BME280Sensor(&dblog));
+	Details.sensors.push_back(new MAX44009Sensor(&dblog));
 
 	// default off, and don't force switches
 	DoAllSwitch(false,false);
@@ -2275,7 +2277,7 @@ void InstallWebServerHandlers()
 		// cache it for an hour
 		wifiInstance.server.serveStatic(file.c_str(), SPIFFS, file.c_str(),"Cache-Control: public, max-age=60");
 
-		dblog.printf(debug::dbVerbose, "Serving %s\n\r", file.c_str());
+		dblog.printf(debug::dbVerbose, "Serving %s\r", file.c_str());
 
 		// remove the slash
 		// file.remove(0,1);
@@ -2547,3 +2549,4 @@ void loop(void)
 #endif
 
 }
+

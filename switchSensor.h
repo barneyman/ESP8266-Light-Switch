@@ -3,7 +3,8 @@
 #include <ArduinoJson.h>
 #include <OneWire.h>
 #include <DallasTemperature.h>
-
+#include <BME280I2C.h>
+#include <MAX44009.h>
 
 class baseThing
 {
@@ -67,6 +68,70 @@ protected:
 };
 
 
+class I2CSensor : public baseSensor
+{
+protected:
+
+	bool i2cAddressExists;
+
+
+public:
+
+	I2CSensor(int address, debugBaseClass*dbg):baseSensor(dbg)
+	{
+		i2cAddressExists=AddressExists(address);
+	}
+
+	bool AddressExists(int addr)
+	{
+		dblog->printf(debug::dbInfo, "I2C checking for 0x%x ", addr);
+
+		TwoWire localWire;
+		localWire.begin();
+		localWire.beginTransmission(addr);
+		bool retval= localWire.endTransmission()?false:true;
+
+		dblog->println(debug::dbInfo, retval?"EXISTS":"nexist");
+
+		return retval;
+	}
+
+	void i2cscan()
+	{
+		TwoWire localWire;
+		localWire.begin();
+
+		dblog->println(debug::dbAlways, "I2C Scanning...");
+	
+		unsigned nDevices = 0;
+		for(int address = 1; address < 127; address++ )
+		{
+			// The i2c_scanner uses the return value of
+			// the Write.endTransmisstion to see if
+			// a device did acknowledge to the address.
+			localWire.beginTransmission(address);
+			int error = localWire.endTransmission();
+		
+			if (error == 0)
+			{
+				dblog->printf(debug::dbAlways,"I2C device found at address 0x%x\r", address);
+			
+				nDevices++;
+			}
+			else if (error==4)
+			{
+				dblog->printf(debug::dbAlways,"Unknown error at address 0x%x\r", address);
+			}    
+		}
+		if (nDevices == 0)
+			dblog->println(debug::dbAlways,"No I2C devices found\n");
+	}
+
+};
+
+
+
+
 
 class DallasSingleSensor : public OneWireSensor
 {
@@ -95,7 +160,7 @@ public:
 
         if (temp > -10.0 && temp < 100.0)
         {
-            toHere["tempC"] = temp;
+            toHere["temp_C"] = temp;
         }
         else
         {
@@ -112,6 +177,75 @@ protected:
     DallasTemperature m_tempC;
 
 };
+
+
+
+class BME280Sensor : public I2CSensor
+{
+
+public:
+
+	BME280Sensor(debugBaseClass*dbg):I2CSensor(0x76, dbg)
+	{
+		m_sensor.begin();
+		thingName="BME280";
+	}
+
+    virtual bool GetSensorValue(JsonObject &toHere)
+    {
+        if(!i2cAddressExists)
+        {
+            toHere["bme_error"] = "No BMEs found";
+            return false;
+        }
+
+		toHere["temp_C"] = m_sensor.temp();
+		toHere["pres_hPA"] = m_sensor.pres();
+		toHere["humid_%"] = m_sensor.hum();
+
+        return true;
+    }
+
+
+protected:
+
+	BME280I2C m_sensor;
+
+};
+
+class MAX44009Sensor: public I2CSensor
+{
+protected:
+
+public:
+
+	MAX44009Sensor(debugBaseClass*dbg,int address=0x4a):I2CSensor(address, dbg),m_sensor(address)
+	{
+		thingName="MAX44009";
+	}
+
+    virtual bool GetSensorValue(JsonObject &toHere)
+    {
+        if(!i2cAddressExists)
+        {
+            toHere["lux_error"] = "No MAX44009s found";
+            return false;
+        }
+
+		toHere["light_Lux"] = m_sensor.getLux();
+
+        return true;
+    }
+
+
+protected:
+
+	Max44009 m_sensor;
+
+};
+
+
+//////////////////////////////////////////
 
 
 class baseSwitch : public baseThing
@@ -229,7 +363,8 @@ public:
 		pinMode(digitalPinOutput, OUTPUT);
 
 		// LED is output
-		pinMode(digitalPinLED, OUTPUT);
+		if(m_ioPinLED!=-1)
+			pinMode(digitalPinLED, OUTPUT);
 
 	}
 
@@ -244,7 +379,7 @@ public:
 		if(ignoreISRrequests)
 			return;
 
-		dblog->isr_println(debug::dbInfo,"OnSwitchISR in");			
+		//dblog->isr_println(debug::dbInfo,"OnSwitchISR in");			
 
 		if(IsSwitchBounce())
 			return;
@@ -269,7 +404,8 @@ public:
 		digitalWrite(m_ioPinOut, on ? HIGH : LOW);
 
 		// LED is inverted on the sonoff
-		digitalWrite(m_ioPinLED, on ? LOW : HIGH);
+		if(m_ioPinLED!=-1)
+			digitalWrite(m_ioPinLED, on ? LOW : HIGH);
 
 		// and inc
 		switchCount++;
@@ -287,3 +423,15 @@ public:
 
 };
 
+class SonoffBasicNoLED : public SonoffBasic
+{
+public:
+
+	// ctor sig is the same as Sooff Basic, but LED pin is ignored
+	SonoffBasicNoLED(debugBaseClass *dblog,int digitalPinInput=0, int digitalPinOutput=12,int digitalPinLED=-1):
+		SonoffBasic(dblog,digitalPinInput,digitalPinOutput,-1)
+	{
+
+	}
+
+};
