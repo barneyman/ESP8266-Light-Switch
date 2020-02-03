@@ -42,6 +42,7 @@ public:
     {}
 
     virtual bool GetSensorValue(JsonObject &toHere)=0;
+	virtual void GetSensorConfig(JsonObject &toHere)=0;
 
     protected:
 
@@ -143,14 +144,19 @@ public:
         m_tempC(&m_oneWire)
     {
         m_tempC.begin();
-        thingName="TempSensor";
+        thingName="DS18B20";
     }
+
+	virtual void GetSensorConfig(JsonObject &toHere)
+	{
+		toHere["temp"] = "°C";
+	}
 
     virtual bool GetSensorValue(JsonObject &toHere)
     {
         if(!m_tempC.getDS18Count())
         {
-            toHere["tempC_error"] = "No DSs found";
+            toHere["temp_error"] = "No DSs found";
             return false;
         }
             
@@ -160,11 +166,11 @@ public:
 
         if (temp > -10.0 && temp < 100.0)
         {
-            toHere["temp_C"] = temp;
+            toHere["temp"] = temp;
         }
         else
         {
-            toHere["tempC_error"] = "Exceeded bounds";
+            toHere["temp_error"] = "Exceeded bounds";
         }
         
 
@@ -191,6 +197,14 @@ public:
 		thingName="BME280";
 	}
 
+	virtual void GetSensorConfig(JsonObject &toHere)
+	{
+		toHere["temp"] = "°C";
+		toHere["pressure"] = "hPA";
+		toHere["humidity"] = "%";
+	}
+
+
     virtual bool GetSensorValue(JsonObject &toHere)
     {
         if(!i2cAddressExists)
@@ -199,9 +213,9 @@ public:
             return false;
         }
 
-		toHere["temp_C"] = m_sensor.temp();
-		toHere["pres_hPA"] = m_sensor.pres();
-		toHere["humid_%"] = m_sensor.hum();
+		toHere["temp"] = m_sensor.temp();
+		toHere["pressure"] = m_sensor.pres();
+		toHere["humidity"] = m_sensor.hum();
 
         return true;
     }
@@ -224,15 +238,21 @@ public:
 		thingName="MAX44009";
 	}
 
+	virtual void GetSensorConfig(JsonObject &toHere)
+	{
+		toHere["light"] = "Lux";
+	}
+
+
     virtual bool GetSensorValue(JsonObject &toHere)
     {
         if(!i2cAddressExists)
         {
-            toHere["lux_error"] = "No MAX44009s found";
+            toHere["light_error"] = "No MAX44009s found";
             return false;
         }
 
-		toHere["light_Lux"] = m_sensor.getLux();
+		toHere["light"] = m_sensor.getLux();
 
         return true;
     }
@@ -247,7 +267,7 @@ protected:
 
 //////////////////////////////////////////
 
-
+// TODO - have to distinguish between a 'SWITCH' and a 'RELAY' and a 'SWITCH mated to RELAY'
 class baseSwitch : public baseThing
 {
 

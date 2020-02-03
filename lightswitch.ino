@@ -2110,6 +2110,22 @@ void InstallWebServerHandlers()
 		root["ledCount"] = Details.rgbLedCount;
 #endif
 
+		root["sensorCount"] = Details.sensors.size();
+		JsonArray &sensorConfig = root.createNestedArray("sensorConfig");
+		int count=0;
+		for(auto each=Details.sensors.begin();each!=Details.sensors.end();each++, count++)
+		{
+			JsonObject &switchRelay = sensorConfig.createNestedObject();
+			switchRelay["sensor"] = count;
+
+			(*each)->GetSensorConfig(switchRelay);
+
+			switchRelay["name"] = (*each)->GetName();
+		}
+
+
+
+
 
 		String jsonText;
 		root.prettyPrintTo(jsonText);
