@@ -1339,10 +1339,13 @@ void setup(void)
 	// load up the sensors and switches
 	Details.switches.push_back(new SonoffBasicNoLED(&dblog));
 
+
 	// OF COURSE i reused D7 which is used by Sonoff! duh!
 	Details.sensors.push_back(new DallasSingleSensor(D7, &dblog));
 	Details.sensors.push_back(new BME280Sensor(&dblog));
 	Details.sensors.push_back(new MAX44009Sensor(&dblog));
+
+
 
 	// default off, and don't force switches
 	DoAllSwitch(false,false);
@@ -1365,6 +1368,7 @@ void setup(void)
 void FindPeers()
 {
 	dblog.printf(debug::dbInfo, "Looking for '%s' siblings ...\n\r", mdsnNAME);
+	
 	// get a list of what's out there
 	services.clear();
 	if (wifiInstance.QueryServices(mdsnNAME, services))
@@ -2096,6 +2100,8 @@ void InstallWebServerHandlers()
 		root["name"] = wifiInstance.m_hostName.c_str();
 		root["version"] = _MYVERSION;
 		root["versionHTML"] = _MYVERSION_HTML;
+		root["ip"] = wifiInstance.localIP().toString();
+		root["mac"] = wifiInstance.macAddress();
 
 #ifdef _OLD_WAY		
 		root["bouncemsMomentary"] = Details.debounceThresholdmsMomentary;
@@ -2110,6 +2116,7 @@ void InstallWebServerHandlers()
 		root["ledCount"] = Details.rgbLedCount;
 #endif
 
+		// add sensors
 		root["sensorCount"] = Details.sensors.size();
 		JsonArray &sensorConfig = root.createNestedArray("sensorConfig");
 		int count=0;
@@ -2119,6 +2126,20 @@ void InstallWebServerHandlers()
 			switchRelay["sensor"] = count;
 
 			(*each)->GetSensorConfig(switchRelay);
+
+			switchRelay["name"] = (*each)->GetName();
+		}
+
+
+		root["sensorCount"] = Details.switches.size();
+		JsonArray &switchConfig = root.createNestedArray("switchConfig");
+		count=0;
+		for(auto each=Details.switches.begin();each!=Details.switches.end();each++, count++)
+		{
+			JsonObject &switchRelay = switchConfig.createNestedObject();
+			switchRelay["switch"] = count;
+
+			//(*each)->GetSwitchConfig(switchRelay);
 
 			switchRelay["name"] = (*each)->GetName();
 		}
@@ -2159,11 +2180,11 @@ void InstallWebServerHandlers()
 		wifiInstance.server.send(200, "application/json", jsonText);
 	});
 
-	///json/htmlPeers
-	wifiInstance.server.on("/json/htmlPeers", HTTP_GET, []() {
+	///json/peers
+	wifiInstance.server.on("/json/peers", HTTP_GET, []() {
 		// give them back the port / switch map
 
-		dblog.println(debug::dbImportant, "json htmlPeers called");
+		dblog.println(debug::dbImportant, "json peers called");
 
 		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 		jsonBuffer.clear();
@@ -2171,11 +2192,14 @@ void InstallWebServerHandlers()
 		JsonObject &root = jsonBuffer.createObject();
 		root["name"] = wifiInstance.m_hostName.c_str();
 		root["peerCount"] = services.size();
-		// let's get all wifis we can see
+		root["ip"] = wifiInstance.localIP().toString();
+
+#ifdef _OLD_WAY
 		JsonArray &peers = root.createNestedArray("peers");
 
 		for (size_t each = 0; each < services.size(); each++)
 		{
+
 			// query that one
 			String url("http://");
 			url += services[each].hostName + "/json/config";
@@ -2219,7 +2243,26 @@ void InstallWebServerHandlers()
 
 			dblog.printf(debug::dbInfo, "%d '%s'\n\r", each + 1, services[each].hostName.c_str());
 
+
 		}
+
+#else
+		// let's get all wifis we can see
+		
+		JsonArray &peers = root.createNestedArray("peers");
+
+		for (size_t each = 0; each < services.size(); each++)
+		{
+			JsonObject &peer = peers.createNestedObject();
+
+			dblog.printf(debug::dbInfo, "%d '%s' %s\n\r", each + 1, services[each].hostName.c_str(), services[each].IP.toString().c_str());
+			peer["name"]=services[each].hostName;
+			peer["ip"]=services[each].IP.toString();
+		}
+
+
+
+#endif		
 
 
 		String jsonText;

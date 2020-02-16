@@ -42,7 +42,14 @@ public:
     {}
 
     virtual bool GetSensorValue(JsonObject &toHere)=0;
-	virtual void GetSensorConfig(JsonObject &toHere)=0;
+	virtual void GetSensorConfig(JsonObject &toHere)
+	{
+		// ask it to get sensor stuff
+		JsonArray &sensorElement = toHere.createNestedArray("elements");
+		GetSensorConfigElements(sensorElement);
+	}
+
+	virtual void GetSensorConfigElements(JsonArray &toHere)=0;
 
     protected:
 
@@ -147,16 +154,20 @@ public:
         thingName="DS18B20";
     }
 
-	virtual void GetSensorConfig(JsonObject &toHere)
+	virtual void GetSensorConfigElements(JsonArray &toHere)
 	{
-		toHere["temp"] = "°C";
+		JsonObject &sensorElement = toHere.createNestedObject();
+		sensorElement["type"] = "temperature";
+		sensorElement["uom"] = "°C";
+		sensorElement["round"] = "1";
+		
 	}
 
     virtual bool GetSensorValue(JsonObject &toHere)
     {
         if(!m_tempC.getDS18Count())
         {
-            toHere["temp_error"] = "No DSs found";
+            toHere["temperature_error"] = "No DSs found";
             return false;
         }
             
@@ -166,11 +177,11 @@ public:
 
         if (temp > -10.0 && temp < 100.0)
         {
-            toHere["temp"] = temp;
+            toHere["temperature"] = temp;
         }
         else
         {
-            toHere["temp_error"] = "Exceeded bounds";
+            toHere["temperature_error"] = "Exceeded bounds";
         }
         
 
@@ -197,11 +208,22 @@ public:
 		thingName="BME280";
 	}
 
-	virtual void GetSensorConfig(JsonObject &toHere)
+	virtual void GetSensorConfigElements(JsonArray &toHere)
 	{
-		toHere["temp"] = "°C";
-		toHere["pressure"] = "hPA";
-		toHere["humidity"] = "%";
+		JsonObject &sensorElement1 = toHere.createNestedObject();
+		sensorElement1["type"] = "temperature";
+		sensorElement1["uom"] = "°C";
+		sensorElement1["round"] = "1";
+
+		JsonObject &sensorElement2 = toHere.createNestedObject();
+		sensorElement2["type"] = "pressure";
+		sensorElement2["uom"] = "hPA";
+		sensorElement2["round"] = "1";
+
+		JsonObject &sensorElement3 = toHere.createNestedObject();
+		sensorElement3["type"] = "humidity";
+		sensorElement3["uom"] = "%";
+		sensorElement3["round"] = "0";
 	}
 
 
@@ -213,7 +235,8 @@ public:
             return false;
         }
 
-		toHere["temp"] = m_sensor.temp();
+		// BME is consistently 1deg over
+		toHere["temperature"] = m_sensor.temp()-1.0;
 		toHere["pressure"] = m_sensor.pres();
 		toHere["humidity"] = m_sensor.hum();
 
@@ -238,9 +261,12 @@ public:
 		thingName="MAX44009";
 	}
 
-	virtual void GetSensorConfig(JsonObject &toHere)
+	virtual void GetSensorConfigElements(JsonArray &toHere)
 	{
-		toHere["light"] = "Lux";
+		JsonObject &sensorElement = toHere.createNestedObject();
+		sensorElement["type"] = "illuminance";
+		sensorElement["uom"] = "Lux";
+		sensorElement["round"] = "0";
 	}
 
 
@@ -252,7 +278,7 @@ public:
             return false;
         }
 
-		toHere["light"] = m_sensor.getLux();
+		toHere["illuminance"] = m_sensor.getLux();
 
         return true;
     }
