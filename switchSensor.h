@@ -6,6 +6,7 @@
 #include <BME280I2C.h>
 #include <MAX44009.h>
 
+
 class baseThing
 {
 
@@ -48,6 +49,9 @@ public:
 		JsonArray &sensorElement = toHere.createNestedArray("elements");
 		GetSensorConfigElements(sensorElement);
 	}
+
+	virtual void DoSensorWork(){}
+	virtual void AddSensorRecipient(IPAddress addr, unsigned port) {}
 
 	virtual void GetSensorConfigElements(JsonArray &toHere)=0;
 
@@ -157,6 +161,7 @@ public:
 	virtual void GetSensorConfigElements(JsonArray &toHere)
 	{
 		JsonObject &sensorElement = toHere.createNestedObject();
+		sensorElement["impl"]="rest";
 		sensorElement["type"] = "temperature";
 		sensorElement["uom"] = "°C";
 		sensorElement["round"] = "1";
@@ -211,16 +216,19 @@ public:
 	virtual void GetSensorConfigElements(JsonArray &toHere)
 	{
 		JsonObject &sensorElement1 = toHere.createNestedObject();
+		sensorElement1["impl"]="rest";
 		sensorElement1["type"] = "temperature";
 		sensorElement1["uom"] = "°C";
 		sensorElement1["round"] = "1";
 
 		JsonObject &sensorElement2 = toHere.createNestedObject();
+		sensorElement2["impl"]="rest";
 		sensorElement2["type"] = "pressure";
 		sensorElement2["uom"] = "hPA";
 		sensorElement2["round"] = "1";
 
 		JsonObject &sensorElement3 = toHere.createNestedObject();
+		sensorElement3["impl"]="rest";
 		sensorElement3["type"] = "humidity";
 		sensorElement3["uom"] = "%";
 		sensorElement3["round"] = "0";
@@ -264,6 +272,7 @@ public:
 	virtual void GetSensorConfigElements(JsonArray &toHere)
 	{
 		JsonObject &sensorElement = toHere.createNestedObject();
+		sensorElement["impl"]="rest";
 		sensorElement["type"] = "illuminance";
 		sensorElement["uom"] = "Lux";
 		sensorElement["round"] = "0";
@@ -287,6 +296,188 @@ public:
 protected:
 
 	Max44009 m_sensor;
+
+};
+
+#include <WiFiClient.h>
+
+
+
+class instantSensor : public baseSensor
+{
+
+protected:
+
+	class recipient
+	{
+		public:
+		recipient(IPAddress addr, unsigned port):m_addr(addr),m_port(port)
+		{
+
+		}
+
+		bool operator==(const recipient &other)
+		{
+			return m_addr==other.m_addr && m_port==other.m_port;
+		}
+
+
+		IPAddress m_addr;
+		unsigned m_port;
+	};
+
+	std::vector<recipient> m_HAhosts;
+
+	unsigned m_port;
+
+	StaticJsonBuffer<200> jsonBuffer;
+
+	bool m_currentState;
+
+	String deviceClass;
+
+public:
+
+	instantSensor(debugBaseClass*dbg):baseSensor(dbg),m_currentState(false)
+	{
+		// 
+		// debug
+		
+	}
+
+    virtual bool GetSensorValue(JsonObject &toHere)
+    {
+		toHere["state"] = m_currentState;
+
+        return true;
+    }
+
+	virtual void GetSensorConfigElements(JsonArray &toHere)
+	{
+		JsonObject &sensorElement = toHere.createNestedObject();
+		sensorElement["impl"]="tcp";
+		sensorElement["type"] = deviceClass;
+
+	}
+
+	virtual void AddSensorRecipient(IPAddress addr, unsigned port)
+	{
+		recipient potential(addr,port);
+		if(std::find(m_HAhosts.begin(),m_HAhosts.end(),potential)==m_HAhosts.end())
+		{
+			m_HAhosts.push_back(potential);
+		}
+	}
+
+
+protected:
+
+
+	void SendState(bool state)
+	{
+		// 
+		jsonBuffer.clear();
+		JsonObject& udproot = jsonBuffer.createObject();
+		udproot["state"]=m_currentState;
+		String bodyText;
+		udproot.printTo(bodyText);
+
+		WiFiClient sender;
+
+		for(auto eachHA=m_HAhosts.begin();eachHA!=m_HAhosts.end();eachHA++)
+		{
+			if(sender.connect(eachHA->m_addr, eachHA->m_port))
+			{
+				dblog->printf(debug::dbAlways,"udp %s to %s\r",bodyText.c_str(), eachHA->m_addr.toString().c_str());
+				sender.write(bodyText.c_str(),bodyText.length());
+				sender.stop();
+			}
+		}		
+
+	}
+
+
+
+};
+
+
+class testInstantSensor : public instantSensor
+{
+
+protected:
+
+	unsigned long m_millis, m_timeout;
+
+public:
+	testInstantSensor(debugBaseClass*dbg, unsigned long timeout):instantSensor(dbg),m_timeout(timeout)
+	{
+		m_millis=millis();
+		thingName="testSensor";
+		deviceClass="test";
+	}
+
+	virtual void DoSensorWork()
+	{
+		// if our state has changed send State
+		unsigned long now=millis();
+		if((now-m_millis) > m_timeout)
+		{
+			m_currentState=!m_currentState;
+			SendState(m_currentState);
+			m_millis=now;
+		}
+
+	}
+
+};
+
+
+class GPIOInstantSensor : public instantSensor
+{
+protected:
+
+	unsigned m_gpio;
+	volatile bool m_ioChanged;
+
+	static void ICACHE_RAM_ATTR static_isr()
+	{
+		m_singleton->m_ioChanged=true;
+	}
+
+	static GPIOInstantSensor* m_singleton;
+
+public:
+
+	GPIOInstantSensor(debugBaseClass*dbg,unsigned gpio):instantSensor(dbg),m_gpio(gpio),m_ioChanged(false)
+	{
+		m_singleton=this;
+		pinMode(m_gpio, INPUT_PULLUP);
+		attachInterrupt(m_gpio, static_isr, CHANGE);
+	}
+
+	virtual void DoSensorWork()
+	{
+		// TODO change this
+		// if our state has changed send State
+		if(m_ioChanged)
+		{
+			SendState(m_currentState);
+			m_currentState=!m_currentState;
+		}
+
+	}
+
+
+};
+
+class PIRInstantSensor : public GPIOInstantSensor
+{
+public:
+	PIRInstantSensor(debugBaseClass*dbg,unsigned gpio):GPIOInstantSensor(dbg,gpio)
+	{
+		thingName="PIR";
+		deviceClass="motion";
+	}
 
 };
 

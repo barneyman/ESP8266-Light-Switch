@@ -1345,6 +1345,8 @@ void setup(void)
 	Details.sensors.push_back(new BME280Sensor(&dblog));
 	Details.sensors.push_back(new MAX44009Sensor(&dblog));
 
+	Details.sensors.push_back(new testInstantSensor(&dblog, 5000));
+
 
 
 	// default off, and don't force switches
@@ -1806,6 +1808,41 @@ void InstallWebServerHandlers()
 		wifiInstance.server.send(200, "text/html", "<html></html>");
 
 		});
+
+
+	wifiInstance.server.on("/json/listen", HTTP_POST, []() {
+
+		dblog.println(debug::dbImportant, "json listen posted");
+		dblog.println(debug::dbImportant, wifiInstance.server.arg("plain"));
+
+		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
+		jsonBuffer.clear();
+		// 'plain' is the secret source to get to the body
+		JsonObject& root = jsonBuffer.parseObject(wifiInstance.server.arg("plain"));
+
+		IPAddress recipientAddr = wifiInstance.server.client().remoteIP();
+		int recipientPort = root["port"];
+		int recipientSensor = root["sensor"];
+
+		if(recipientSensor<Details.sensors.size())
+		{
+			dblog.printf(debug::dbInfo, "Adding recipient %s:%d\n\r", recipientAddr.toString().c_str(), recipientPort);
+			Details.sensors[recipientSensor]->AddSensorRecipient(recipientAddr,recipientPort);
+		}
+		else
+		{
+			dblog.println(debug::dbError, "Sensor exceeded bounds");
+		}
+
+
+		//delay(_WEB_TAR_PIT_DELAY);
+		wifiInstance.server.send(200, "text/html", "<html></html>");
+
+
+	});
+
+
+
 
 
 	wifiInstance.server.on("/json/wifi", HTTP_POST, []() {
@@ -2577,6 +2614,12 @@ void loop(void)
 
 	wifiInstance.server.handleClient();
 	wifiInstance.mdns.update();
+
+	// sensors may need some work
+	for(auto eachSensor=Details.sensors.begin();eachSensor!=Details.sensors.end();eachSensor++)
+	{
+		(*eachSensor)->DoSensorWork();
+	}
 
 	dblog.isr_pump();
 
