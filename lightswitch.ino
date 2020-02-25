@@ -1345,7 +1345,7 @@ void setup(void)
 	Details.sensors.push_back(new BME280Sensor(&dblog));
 	Details.sensors.push_back(new MAX44009Sensor(&dblog));
 
-	Details.sensors.push_back(new testInstantSensor(&dblog, 5000));
+	Details.sensors.push_back(new testInstantSensor(&dblog, 2000));
 
 
 
@@ -1826,7 +1826,7 @@ void InstallWebServerHandlers()
 
 		if(recipientSensor<Details.sensors.size())
 		{
-			dblog.printf(debug::dbInfo, "Adding recipient %s:%d\n\r", recipientAddr.toString().c_str(), recipientPort);
+			dblog.printf(debug::dbInfo, "Adding recipient %s:%d Sensor %d\n\r", recipientAddr.toString().c_str(), recipientPort, recipientSensor);
 			Details.sensors[recipientSensor]->AddSensorRecipient(recipientAddr,recipientPort);
 		}
 		else

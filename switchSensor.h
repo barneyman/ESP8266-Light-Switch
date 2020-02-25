@@ -51,7 +51,10 @@ public:
 	}
 
 	virtual void DoSensorWork(){}
-	virtual void AddSensorRecipient(IPAddress addr, unsigned port) {}
+	virtual void AddSensorRecipient(IPAddress addr, unsigned port) 
+	{
+		dblog->println(debug::dbWarning,"base AddSensorRecipient called");
+	}
 
 	virtual void GetSensorConfigElements(JsonArray &toHere)=0;
 
@@ -299,7 +302,12 @@ protected:
 
 };
 
+//#define _USE_UDP
+
+#ifdef _USE_UDP
+#else
 #include <WiFiClient.h>
+#endif
 
 
 
@@ -355,17 +363,27 @@ public:
 	virtual void GetSensorConfigElements(JsonArray &toHere)
 	{
 		JsonObject &sensorElement = toHere.createNestedObject();
+#ifdef _USE_UDP
+		sensorElement["impl"]="udp";
+#else
 		sensorElement["impl"]="tcp";
+#endif
 		sensorElement["type"] = deviceClass;
 
 	}
 
-	virtual void AddSensorRecipient(IPAddress addr, unsigned port)
+	virtual void AddSensorRecipient(IPAddress addr, unsigned port) 
 	{
+		dblog->printf(debug::dbInfo,"Adding recipient %s\r",addr.toString().c_str());
 		recipient potential(addr,port);
 		if(std::find(m_HAhosts.begin(),m_HAhosts.end(),potential)==m_HAhosts.end())
 		{
 			m_HAhosts.push_back(potential);
+			dblog->println(debug::dbInfo,"ADDED");
+		}
+		else
+		{
+			dblog->println(debug::dbInfo,"already exists");
 		}
 	}
 
@@ -382,16 +400,41 @@ protected:
 		String bodyText;
 		udproot.printTo(bodyText);
 
+#ifdef _USE_UDP
+		WiFiUDP sender;
+#else
 		WiFiClient sender;
+#endif		
+
+		dblog->println(debug::dbInfo,"Starting IP yell");
 
 		for(auto eachHA=m_HAhosts.begin();eachHA!=m_HAhosts.end();eachHA++)
 		{
+
+#ifdef _USE_UDP
+
+			sender.beginPacket(eachHA->m_addr, eachHA->m_port);
+
+			dblog->printf(debug::dbInfo,"tcp %s to %s\r",bodyText.c_str(), eachHA->m_addr.toString().c_str());
+			sender.write(bodyText.c_str(),bodyText.length());
+
+			sender.endPacket();
+
+#else
+
 			if(sender.connect(eachHA->m_addr, eachHA->m_port))
 			{
-				dblog->printf(debug::dbAlways,"udp %s to %s\r",bodyText.c_str(), eachHA->m_addr.toString().c_str());
+				dblog->printf(debug::dbInfo,"tcp %s to %s\r",bodyText.c_str(), eachHA->m_addr.toString().c_str());
 				sender.write(bodyText.c_str(),bodyText.length());
 				sender.stop();
 			}
+			else
+			{
+				dblog->printf(debug::dbError,"tcpconnect failed %s;%u\r", eachHA->m_addr.toString().c_str(),eachHA->m_port);
+			}
+
+#endif
+
 		}		
 
 	}
