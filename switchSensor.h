@@ -324,6 +324,8 @@ protected:
 
 		}
 
+		// only checks host, deliberately
+		// this allows the HA server to reboot, change ports, and we'll spot it
 		bool operator==(const recipient &other)
 		{
 			return m_addr==other.m_addr && m_port==other.m_port;
@@ -376,14 +378,27 @@ public:
 	{
 		dblog->printf(debug::dbInfo,"Adding recipient %s\r",addr.toString().c_str());
 		recipient potential(addr,port);
-		if(std::find(m_HAhosts.begin(),m_HAhosts.end(),potential)==m_HAhosts.end())
+		auto finder=std::find(m_HAhosts.begin(),m_HAhosts.end(),potential);
+		if(finder==m_HAhosts.end())
 		{
 			m_HAhosts.push_back(potential);
 			dblog->println(debug::dbInfo,"ADDED");
 		}
 		else
 		{
-			dblog->println(debug::dbInfo,"already exists");
+			// cater for port change
+			if(finder->m_port==port)
+			{
+				dblog->println(debug::dbInfo,"already exists");
+
+			}
+			else
+			{
+				dblog->println(debug::dbInfo,"port has changed, re-adding");
+				m_HAhosts.erase(finder);
+				m_HAhosts.push_back(potential);
+			}
+
 		}
 	}
 
@@ -495,7 +510,7 @@ public:
 	GPIOInstantSensor(debugBaseClass*dbg,unsigned gpio):instantSensor(dbg),m_gpio(gpio),m_ioChanged(false)
 	{
 		m_singleton=this;
-		pinMode(m_gpio, INPUT_PULLUP);
+		pinMode(m_gpio, INPUT);
 		attachInterrupt(m_gpio, static_isr, CHANGE);
 	}
 
@@ -505,8 +520,12 @@ public:
 		// if our state has changed send State
 		if(m_ioChanged)
 		{
+			m_currentState=(digitalRead(m_gpio)==HIGH)?true:false;
+
+			dblog->printf(debug::dbInfo,"sensor changed %s\r",m_currentState?"HIGH":"LOW");
+
 			SendState(m_currentState);
-			m_currentState=!m_currentState;
+			m_ioChanged=false;
 		}
 
 	}
@@ -517,7 +536,7 @@ public:
 class PIRInstantSensor : public GPIOInstantSensor
 {
 public:
-	PIRInstantSensor(debugBaseClass*dbg,unsigned gpio):GPIOInstantSensor(dbg,gpio)
+	PIRInstantSensor(debugBaseClass*dbg,unsigned gpio):GPIOInstantSensor(dbg, gpio)
 	{
 		thingName="PIR";
 		deviceClass="motion";

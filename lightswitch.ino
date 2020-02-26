@@ -1336,6 +1336,10 @@ void setup(void)
 
 	}
 
+// thermos and lux
+#define WEMOS_COM3
+
+#ifdef WEMOS_COM3
 	// load up the sensors and switches
 	Details.switches.push_back(new SonoffBasicNoLED(&dblog));
 
@@ -1345,9 +1349,11 @@ void setup(void)
 	Details.sensors.push_back(new BME280Sensor(&dblog));
 	Details.sensors.push_back(new MAX44009Sensor(&dblog));
 
-	Details.sensors.push_back(new testInstantSensor(&dblog, 2000));
+#else /// WEMOS_COM3
 
+	Details.sensors.push_back(new PIRInstantSensor(&dblog, D7));
 
+#endif
 
 	// default off, and don't force switches
 	DoAllSwitch(false,false);
