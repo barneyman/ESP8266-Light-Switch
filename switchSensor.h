@@ -302,7 +302,7 @@ protected:
 
 };
 
-//#define _USE_UDP
+#define _USE_UDP
 
 #ifdef _USE_UDP
 #else
@@ -415,22 +415,23 @@ protected:
 
 			sender.beginPacket(eachHA->m_addr, eachHA->m_port);
 
-			dblog->printf(debug::dbInfo,"tcp %s to %s\r",bodyText.c_str(), eachHA->m_addr.toString().c_str());
+			dblog->printf(debug::dbInfo,"udp %s to %s\r",bodyText.c_str(), eachHA->m_addr.toString().c_str());
 			sender.write(bodyText.c_str(),bodyText.length());
 
 			sender.endPacket();
 
 #else
 
-			if(sender.connect(eachHA->m_addr, eachHA->m_port))
+			if(sender.connect(eachHA->m_addr, eachHA->m_port)==1)
 			{
-				dblog->printf(debug::dbInfo,"tcp %s to %s\r",bodyText.c_str(), eachHA->m_addr.toString().c_str());
+				dblog->printf(debug::dbInfo,"tcp %s;%u to %s\r",bodyText.c_str(),eachHA->m_port, eachHA->m_addr.toString().c_str());
 				sender.write(bodyText.c_str(),bodyText.length());
+				sender.flush();
 				sender.stop();
 			}
 			else
 			{
-				dblog->printf(debug::dbError,"tcpconnect failed %s;%u\r", eachHA->m_addr.toString().c_str(),eachHA->m_port);
+				dblog->printf(debug::dbError,"tcpconnect failed %s:%u\r", eachHA->m_addr.toString().c_str(),eachHA->m_port);
 			}
 
 #endif
