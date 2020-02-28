@@ -1349,6 +1349,8 @@ void setup(void)
 	Details.sensors.push_back(new BME280Sensor(&dblog));
 	Details.sensors.push_back(new MAX44009Sensor(&dblog));
 
+	Details.sensors.push_back(new testInstantSensor(&dblog, 5000));
+
 #else /// WEMOS_COM3
 
 	Details.sensors.push_back(new PIRInstantSensor(&dblog, D7));

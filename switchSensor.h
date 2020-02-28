@@ -430,7 +430,7 @@ protected:
 
 			sender.beginPacket(eachHA->m_addr, eachHA->m_port);
 
-			dblog->printf(debug::dbInfo,"udp %s to %s\r",bodyText.c_str(), eachHA->m_addr.toString().c_str());
+			dblog->printf(debug::dbInfo,"udp %s to %s:%u\r",bodyText.c_str(), eachHA->m_addr.toString().c_str(),eachHA->m_port);
 			sender.write(bodyText.c_str(),bodyText.length());
 
 			sender.endPacket();
