@@ -4,7 +4,7 @@
 
 
 
-SonoffBasic* SonoffBasic::m_singleton=NULL;
+RelayLEDandSwitch* RelayLEDandSwitch::m_singleton=NULL;
 GPIOInstantSensor* GPIOInstantSensor::m_singleton;
 
 

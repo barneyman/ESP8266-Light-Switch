@@ -7,16 +7,9 @@
 // nothing defined == 6 switch nodemcu
 #define _SONOFF_BASIC					// the basic normal sonoff
 //#define _SONOFF_BASIC_EXTRA_SWITCH		// one with the extra GPIO pin wired as a switch
-//#define _WEMOS_RELAY_SHIELD			// simple d1 with a relay shield on it
 //#define _AT_RGBSTRIP					// a strip of RGBs
-//#define _THERMOMETER					// simple thermo
 //#define _6SWITCH						// my nodemcu with a 6 relay board attached
 
-#ifdef _THERMOMETER
-	#define _TMP_SENSOR_DATA_PIN		D7
-	#define _SENSOR_TYPE	THERMOMETER
-#endif
-//#define _TMP_SENSOR_PWR_PIN		2
 
 
 // turn these OFF for the 6 switch one
@@ -26,16 +19,15 @@
 // the one in LS with an extra switch wire
 // #define _SONOFF_BASIC_EXTRA_SWITCH
 // the wemso D1 relay shield
-//#define _WEMOS_RELAY_SHIELD
 
 
 
 
-#if !defined(_SONOFF_BASIC) && !defined(_SONOFF_BASIC_EXTRA_SWITCH) && !defined(_WEMOS_RELAY_SHIELD) && !defined(_AT_RGBSTRIP) && !defined(_6SWITCH) && !defined(_THERMOMETER)
+#if !defined(_SONOFF_BASIC) && !defined(_SONOFF_BASIC_EXTRA_SWITCH) && !defined(_AT_RGBSTRIP) && !defined(_6SWITCH)
 #error "Something MUST be defined!"
 #endif
 
-#if defined(_WEMOS_RELAY_SHIELD) || defined(_SONOFF_BASIC) || defined(_SONOFF_BASIC_EXTRA_SWITCH)
+#if defined(_SONOFF_BASIC) || defined(_SONOFF_BASIC_EXTRA_SWITCH)
 
 // without this, we use a MUXer
 #define _PHYSICAL_SWITCH_EXISTS
@@ -49,11 +41,6 @@
 #define _OTA_AVAILABLE
 #define NUM_SOCKETS	1
 
-#elif defined(_THERMOMETER)
-
-#define _OTA_AVAILABLE
-//#define NUM_SOCKETS	0
-
 
 #elif defined(_6SWITCH)
 
@@ -64,14 +51,8 @@
 
 #endif
 
-#if defined (_WEMOS_RELAY_SHIELD)
+#if defined(_SONOFF_BASIC) || defined(_SONOFF_BASIC_EXTRA_SWITCH)
 
-#define GPIO_RELAY		D1
-#define GPIO_LED		LED_BUILTIN
-// whatever you want it to be!
-#define GPIO_SWITCH		D2
-
-#elif defined (_SONOFF_BASIC) || defined (_SONOFF_BASIC_EXTRA_SWITCH)
 
 // IMPORTANT - for programming SONOFF Basics
 // https://github.com/arendst/Sonoff-Tasmota/wiki/Arduino-IDE
@@ -128,12 +109,8 @@
 #define _VERSION_ROOT	"lightS_"
 #elif defined (_SONOFF_BASIC_EXTRA_SWITCH)
 #define _VERSION_ROOT	"lightE_"
-#elif defined (_WEMOS_RELAY_SHIELD)
-#define _VERSION_ROOT	"lightW_"
 #elif defined(_AT_RGBSTRIP)
 #define _VERSION_ROOT	"lightRGB_"
-#elif defined(_THERMOMETER)
-#define _VERSION_ROOT	"therm_"
 #else
 #define _VERSION_ROOT	"light6_"
 #endif
@@ -188,8 +165,6 @@ SerialDebug dblog(debug::dbVerbose);
 
 #if defined(_SONOFF_BASIC) || defined(_SONOFF_BASIC_EXTRA_SWITCH)
 myWifiClass wifiInstance("sonoff_", &dblog, mdsnNAME);
-#elif defined(_WEMOS_RELAY_SHIELD)
-myWifiClass wifiInstance("wemos_", &dblog, mdsnNAME);
 #elif defined(_6SWITCH)
 // for serial
 SerialDebug dblog(debug::dbWarning);
@@ -204,10 +179,6 @@ myWifiClass wifiInstance("rgb_", &dblog, mdsnNAME);
 #define _AT85_ADDR	0x10
 ATleds rgbHandler(_AT85_ADDR,&dblog);
 
-#elif defined(_THERMOMETER)
-SerialDebug dblog(debug::dbVerbose);
-myWifiClass wifiInstance("thrm_", &dblog, mdsnNAME);
-
 #endif
 
 #else
@@ -219,15 +190,6 @@ myWifiClass wifiInstance("esp_", &dblog, mdsnNAME);
 
 
 
-#ifdef _TMP_SENSOR_DATA_PIN
-#include <onewire.h>
-#include <DallasTemperature.h>
-
-OneWire oneWire(_TMP_SENSOR_DATA_PIN);
-// Pass our oneWire reference to Dallas Temperature. 
-DallasTemperature ds18b20(&oneWire);
-
-#endif
 
 
 #ifdef _OLD_WAY
@@ -803,7 +765,7 @@ void DoAllSwitch(bool state, bool force)
 
 	for(auto each=Details.switches.begin();each!=Details.switches.end();each++)
 	{
-		(*each)->DoSwitch(state, force);
+		(*each)->DoRelay(state, force);
 	}
 
 #endif
@@ -1241,18 +1203,6 @@ void setup(void)
 
 #endif
 
-#ifdef _TMP_SENSOR_DATA_PIN
-	dblog.printf(debug::dbVerbose, "Starting DS18B Thermometer ... ");
-	ds18b20.begin();
-	if (!ds18b20.getDS18Count())
-	{
-		dblog.println(debug::dbError, "Did not find ANY thermometers");
-	}
-	else
-	{
-		dblog.printf(debug::dbVerbose, "found %d\n\r");
-	}
-#endif
 
 
 #ifdef _PHYSICAL_SWITCH_EXISTS
@@ -1663,7 +1613,7 @@ void InstallWebServerHandlers()
 			bool action = wifiInstance.server.arg("action") == "on" ? true : false;
 			// just go thru them all
 			for(auto each=Details.switches.begin();each!=Details.switches.end();each++)
-				(*each)->DoSwitch(action);
+				(*each)->DoRelay(action);
 
 		}
 
@@ -1964,24 +1914,6 @@ void InstallWebServerHandlers()
 		root["switchCount"] = NUM_SOCKETS;
 #endif
 		
-#ifdef _TMP_SENSOR_DATA_PIN
-		if (ds18b20.getDS18Count())
-		{
-			ds18b20.requestTemperatures();
-			float temp= ds18b20.getTempCByIndex(0);
-			// sanity
-			if (temp > -10.0 && temp < 100.0)
-			{
-				root["temperature"] = temp;
-			}
-		}
-		else
-		{
-			root["Error"] = "NO Thermometers detected";
-			dblog.println(debug::dbError, "No thermometers detected when expected");
-		}
-		
-#endif
 
 #ifdef NUM_SOCKETS
 		JsonArray &switchState = root.createNestedArray("switchState");
@@ -2034,7 +1966,7 @@ void InstallWebServerHandlers()
 			JsonObject &switchRelay = switchState.createNestedObject();
 			switchRelay["switch"] = count;
 			// html js expects 1 or 0
-			switchRelay["state"] = (*each)->GetSwitch()?1:0;
+			switchRelay["state"] = (*each)->GetRelay()?1:0;
 			switchRelay["stateChanges"] = (*each)->GetTransitionCount();
 
 			switch ((*each)->GetSwitchType())

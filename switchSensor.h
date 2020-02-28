@@ -562,25 +562,24 @@ protected:
 
 public:
 
-	baseSwitch(unsigned long bounceThreshold, debugBaseClass*dbg):switchCount(0),last_seen_bounce(0),bounce_threshhold(bounceThreshold),
+	baseSwitch(debugBaseClass*dbg, unsigned long bounceThreshold):switchCount(0),last_seen_bounce(0),bounce_threshhold(bounceThreshold),
 		baseThing(dbg), m_type(stUndefined)
 	{
 
 	}
 
-	// TODO rename DoRelay
-	virtual void ICACHE_RAM_ATTR DoSwitch(bool on, bool forceSwitchToReflect=false)
+	virtual void ICACHE_RAM_ATTR DoRelay(bool on, bool forceSwitchToReflect=false)
 	{
-		dblog->isr_printf(debug::dbImportant, "DoSwitch: %s %s\r\n", on ? "ON" : "off", forceSwitchToReflect ? "FORCE" : "");		
+		//dblog->isr_printf(debug::dbImportant, "DoRelay: %s %s\r\n", on ? "ON" : "off", forceSwitchToReflect ? "FORCE" : "");		
 	}
 
 	virtual void ICACHE_RAM_ATTR ToggleRelay()
 	{
-		DoSwitch(!GetSwitch());
+		DoRelay(!GetRelay());
 	}
 
 	// TODO rename GetRelay
-	virtual bool ICACHE_RAM_ATTR GetSwitch()=0;
+	virtual bool ICACHE_RAM_ATTR GetRelay()=0;
 
 	virtual bool ICACHE_RAM_ATTR IsSwitchBounce()
 	{
@@ -625,7 +624,7 @@ protected:
 class momentarySwitch : public baseSwitch
 {
 public:
-	momentarySwitch(debugBaseClass *dblog):baseSwitch(_DEBOUNCE_WINDOW_MOMENTARY,dblog)
+	momentarySwitch(debugBaseClass *dblog):baseSwitch(dblog,_DEBOUNCE_WINDOW_MOMENTARY)
 	{
 		m_type=stMomentary;
 	}
@@ -634,19 +633,19 @@ public:
 class toggleSwitch : public baseSwitch
 {
 public:
-	toggleSwitch(debugBaseClass *dblog):baseSwitch(_DEBOUNCE_WINDOW_TOGGLE,dblog)
+	toggleSwitch(debugBaseClass *dblog):baseSwitch(dblog,_DEBOUNCE_WINDOW_TOGGLE)
 	{
 		m_type=stToggle;
 	}
 };
 
 
-class SonoffBasic : public momentarySwitch
+class RelayLEDandSwitch : public momentarySwitch
 {
 
 public:
 
-	SonoffBasic(debugBaseClass *dblog,int digitalPinInput=0, int digitalPinOutput=12,int digitalPinLED=13):
+	RelayLEDandSwitch(debugBaseClass *dblog,int digitalPinInput=0, int digitalPinOutput=12,int digitalPinLED=13):
 		m_ioPinIn(digitalPinInput), m_ioPinOut(digitalPinOutput), m_ioPinLED(digitalPinLED),
 		ignoreISRrequests(false),
 		momentarySwitch(dblog)
@@ -657,7 +656,7 @@ public:
 		// pull up in
 		pinMode(digitalPinInput, INPUT_PULLUP);
 		// and attach to it, it's momentary, so get if falling low
-		attachInterrupt(digitalPinInput, SonoffBasic::staticOnSwitchISR, FALLING );
+		attachInterrupt(digitalPinInput, RelayLEDandSwitch::staticOnSwitchISR, FALLING );
 
 		// relay is output
 		pinMode(digitalPinOutput, OUTPUT);
@@ -689,12 +688,12 @@ public:
 
 	}
 
-	virtual bool ICACHE_RAM_ATTR GetSwitch()
+	virtual bool ICACHE_RAM_ATTR GetRelay()
 	{
 		return digitalRead(m_ioPinOut)==HIGH;
 	}
 
-	virtual void ICACHE_RAM_ATTR DoSwitch(bool on, bool forceSwitchToReflect=false)
+	virtual void ICACHE_RAM_ATTR DoRelay(bool on, bool forceSwitchToReflect=false)
 	{
 		// have seen instances where firing this relay contributes enough
 		// noise to get detected as an inpout switch - so guard
@@ -719,19 +718,31 @@ protected:
 	volatile bool ignoreISRrequests;
 
 public:
-  static SonoffBasic* m_singleton;
+  static RelayLEDandSwitch* m_singleton;
 
 };
 
-class SonoffBasicNoLED : public SonoffBasic
+class SonoffBasicNoLED : public RelayLEDandSwitch
 {
 public:
 
 	// ctor sig is the same as Sooff Basic, but LED pin is ignored
 	SonoffBasicNoLED(debugBaseClass *dblog,int digitalPinInput=0, int digitalPinOutput=12,int digitalPinLED=-1):
-		SonoffBasic(dblog,digitalPinInput,digitalPinOutput,-1)
+		RelayLEDandSwitch(dblog,digitalPinInput,digitalPinOutput,-1)
 	{
 
 	}
 
 };
+
+// TODO - untested
+class WemosRelayShield : public RelayLEDandSwitch
+{
+public:
+	WemosRelayShield(debugBaseClass *dblog):RelayLEDandSwitch(dblog,D2,D1,LED_BUILTIN)
+	{}
+};
+
+
+#define _DEBOUNCE_WINDOW_LOGIC_TTL	10
+
