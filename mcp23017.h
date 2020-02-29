@@ -5,6 +5,7 @@
 
 #include "Arduino.h"
 #include <Wire.h>
+#include <debugLogger.h>
 
 // the address of the MCP
 #define MCPADDR	0x20
@@ -32,8 +33,8 @@
 class mcp23017
 {
 public:
-	mcp23017(int sdaPin, int sclPin, int resetPin):
-		m_resetAvailable(true), m_sdaPin(sdaPin), m_sclPin(sclPin), m_resetPin(resetPin)
+	mcp23017(debugBaseClass *dblog, int sdaPin, int sclPin, int resetPin):
+		m_resetAvailable(true), m_sdaPin(sdaPin), m_sclPin(sclPin), m_resetPin(resetPin),m_dblog(dblog)
 	{
 		m_wire.begin(sdaPin, sclPin);
 		memset(&m_lastRelayMicros,0,sizeof(m_lastRelayMicros));
@@ -43,8 +44,8 @@ public:
 #endif
 	}
 
-	mcp23017(int sdaPin, int sclPin) :
-		m_resetAvailable(false), m_sdaPin(sdaPin), m_sclPin(sclPin), m_resetPin(0)
+	mcp23017(debugBaseClass *dblog, int sdaPin, int sclPin) :
+		m_resetAvailable(false), m_sdaPin(sdaPin), m_sclPin(sclPin), m_resetPin(0),m_dblog(dblog)
 	{
 		m_wire.begin(sdaPin, sclPin);
 
@@ -79,6 +80,8 @@ protected:
 	bool m_resetAvailable;
 	int m_sdaPin, m_sclPin, m_resetPin;
 
+	debugBaseClass *m_dblog;
+
 private:
 
 #ifdef _IPOL_IN_SOFTWARE
@@ -95,13 +98,14 @@ private:
 class mcp23017AndRelay: public mcp23017
 {
 public:
-	mcp23017AndRelay(int sdaPin, int sclPin, int resetPin, int powerHubNPN):mcp23017(sdaPin, sclPin, resetPin),m_powerHubNPN(powerHubNPN)
+	mcp23017AndRelay(debugBaseClass *dblog, int sdaPin, int sclPin, int resetPin, int powerHubNPN):
+		mcp23017(dblog, sdaPin, sclPin, resetPin),m_powerHubNPN(powerHubNPN)
 	{
 	
 		// set up the xistor that looks after the relay
 		pinMode(m_powerHubNPN, OUTPUT);
 		// ensure relay is off
-		digitalWrite(m_powerHubNPN, 0);
+		digitalWrite(m_powerHubNPN, LOW);
 
 	}
 
@@ -109,13 +113,13 @@ public:
 	virtual void Initialise()
 	{
 		// ensure relay is off
-		digitalWrite(m_powerHubNPN, 0);
+		digitalWrite(m_powerHubNPN, LOW);
 
 		// initialise
 		mcp23017::Initialise();
 
 		// then turn the relay on
-		digitalWrite(m_powerHubNPN, 255);
+		digitalWrite(m_powerHubNPN, HIGH);
 	}
 
 private:

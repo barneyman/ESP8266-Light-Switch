@@ -4,15 +4,27 @@
 
 #include "mcp23017.h"
 
-#define DEBUG(a,b) ;
 
 byte mcp23017::readOneRegister(byte command)
 {
 	m_wire.beginTransmission(MCPADDR);
 	m_wire.write(command); // register
-	m_wire.endTransmission();
+	int res=m_wire.endTransmission();
 
-	m_wire.requestFrom(MCPADDR, 1); // request one byte of data
+	if(res)
+	{
+		m_dblog->printf(debug::dbError,"readOneRegister endTransmission returned %d\n\r", res);
+		return 0;
+	}
+
+	delay(10);
+	// request one byte of data
+	res=m_wire.requestFrom(MCPADDR, 1);
+	if(1!=res)
+	{
+		m_dblog->printf(debug::dbError,"readOneRegister requestFrom returned %d\n\r", res);	
+		return 0;
+	}
 	byte state = m_wire.read();
 
 	return state;
@@ -23,7 +35,14 @@ void mcp23017::writeOneRegister(byte command, byte theByte)
 	m_wire.beginTransmission(MCPADDR);
 	m_wire.write(command); // register
 	m_wire.write(theByte);
-	m_wire.endTransmission();
+
+	int res=m_wire.endTransmission();
+
+	if(res)
+	{
+		m_dblog->printf(debug::dbError,"writeOneRegister endTransmission returned %d\n\r", res);
+		return;
+	}
 
 }
 
@@ -81,15 +100,15 @@ void mcp23017::flipPolarityPort(unsigned port)
 {
 	if (port > 7 || port < 0)
 	{
-		DEBUG(DEBUG_ERROR, Serial.printf("flipPolarityPort called out of bounds %u\n\r", port));
+		m_dblog->printf(debug::dbError,"flipPolarityPort called out of bounds %u\n\r", port);
 		return;
 	}
 
 
 #ifdef _IPOL_IN_SOFTWARE
-	DEBUG(DEBUG_VERBOSE, Serial.printf("%02x -> ", m_polarity));
+	m_dblog->printf(debug::dbVerbose,"%02x -> ", m_polarity);
 	m_polarity ^= ((1 << port));
-	DEBUG(DEBUG_VERBOSE, Serial.printf("%02x ", m_polarity));
+	m_dblog->printf(debug::dbVerbose,"%02x ", m_polarity);
 #else
 	// get polarity of A
 	byte polarity = readOneRegister(MCP_IPOL_A);
@@ -105,7 +124,7 @@ void mcp23017::flipPolarityPort(unsigned port)
 	DEBUG(DEBUG_IMPORTANT, Serial.printf("%02x ", polarity));
 
 #endif
-	DEBUG(DEBUG_VERBOSE, Serial.println("written"));
+	m_dblog->printf(debug::dbVerbose,"written");
 
 }
 
@@ -133,7 +152,7 @@ bool mcp23017::readSwitch(unsigned switchNumber)
 {
 	if (switchNumber > 7 || switchNumber < 0)
 	{
-		DEBUG(DEBUG_ERROR, Serial.printf("readSwitch called out of bounds %u\n\r", switchNumber));
+		m_dblog->printf(debug::dbError,"readSwitch called out of bounds %u\n\r", switchNumber);
 		return false;
 	}
 
@@ -149,7 +168,7 @@ void mcp23017::SetSwitch(unsigned switchNumber, bool relayState)
 	// get the switch state for this port
 	bool switchState = readSwitch(switchNumber);
 
-	DEBUG(DEBUG_VERBOSE, Serial.printf("port %d switchState = %02x\n\r", switchNumber, switchState));
+	m_dblog->printf(debug::dbVerbose,"port %d switchState = %02x\n\r", switchNumber, switchState);
 
 	// thw switch does NOT mirror the request state
 	if (switchState != relayState)
@@ -164,7 +183,7 @@ bool mcp23017::ToggleRelay(unsigned relayNumber)
 	bool currentState = false;
 	if (GetRelay(relayNumber, currentState))
 	{
-		DEBUG(DEBUG_INFO, Serial.printf("ToggleRelay %u %s -> %s\n\r", relayNumber,currentState?"ON":"off", !currentState ? "ON" : "off"));
+		m_dblog->printf(debug::dbInfo,"ToggleRelay %u %s -> %s\n\r", relayNumber,currentState?"ON":"off", !currentState ? "ON" : "off");
 		return SetRelay(relayNumber, !currentState);
 	}
 
@@ -173,15 +192,15 @@ bool mcp23017::ToggleRelay(unsigned relayNumber)
 
 bool mcp23017::GetRelay(unsigned relayNumber, bool &relayState)
 {
-	if (relayNumber > 7 || relayNumber < 0)
+	if (relayNumber > 7)
 	{
-		DEBUG(DEBUG_ERROR, Serial.printf("GetRelay called out of bounds %u\n\r", relayNumber));
+		m_dblog->printf(debug::dbError,"GetRelay called out of bounds %u\n\r", relayNumber);
 		return false;
 	}
 
 	byte state = readOneRegister(MCP_GPIO_B);
 
-	DEBUG(DEBUG_INFO, Serial.printf("GetRelay state %02x\n\r", (int)state));
+	m_dblog->printf(debug::dbInfo,"GetRelay state %02x\n\r", (int)state);
 
 	// get the existing state *of the relay* HI is OFF
 	relayState = ((state & (1 << relayNumber))&0xff) ? false : true;
@@ -194,9 +213,9 @@ bool mcp23017::GetRelay(unsigned relayNumber, bool &relayState)
 
 bool mcp23017::SetRelay(unsigned relayNumber, bool relayState)
 {
-	if (relayNumber > 7 || relayNumber < 0)
+	if (relayNumber > 7)
 	{
-		DEBUG(DEBUG_ERROR, Serial.printf("SetRelay called out of bounds %u\n\r", relayNumber));
+		m_dblog->printf(debug::dbError,"SetRelay called out of bounds %u\n\r", relayNumber);
 		return false;
 	}
 
@@ -205,7 +224,7 @@ bool mcp23017::SetRelay(unsigned relayNumber, bool relayState)
 	unsigned long timediff = now-m_lastRelayMicros[relayNumber];
 	if (timediff < _MIN_TIME_BETWEEN_SWITCHES)
 	{
-		DEBUG(DEBUG_ERROR, Serial.printf("SetRelay called too soon for relay %u (%lums)\n\r", relayNumber, timediff/1000));
+		m_dblog->printf(debug::dbError,"SetRelay called too soon for relay %u (%lums)\n\r", relayNumber, timediff/1000);
 		return false;
 	}
 
@@ -213,7 +232,7 @@ bool mcp23017::SetRelay(unsigned relayNumber, bool relayState)
 
 	byte state = readOneRegister(MCP_GPIO_B);
 
-	DEBUG(DEBUG_INFO, Serial.printf("SetRelay state %02x\n\r", (int)state));
+	m_dblog->printf(debug::dbInfo,"SetRelay - current state %02x\n\r", (int)state);
 
 	// get the existing state *of the relay*, mask out the bit we want
 	state = ((state& (~(1 << relayNumber)))) & 0xff;
@@ -223,7 +242,16 @@ bool mcp23017::SetRelay(unsigned relayNumber, bool relayState)
 	if (!relayState)
 		state = state | (1 << relayNumber);
 
+	m_dblog->printf(debug::dbInfo,"SetRelay - new state %02x\n\r", (int)state);
+
 	writeOneRegister(MCP_GPIO_B, state);
+
+	// then confirm
+	if(state!=readOneRegister(MCP_GPIO_B))
+	{
+		m_dblog->println(debug::dbError,"State did not stick!");	
+	}
+
 
 	return true;
 }
@@ -240,7 +268,7 @@ int mcp23017::InterruptCauseAndCurrentState(bool justClearInterrupt)
 	// then get current states
 	byte state= readAllSwitches(true);
 
-	DEBUG(DEBUG_VERBOSE, Serial.printf("MCPInt cause %02x state %02x [%04x]\n\r", cause, state, (int)((cause & 0xff) << 8) | (state & 0xff)));
+	m_dblog->printf(debug::dbInfo,"MCPInt cause %02x state %02x [%04x]\n\r", cause, state, (int)((cause & 0xff) << 8) | (state & 0xff));
 
 	// then send that back
 	return (int)((cause & 0xff) << 8) | (state & 0xff);

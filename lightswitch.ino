@@ -150,7 +150,7 @@ void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState);
 #ifdef _USE_SYSLOG
 syslogDebug dblog(debug::dbWarning, "192.168.51.1", 514, "temp", "lights");
 #else
-SerialDebug dblog(debug::dbVerbose);
+SerialDebug dblog(debug::dbInfo);
 #endif
 
 //#define _OLD_WAY
@@ -682,60 +682,10 @@ void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState)
 void RevertAllSwitch()
 {
 
-#ifdef _OLD_WAY
-
-#ifdef _PHYSICAL_SWITCH_EXISTS
-
-	// read the current switch state, and reflect that in the relay state
-	enum switchState requestState = swUnknown;
-	if (Details.switches[0].lastState == swUnknown)
+	for(auto each=Details.switches.begin();each!=Details.switches.end();each++)
 	{
-		// try to find it
-		if (Details.switches[0].switchType == stToggle)
-		{
-			// found a toggle, believe it
-#ifdef GPIO_SWITCH
-			requestState = (digitalRead(GPIO_SWITCH) == HIGH)?swOn:swOff;
-#else
-			requestState = (requestState == swOn?swOff:swOn);
-#endif
-		}
-#ifdef GPIO_SWITCH2
-		else if (Details.switches[0].altSwitchType == stToggle)
-		{
-			// found a toggle, believe it
-			requestState = (digitalRead(GPIO_SWITCH2) == HIGH) ? swOn : swOff;
-		}
-#endif
-		else
-		{
-			requestState = Details.switches[0].preferredDefault;
-		}
+		(*each)->HonourCurrentSwitch();
 	}
-	else
-	{
-		requestState = Details.switches[0].lastState;
-	}
-	DoSwitch(0, requestState == swOn ? true : false, false);
-
-
-#elif defined(_6SWITCH)
-	// get the switch state
-	for (int port = 0; port < NUM_SOCKETS; port++)
-	{
-		DoSwitch((port),
-			mcp.readSwitch(port),
-			false);
-
-	}
-
-#else
-
-	dblog.isr_printf(debug::dbError, "no impl for RevertAllSwitch");
-
-#endif
-
-#endif
 
 }
 
@@ -743,32 +693,17 @@ void RevertAllSwitch()
 // override switch state
 void DoAllSwitch(bool state, bool force)
 {
-#ifdef _OLD_WAY	
-#ifdef NUM_SOCKETS
-	dblog.printf(debug::dbInfo, "DoAllSwitch: %s %s\r\n", state ? "ON" : "off", force ? "FORCE" : "");
-
-#ifdef _PHYSICAL_SWITCH_EXISTS
-	DoSwitch(0, state, force);
-#else
-
-	for (int Switch = 0; Switch < NUM_SOCKETS; Switch++)
-	{
-		// MapSwitchToRelay is redundant given we're doing them all
-		DoSwitch((Switch), state, force);
-	}
-#endif
-#endif
-
-#else
 
 	dblog.printf(debug::dbInfo, "DoAllSwitch: %s %s\r\n", state ? "ON" : "off", force ? "FORCE" : "");
 
 	for(auto each=Details.switches.begin();each!=Details.switches.end();each++)
 	{
+		dblog.printf(debug::dbInfo, "Switch: %x\r\n", *each);
 		(*each)->DoRelay(state, force);
+		yield();
 	}
 
-#endif
+	dblog.println(debug::dbInfo, "DoAllSwitch: Out");
 
 }
 
@@ -1010,7 +945,7 @@ void ReadJSONconfig()
 		// kill it - and write it again
 		SPIFFS.remove(_JSON_CONFIG_FILE);
 
-		dblog.printf(debug::dbVerbose, "JSON file deleted\n\r");
+		dblog.printf(debug::dbInfo, "JSON file deleted\n\r");
 
 		WriteJSONconfig();
 
@@ -1132,7 +1067,20 @@ void ResetMe()
 
 
 
-
+void AddSwitch(baseSwitch *newSwitch)
+{
+	if(newSwitch)
+	{
+		dblog.println(debug::dbInfo, "Adding switch");
+		Details.switches.push_back(newSwitch);
+		MultiSwitch* multi=(MultiSwitch*)newSwitch;
+		for(unsigned eachChild=0;eachChild<newSwitch->ChildSwitchCount();eachChild++)
+		{
+			Details.switches.push_back(multi->GetChild(eachChild));
+		}
+		dblog.println(debug::dbInfo, "Added switch");
+	}
+}
 
 
 
@@ -1287,11 +1235,15 @@ void setup(void)
 	}
 
 // thermos and lux
-#define WEMOS_COM3
+//#define WEMOS_COM3
+// PIR
+//#define WEMOS_COM4
+// 6switch
+#define WEMOS_COM5
 
 #ifdef WEMOS_COM3
 	// load up the sensors and switches
-	Details.switches.push_back(new SonoffBasicNoLED(&dblog));
+	AddSwitch(new SonoffBasicNoLED(&dblog));
 
 
 	// OF COURSE i reused D7 which is used by Sonoff! duh!
@@ -1301,9 +1253,14 @@ void setup(void)
 
 	Details.sensors.push_back(new testInstantSensor(&dblog, 5000));
 
-#else /// WEMOS_COM3
+#elif defined(WEMOS_COM4) 
 
 	Details.sensors.push_back(new PIRInstantSensor(&dblog, D7));
+
+#elif defined(WEMOS_COM5) 
+
+	AddSwitch(new MCP23017MultiSwitch(&dblog, 6, 4, 5));
+
 
 #endif
 
@@ -1320,9 +1277,9 @@ void setup(void)
 
 #endif
 
-
-
 }
+
+
 
 // look for my siblings
 void FindPeers()
@@ -1472,40 +1429,10 @@ void InstallWebServerHandlers()
 		delay(_WEB_TAR_PIT_DELAY);
 
 
-#ifdef _OLD_WAY		
-
-#ifdef _PHYSICAL_SWITCH_EXISTS
-
-#ifdef GPIO_RELAY
-		DoSwitch(0, (digitalRead(GPIO_RELAY) == HIGH ? false : true), true);
-#endif
-
-#elif defined(_6SWITCH)
-		// must be an arg
-		if (!wifiInstance.server.args())
-		{
-			return;
-		}
-
-		if (wifiInstance.server.argName(0) == "relay")
-		{
-			if (mcp.ToggleRelay(wifiInstance.server.arg(0).toInt()))
-			{
-				wifiInstance.server.send(200, "text/html", "<html></html>");
-			}
-		}
-#else
-		dblog.isr_printf(debug::dbError, "no impl for /toggle");
-#endif
-
-#else
-
+		// TODO pick the right one
 		// just go thru them all
 		for(auto each=Details.switches.begin();each!=Details.switches.end();each)
 			(*each)->ToggleRelay();
-
-
-#endif
 
 
 
@@ -1563,7 +1490,7 @@ void InstallWebServerHandlers()
 			}
 		}
 
-#else
+#else // 6switch
 
 		// one trick pony
 		if (wifiInstance.server.hasArg("action"))
@@ -1604,16 +1531,33 @@ void InstallWebServerHandlers()
 		}
 
 
-#endif
+#endif // 6switch
 
 #endif
 
 		if (wifiInstance.server.hasArg("action"))
 		{
 			bool action = wifiInstance.server.arg("action") == "on" ? true : false;
-			// just go thru them all
-			for(auto each=Details.switches.begin();each!=Details.switches.end();each++)
-				(*each)->DoRelay(action);
+			
+			if(wifiInstance.server.hasArg("port"))
+			{
+				int port=wifiInstance.server.arg("port").toInt();
+				if(port<Details.switches.size())
+				{
+					Details.switches[port]->DoRelay(action);
+				}
+				else
+				{
+					dblog.printf(debug::dbWarning, "asked to action %d - exceeds maximum %d\r\n", port,Details.switches.size()-1);
+				}
+			}
+			else
+			{
+				// just go thru them all
+				for(auto each=Details.switches.begin();each!=Details.switches.end();each++)
+					(*each)->DoRelay(action);
+			}
+			
 
 		}
 
@@ -1629,19 +1573,8 @@ void InstallWebServerHandlers()
 
 		delay(_WEB_TAR_PIT_DELAY);
 
-#ifdef _OLD_WAY
-#ifdef NUM_SOCKETS
-		for (int eachSwitch = 0; eachSwitch < NUM_SOCKETS; eachSwitch++)
-		{
-			Details.switches[eachSwitch].switchCount = 0;
-		}
-#endif
-
-#else
-		for(auto each=Details.switches.begin();each!=Details.switches.end();each)
+		for(auto each=Details.switches.begin();each!=Details.switches.end();each++)
 			(*each)->ResetTransitionCount();
-
-#endif
 
 		wifiInstance.server.send(200,"text/html","<html/>");
 
@@ -1906,56 +1839,8 @@ void InstallWebServerHandlers()
 
 		root["name"] = wifiInstance.m_hostName.c_str();
 		root["friendlyName"] = Details.friendlyName;
-		root["ip"] = wifiInstance.localIP().toString();
-
-#ifdef _OLD_WAY
-
-#ifdef NUM_SOCKETS
-		root["switchCount"] = NUM_SOCKETS;
-#endif
-		
-
-#ifdef NUM_SOCKETS
-		JsonArray &switchState = root.createNestedArray("switchState");
-		for (unsigned each = 0; each < NUM_SOCKETS; each++)
-		{
-			JsonObject &switchRelay = switchState.createNestedObject();
-			switchRelay["switch"] = each;
-			switch (Details.switches[each].switchType)
-			{
-			case stUndefined:
-				switchRelay["type"] = "!UNDEFINED!";
-				break;
-
-			case stMomentary:
-				switchRelay["type"] = "Momentary";
-				break;
-			case stToggle:
-				switchRelay["type"] = "Toggle";
-				break;
-			case stVirtual:
-				switchRelay["type"] = "Virtual";
-				break;
-			}
-			switchRelay["name"] = Details.switches[each].name;
-			switchRelay["relay"] = Details.switches[each].relay;
-			switchRelay["state"] = 
-#ifdef _6SWITCH
-				mcp.readSwitch(each) ? 1 : 0;
-#else
-				// reflect the relay, not the switch
-				Details.switches[0].lastState== swOn?1:0;
-#endif
-
-#ifdef _AT_RGBSTRIP
-			switchRelay["lastRGB"] = Details.switches[each].lastRGB;
-#endif
-
-			switchRelay["stateChanges"] = Details.switches[each].switchCount;
-		}
-#endif
-
-#endif
+		if(wifiInstance.localIP().isSet())
+			root["ip"] = wifiInstance.localIP().toString();
 
 		root["switchCount"] = Details.switches.size();
 
@@ -1984,6 +1869,11 @@ void InstallWebServerHandlers()
 			case baseSwitch::stVirtual:
 				switchRelay["type"] = "Virtual";
 				break;
+
+			default:
+				switchRelay["type"] = "!Unsupported!";
+				break;
+
 			}
 
 			switchRelay["name"] = (*each)->GetName();
@@ -2077,7 +1967,8 @@ void InstallWebServerHandlers()
 		root["name"] = wifiInstance.m_hostName.c_str();
 		root["version"] = _MYVERSION;
 		root["versionHTML"] = _MYVERSION_HTML;
-		root["ip"] = wifiInstance.localIP().toString();
+		if(wifiInstance.localIP().isSet())
+			root["ip"] = wifiInstance.localIP().toString();
 		root["mac"] = wifiInstance.macAddress();
 
 #ifdef _OLD_WAY		
@@ -2108,7 +1999,7 @@ void InstallWebServerHandlers()
 		}
 
 
-		root["sensorCount"] = Details.switches.size();
+		root["switchCount"] = Details.switches.size();
 		JsonArray &switchConfig = root.createNestedArray("switchConfig");
 		count=0;
 		for(auto each=Details.switches.begin();each!=Details.switches.end();each++, count++)
@@ -2146,7 +2037,8 @@ void InstallWebServerHandlers()
 
 		root["name"] = wifiInstance.m_hostName.c_str();
 		root["ssid"] = wifiInstance.SSID();
-		root["ip"] = wifiInstance.localIP().toString();
+		if(wifiInstance.localIP().isSet())
+			root["ip"] = wifiInstance.localIP().toString();
 
 		String jsonText;
 		root.prettyPrintTo(jsonText);
@@ -2169,7 +2061,8 @@ void InstallWebServerHandlers()
 		JsonObject &root = jsonBuffer.createObject();
 		root["name"] = wifiInstance.m_hostName.c_str();
 		root["peerCount"] = services.size();
-		root["ip"] = wifiInstance.localIP().toString();
+		if(wifiInstance.localIP().isSet())
+			root["ip"] = wifiInstance.localIP().toString();
 
 #ifdef _OLD_WAY
 		JsonArray &peers = root.createNestedArray("peers");

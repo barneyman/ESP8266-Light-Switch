@@ -498,7 +498,7 @@ protected:
 	unsigned m_gpio;
 	volatile bool m_ioChanged;
 
-	static void ICACHE_RAM_ATTR static_isr()
+	static void static_isr()
 	{
 		m_singleton->m_ioChanged=true;
 	}
@@ -568,20 +568,31 @@ public:
 
 	}
 
-	virtual void ICACHE_RAM_ATTR DoRelay(bool on, bool forceSwitchToReflect=false)
+	virtual void DoRelay(bool on, bool forceSwitchToReflect=false)
 	{
 		//dblog->isr_printf(debug::dbImportant, "DoRelay: %s %s\r\n", on ? "ON" : "off", forceSwitchToReflect ? "FORCE" : "");		
 	}
 
-	virtual void ICACHE_RAM_ATTR ToggleRelay()
+	virtual void ToggleRelay()
 	{
 		DoRelay(!GetRelay());
 	}
 
-	// TODO rename GetRelay
-	virtual bool ICACHE_RAM_ATTR GetRelay()=0;
+	virtual bool GetRelay()=0;
 
-	virtual bool ICACHE_RAM_ATTR IsSwitchBounce()
+	// make the relay honour the switch
+	virtual void HonourCurrentSwitch()
+	{
+
+	}
+
+	// to handle multiple switches 
+	virtual unsigned ChildSwitchCount()
+	{
+		return 0;
+	}
+
+	virtual bool IsSwitchBounce()
 	{
 		unsigned long now=GetMillis();
 		unsigned long bounceTime=now-last_seen_bounce;
@@ -673,6 +684,8 @@ public:
 
 	}
 
+	// TODO - flag this, create a work loop, and do it in that
+	// TODO - and remove all the ICACHE_RAM_ATTR
 	void ICACHE_RAM_ATTR OnSwitchISR()
 	{
 		if(ignoreISRrequests)
@@ -688,12 +701,12 @@ public:
 
 	}
 
-	virtual bool ICACHE_RAM_ATTR GetRelay()
+	virtual bool GetRelay()
 	{
 		return digitalRead(m_ioPinOut)==HIGH;
 	}
 
-	virtual void ICACHE_RAM_ATTR DoRelay(bool on, bool forceSwitchToReflect=false)
+	virtual void DoRelay(bool on, bool forceSwitchToReflect=false)
 	{
 		// have seen instances where firing this relay contributes enough
 		// noise to get detected as an inpout switch - so guard
@@ -746,3 +759,135 @@ public:
 
 #define _DEBOUNCE_WINDOW_LOGIC_TTL	10
 
+// acts as a 'gang' switch, but exposes the children
+class MultiSwitch : public baseSwitch
+{
+
+protected:
+
+	class childSwitch : public toggleSwitch
+	{
+	public:
+		childSwitch(debugBaseClass *dblog, MultiSwitch *parent, unsigned port):
+			toggleSwitch(dblog),m_parent(parent),m_port(port)
+		{
+			thingName="Port "+String(port);
+		}
+
+		virtual void DoRelay(bool on, bool forceSwitchToReflect=false)
+		{
+			// ask dad
+			if(m_parent)
+				m_parent->DoChildRelay(m_port, on, forceSwitchToReflect);
+		}
+
+		virtual bool GetRelay()
+		{
+			// ask dad
+			if(m_parent)
+				return m_parent->GetChildRelay(m_port);
+			return false;
+		}
+
+	protected:
+		MultiSwitch*m_parent;
+		unsigned m_port;
+	};
+
+
+public:
+	MultiSwitch(debugBaseClass *dblog):
+		baseSwitch(dblog,_DEBOUNCE_WINDOW_LOGIC_TTL)
+	{
+		m_type=stVirtual;
+		thingName="Gang";
+	}
+
+	virtual unsigned ChildSwitchCount()
+	{
+		return m_children.size();
+	}
+
+	baseSwitch *GetChild(unsigned offset)
+	{
+		if(offset<m_children.size())
+		{
+			return m_children[offset];
+		}
+
+		return NULL;
+	}
+
+	virtual bool GetRelay()
+	{
+		return false;
+	}
+
+	// turn all the children on or off
+	virtual void DoRelay(bool on, bool forceSwitchToReflect=false)
+	{
+		dblog->println(debug::dbVerbose,"DoRelay on Gang called");
+		for(auto each=0;each<m_children.size();each++)
+		{
+			dblog->printf(debug::dbVerbose,"DoChildRelay %d called\n\r",each);
+			DoChildRelay(each,on,forceSwitchToReflect);
+		}
+	}
+
+	virtual void DoChildRelay(unsigned child,bool on, bool forceSwitchToReflect=false)=0;
+	virtual bool GetChildRelay(unsigned child)=0;
+
+protected:
+
+	std::vector<baseSwitch*> m_children;
+
+	unsigned m_numSwitches;
+
+};
+
+#include "mcp23017.h"
+
+class MCP23017MultiSwitch : public MultiSwitch
+{
+
+protected:
+
+//#define USE_MCP_RELAY
+#ifdef USE_MCP_RELAY
+	mcp23017AndRelay m_iochip;
+#else	
+	mcp23017 m_iochip;
+#endif	
+
+public:
+
+	MCP23017MultiSwitch(debugBaseClass *dblog, unsigned numSwitches, int sdaPin, int sclPin):
+		MultiSwitch(dblog),
+#ifdef USE_MCP_RELAY		
+		m_iochip(dblog, sdaPin,sclPin, D0, D3)
+#else
+		m_iochip(dblog, sdaPin,sclPin)
+#endif		
+	{
+		m_iochip.Initialise();
+
+		for(unsigned each=0;each<numSwitches;each++)
+		{
+			m_children.push_back(new childSwitch(dblog, this, each));
+		}
+	}
+
+	virtual void DoChildRelay(unsigned child,bool on, bool forceSwitchToReflect=false)
+	{
+		m_iochip.SetRelay(child,on);
+	}
+
+	virtual bool GetChildRelay(unsigned child)
+	{
+		bool result=false;
+		m_iochip.GetRelay(child,result);
+		return result;
+	}
+
+
+};
