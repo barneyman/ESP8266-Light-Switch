@@ -23,6 +23,8 @@ public:
 		return thingName;
 	}
 
+	virtual void DoWork(){}
+
 protected:
 
 	unsigned long GetMillis()
@@ -50,7 +52,6 @@ public:
 		GetSensorConfigElements(sensorElement);
 	}
 
-	virtual void DoSensorWork(){}
 	virtual void AddSensorRecipient(IPAddress addr, unsigned port) 
 	{
 		dblog->println(debug::dbWarning,"base AddSensorRecipient called");
@@ -475,7 +476,7 @@ public:
 		deviceClass="test";
 	}
 
-	virtual void DoSensorWork()
+	virtual void DoWork()
 	{
 		// if our state has changed send State
 		unsigned long now=millis();
@@ -485,6 +486,8 @@ public:
 			SendState(m_currentState);
 			m_millis=now;
 		}
+
+		instantSensor::DoWork();
 
 	}
 
@@ -592,7 +595,7 @@ public:
 		return 0;
 	}
 
-	virtual bool IsSwitchBounce()
+	virtual bool ICACHE_RAM_ATTR IsSwitchBounce()
 	{
 		unsigned long now=GetMillis();
 		unsigned long bounceTime=now-last_seen_bounce;
@@ -654,12 +657,18 @@ public:
 class RelayLEDandSwitch : public momentarySwitch
 {
 
+protected:
+
+	enum workToDo_Switch { w2dNone, w2dToggle };
+	volatile enum workToDo_Switch m_workToDo;
+
 public:
 
 	RelayLEDandSwitch(debugBaseClass *dblog,int digitalPinInput=0, int digitalPinOutput=12,int digitalPinLED=13):
 		m_ioPinIn(digitalPinInput), m_ioPinOut(digitalPinOutput), m_ioPinLED(digitalPinLED),
 		ignoreISRrequests(false),
-		momentarySwitch(dblog)
+		momentarySwitch(dblog),
+		m_workToDo(w2dNone)
 	{
 		// and remember shit
 		m_singleton=this;
@@ -697,9 +706,27 @@ public:
 			return;
 
 		// just alternate
-		ToggleRelay();
+		m_workToDo=w2dToggle;
 
 	}
+
+	virtual void DoWork()
+	{
+		switch(m_workToDo)
+		{
+			case w2dToggle:
+				ToggleRelay();
+				break;
+			case w2dNone:
+				break;	
+		}
+
+		m_workToDo=w2dNone;
+
+		momentarySwitch::DoWork();
+
+	}
+
 
 	virtual bool GetRelay()
 	{

@@ -2451,8 +2451,14 @@ void loop(void)
 	// sensors may need some work
 	for(auto eachSensor=Details.sensors.begin();eachSensor!=Details.sensors.end();eachSensor++)
 	{
-		(*eachSensor)->DoSensorWork();
+		(*eachSensor)->DoWork();
 	}
+
+	for(auto eachSwitch=Details.switches.begin();eachSwitch!=Details.switches.end();eachSwitch++)
+	{
+		(*eachSwitch)->DoWork();
+	}
+
 
 	dblog.isr_pump();
 
