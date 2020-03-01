@@ -329,7 +329,7 @@ protected:
 		// this allows the HA server to reboot, change ports, and we'll spot it
 		bool operator==(const recipient &other)
 		{
-			return m_addr==other.m_addr && m_port==other.m_port;
+			return m_addr==other.m_addr;// && m_port==other.m_port;
 		}
 
 
@@ -395,9 +395,10 @@ public:
 			}
 			else
 			{
-				dblog->println(debug::dbInfo,"port has changed, re-adding");
-				m_HAhosts.erase(finder);
-				m_HAhosts.push_back(potential);
+				dblog->println(debug::dbInfo,"port has changed, re-mapping");
+				finder->m_port=port;
+				//m_HAhosts.erase(finder);
+				//m_HAhosts.push_back(potential);
 			}
 
 		}
@@ -501,7 +502,7 @@ protected:
 	unsigned m_gpio;
 	volatile bool m_ioChanged;
 
-	static void static_isr()
+	static void ICACHE_RAM_ATTR static_isr()
 	{
 		m_singleton->m_ioChanged=true;
 	}
