@@ -518,7 +518,7 @@ public:
 		attachInterrupt(m_gpio, static_isr, CHANGE);
 	}
 
-	virtual void DoSensorWork()
+	virtual void DoWork()
 	{
 		// if our state has changed send State
 		if(m_ioChanged)
@@ -530,6 +530,8 @@ public:
 			SendState(m_currentState);
 			m_ioChanged=false;
 		}
+
+		instantSensor::DoWork();
 
 	}
 
