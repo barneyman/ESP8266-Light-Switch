@@ -519,7 +519,6 @@ public:
 
 	virtual void DoSensorWork()
 	{
-		// TODO change this
 		// if our state has changed send State
 		if(m_ioChanged)
 		{
@@ -562,11 +561,14 @@ public:
 protected:	
 
 	enum typeOfSwitch m_type;
+	enum workToDo_Switch { w2dNone, w2dToggle, w2dQuery };
+	volatile enum workToDo_Switch m_workToDo;
 
 public:
 
 	baseSwitch(debugBaseClass*dbg, unsigned long bounceThreshold):switchCount(0),last_seen_bounce(0),bounce_threshhold(bounceThreshold),
-		baseThing(dbg), m_type(stUndefined)
+		baseThing(dbg), m_type(stUndefined),
+		m_workToDo(w2dNone)
 	{
 
 	}
@@ -659,16 +661,13 @@ class RelayLEDandSwitch : public momentarySwitch
 
 protected:
 
-	enum workToDo_Switch { w2dNone, w2dToggle };
-	volatile enum workToDo_Switch m_workToDo;
 
 public:
 
 	RelayLEDandSwitch(debugBaseClass *dblog,int digitalPinInput=0, int digitalPinOutput=12,int digitalPinLED=13):
 		m_ioPinIn(digitalPinInput), m_ioPinOut(digitalPinOutput), m_ioPinLED(digitalPinLED),
 		ignoreISRrequests(false),
-		momentarySwitch(dblog),
-		m_workToDo(w2dNone)
+		momentarySwitch(dblog)
 	{
 		// and remember shit
 		m_singleton=this;
@@ -693,14 +692,12 @@ public:
 
 	}
 
-	// TODO - flag this, create a work loop, and do it in that
-	// TODO - and remove all the ICACHE_RAM_ATTR
 	void ICACHE_RAM_ATTR OnSwitchISR()
 	{
 		if(ignoreISRrequests)
 			return;
 
-		//dblog->isr_println(debug::dbInfo,"OnSwitchISR in");			
+		dblog->isr_println(debug::dbInfo,"RelayLEDandSwitch::OnSwitchISR in");			
 
 		if(IsSwitchBounce())
 			return;
@@ -717,7 +714,7 @@ public:
 			case w2dToggle:
 				ToggleRelay();
 				break;
-			case w2dNone:
+			default:
 				break;	
 		}
 
@@ -751,6 +748,8 @@ public:
 
 		ignoreISRrequests=false;
 	}
+
+
 
 protected:
 
@@ -877,25 +876,22 @@ protected:
 class MCP23017MultiSwitch : public MultiSwitch
 {
 
-protected:
-
-//#define USE_MCP_RELAY
-#ifdef USE_MCP_RELAY
-	mcp23017AndRelay m_iochip;
-#else	
-	mcp23017 m_iochip;
-#endif	
 
 public:
 
-	MCP23017MultiSwitch(debugBaseClass *dblog, unsigned numSwitches, int sdaPin, int sclPin):
+	MCP23017MultiSwitch(debugBaseClass *dblog, unsigned numSwitches, int sdaPin, int sclPin, int intPin):
 		MultiSwitch(dblog),
 #ifdef USE_MCP_RELAY		
 		m_iochip(dblog, sdaPin,sclPin, D0, D3)
 #else
-		m_iochip(dblog, sdaPin,sclPin)
+		m_iochip(dblog, sdaPin, sclPin)
 #endif		
 	{
+		pinMode(intPin, INPUT_PULLUP);
+		m_singleton=this;
+		attachInterrupt(intPin,staticOnSwitchISR, FALLING);
+
+
 		m_iochip.Initialise();
 
 		for(unsigned each=0;each<numSwitches;each++)
@@ -916,5 +912,86 @@ public:
 		return result;
 	}
 
+
+	static void ICACHE_RAM_ATTR staticOnSwitchISR()
+	{
+		m_singleton->OnSwitchISR();
+	}
+
+	void ICACHE_RAM_ATTR OnSwitchISR()
+	{
+		dblog->isr_println(debug::dbInfo,"MCP23017MultiSwitch::OnSwitchISR in");			
+
+		// just query
+		// m_workToDo=w2dQuery;
+		QueryStateAndAct();
+
+	}
+
+	virtual void DoWork()
+	{
+		switch(m_workToDo)
+		{
+			case w2dQuery:
+				QueryStateAndAct();
+				break;
+			default:
+				break;	
+
+		}
+
+		m_workToDo=w2dNone;
+
+		// clear the port int flag (if set and missed)
+		m_iochip.readAllSwitches();
+
+		MultiSwitch::DoWork();
+
+	}
+
+	void QueryStateAndAct()
+	{
+		unsigned causeAndState=m_iochip.QueryInterruptCauseAndCurrentState(false);
+
+		// just in case more than one fired
+		for(int each=0;each<this->ChildSwitchCount();each++)
+		{
+			if(causeAndState & (1<<(each+8)))
+			{
+				dblog->isr_printf(debug::dbInfo,"Port %u triggered ... ", each);			
+
+				if(m_children[each]->IsSwitchBounce())
+				{
+					dblog->isr_println(debug::dbInfo,"bounce");
+					continue;
+				}
+
+				// get the state
+				bool state=(causeAndState&(1<<each))?true:false;
+				dblog->isr_printf(debug::dbInfo,"%s\r\n", state?"ON":"off");
+				DoChildRelay(each,state,false);
+			}
+		}
+
+	}
+
+	virtual void HonourCurrentSwitch()
+	{
+		// get the switch, set the relay, save the girl
+		byte allSwitchStates=m_iochip.readAllSwitches(false);
+
+		// then set all relays
+	}
+
+protected:
+
+//#define USE_MCP_RELAY
+#ifdef USE_MCP_RELAY
+	mcp23017AndRelay m_iochip;
+#else	
+	mcp23017 m_iochip;
+#endif	
+
+	static MCP23017MultiSwitch *m_singleton;
 
 };

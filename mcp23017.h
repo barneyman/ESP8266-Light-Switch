@@ -25,34 +25,26 @@
 #define MCP_GPIO_B		0x13
 
 // can't get IPOL to work, so emulate in software
-#define _IPOL_IN_SOFTWARE
+// #define _IPOL_IN_SOFTWARE
 
 
 
 
 class mcp23017
 {
+
+
 public:
 	mcp23017(debugBaseClass *dblog, int sdaPin, int sclPin, int resetPin):
 		m_resetAvailable(true), m_sdaPin(sdaPin), m_sclPin(sclPin), m_resetPin(resetPin),m_dblog(dblog)
 	{
-		m_wire.begin(sdaPin, sclPin);
-		memset(&m_lastRelayMicros,0,sizeof(m_lastRelayMicros));
-
-#ifdef _IPOL_IN_SOFTWARE
-		m_polarity = 0;
-#endif
+		commonConstruct();
 	}
 
 	mcp23017(debugBaseClass *dblog, int sdaPin, int sclPin) :
 		m_resetAvailable(false), m_sdaPin(sdaPin), m_sclPin(sclPin), m_resetPin(0),m_dblog(dblog)
 	{
-		m_wire.begin(sdaPin, sclPin);
-
-#ifdef _IPOL_IN_SOFTWARE
-		m_polarity = 0;
-#endif
-		memset(&m_lastRelayMicros, 0, sizeof(m_lastRelayMicros));
+		commonConstruct();
 	}
 
 	// spin it up
@@ -65,14 +57,28 @@ public:
 	bool ToggleRelay(unsigned relayNumber);
 	void SetSwitch(unsigned switchNumber, bool relayState);
 	// find out what caused the isr
-	int InterruptCauseAndCurrentState(bool justClearInterrupt);
+	unsigned QueryInterruptCauseAndCurrentState(bool justClearInterrupt);
 	// get all the switches
 	byte readAllSwitches(bool readInterrupt=false);
 	// read the RELAY
 	bool GetRelay(unsigned relayNumber, bool &relayState);
+	// set all relays
+	void setAllRelays(byte state);
 
 
 protected:
+
+	void commonConstruct()
+	{
+		m_wire.begin(m_sdaPin, m_sclPin);
+		memset(&m_lastRelayMicros,0,sizeof(m_lastRelayMicros));
+
+#ifdef _IPOL_IN_SOFTWARE
+		m_polarity = 0;
+#endif
+
+	}
+
 	byte readOneRegister(byte command);
 	void writeOneRegister(byte command, byte theByte);
 	void flipPolarityPort(unsigned port);
@@ -98,7 +104,7 @@ private:
 class mcp23017AndRelay: public mcp23017
 {
 public:
-	mcp23017AndRelay(debugBaseClass *dblog, int sdaPin, int sclPin, int resetPin, int powerHubNPN):
+	mcp23017AndRelay(debugBaseClass *dblog, int sdaPin, int sclPin, int intPin, int resetPin, int powerHubNPN):
 		mcp23017(dblog, sdaPin, sclPin, resetPin),m_powerHubNPN(powerHubNPN)
 	{
 	

@@ -1079,6 +1079,7 @@ void AddSwitch(baseSwitch *newSwitch)
 			Details.switches.push_back(multi->GetChild(eachChild));
 		}
 		dblog.println(debug::dbInfo, "Added switch");
+		newSwitch->HonourCurrentSwitch();
 	}
 }
 
@@ -1259,7 +1260,7 @@ void setup(void)
 
 #elif defined(WEMOS_COM5) 
 
-	AddSwitch(new MCP23017MultiSwitch(&dblog, 6, 4, 5));
+	AddSwitch(new MCP23017MultiSwitch(&dblog, 6, SDA, SCL, D5));
 
 
 #endif
@@ -1290,7 +1291,8 @@ void FindPeers()
 	services.clear();
 	if (wifiInstance.QueryServices(mdsnNAME, services))
 	{
-		dblog.printf(debug::dbInfo, "Found %d brethren!!\n\r", (int)services.size());
+		int found=(int)services.size();
+		dblog.printf(debug::dbInfo, "Found %d sibling%c!!\n\r", found, found==1?' ':'s');
 		for (auto iterator = services.begin(); iterator != services.end(); iterator++)
 		{
 			dblog.printf(debug::dbInfo, "\t%s.local @ %s\n\r", iterator->hostName.c_str(), iterator->IP.toString().c_str());

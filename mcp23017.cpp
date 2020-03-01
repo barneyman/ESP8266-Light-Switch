@@ -17,7 +17,6 @@ byte mcp23017::readOneRegister(byte command)
 		return 0;
 	}
 
-	delay(10);
 	// request one byte of data
 	res=m_wire.requestFrom(MCPADDR, 1);
 	if(1!=res)
@@ -59,7 +58,8 @@ void mcp23017::Initialise()
 		delay(100);
 	}
 
-	writeOneRegister(MCP_IOCAN_A, 0x20 | 0x8); // BANK0(0) MIRROR0(0) SEQOPoff(20) DISSLWoff(0) HAENoff(8) ODRoff(0) INTPOLoff(0)
+	// turn sequential reads off, and hardware address mod off
+	writeOneRegister(MCP_IOCAN_A, 0x20 | 0x8); // BANK0(0) MIRROR0(0) SEQOPoff(20) DISSLWoff(0) HAENoff(8) ODRoff(0) INTPOLlo(0)
 
 	// make all B ports output
 	{
@@ -85,7 +85,7 @@ void mcp23017::Initialise()
 
 			writeOneRegister(MCP_DEFVAL_A, 0);// intcona makes this redundant
 
-			writeOneRegister(MCP_INTCON_A, 0);// change from previous state
+			writeOneRegister(MCP_INTCON_A, 0);// interrupt on change from previous state
 
 			writeOneRegister(MCP_GPINTE_A, 0xff);// all signal interrupt
 
@@ -113,7 +113,7 @@ void mcp23017::flipPolarityPort(unsigned port)
 	// get polarity of A
 	byte polarity = readOneRegister(MCP_IPOL_A);
 
-	DEBUG(DEBUG_IMPORTANT, Serial.printf("%02x -> ", polarity));
+	m_dblog->printf(debug::dbInfo, "%02x -> ", polarity);
 
 	// flip the polarity bit for that switch
 	polarity ^= (1 << port);
@@ -121,7 +121,7 @@ void mcp23017::flipPolarityPort(unsigned port)
 	// enabling this line causes an ISR storm
 	writeOneRegister(MCP_IPOL_A, polarity);
 
-	DEBUG(DEBUG_IMPORTANT, Serial.printf("%02x ", polarity));
+	m_dblog->printf(debug::dbInfo, "%02x ", polarity);
 
 #endif
 	m_dblog->printf(debug::dbVerbose,"written");
@@ -131,7 +131,7 @@ void mcp23017::flipPolarityPort(unsigned port)
 
 byte mcp23017::readAllSwitches(bool readInterrupt)
 {
-	byte state = readInterrupt? readOneRegister(MCP_INTCAP_A) :readOneRegister(MCP_GPIO_A);
+	byte state = readInterrupt ? readOneRegister(MCP_INTCAP_A) : readOneRegister(MCP_GPIO_A);
 
 #ifdef _IPOL_IN_SOFTWARE
 
@@ -256,7 +256,12 @@ bool mcp23017::SetRelay(unsigned relayNumber, bool relayState)
 	return true;
 }
 
-int mcp23017::InterruptCauseAndCurrentState(bool justClearInterrupt)
+void mcp23017::setAllRelays(byte state)
+{
+	writeOneRegister(MCP_GPIO_B, state);
+}
+
+unsigned mcp23017::QueryInterruptCauseAndCurrentState(bool justClearInterrupt)
 {
 	if (justClearInterrupt)
 	{
@@ -268,8 +273,10 @@ int mcp23017::InterruptCauseAndCurrentState(bool justClearInterrupt)
 	// then get current states
 	byte state= readAllSwitches(true);
 
-	m_dblog->printf(debug::dbInfo,"MCPInt cause %02x state %02x [%04x]\n\r", cause, state, (int)((cause & 0xff) << 8) | (state & 0xff));
+	unsigned retval=((cause) << 8) | (state);
+
+	m_dblog->printf(debug::dbInfo,"MCPInt cause %02x state %02x [%04x]\n\r", cause, state, retval);
 
 	// then send that back
-	return (int)((cause & 0xff) << 8) | (state & 0xff);
+	return retval;
 }
