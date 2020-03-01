@@ -1266,7 +1266,7 @@ void setup(void)
 #endif
 
 	// default off, and don't force switches
-	DoAllSwitch(false,false);
+	// DoAllSwitch(false,false);
 
 	// try to connect to the wifi
 	wifiInstance.ConnectWifi(intent, Details.wifi);

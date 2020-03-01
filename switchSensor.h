@@ -979,8 +979,9 @@ public:
 	{
 		// get the switch, set the relay, save the girl
 		byte allSwitchStates=m_iochip.readAllSwitches(false);
-
+		dblog->printf(debug::dbInfo,"readAllSwitches %x\n\r",allSwitchStates);
 		// then set all relays
+		m_iochip.setAllRelays(allSwitchStates);
 	}
 
 protected:

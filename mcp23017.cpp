@@ -80,8 +80,8 @@ void mcp23017::Initialise()
 		// set interrupt to spot A changing
 		{
 
-			// turn polarity off
-			writeOneRegister(MCP_IPOL_A, 0);// set all of port A to 1:1
+			// because inputs are pullup, their open state is high, so reverse the polarity
+			writeOneRegister(MCP_IPOL_A, 0xff);// set all of port A to 1:1
 
 			writeOneRegister(MCP_DEFVAL_A, 0);// intcona makes this redundant
 
