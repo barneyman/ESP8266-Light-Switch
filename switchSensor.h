@@ -311,6 +311,11 @@ protected:
 #endif
 
 
+class StateAnnouncer
+{
+
+};
+
 
 class instantSensor : public baseSensor
 {
@@ -397,8 +402,6 @@ public:
 			{
 				dblog->println(debug::dbInfo,"port has changed, re-mapping");
 				finder->m_port=port;
-				//m_HAhosts.erase(finder);
-				//m_HAhosts.push_back(potential);
 			}
 
 		}
@@ -678,7 +681,7 @@ public:
 		// pull up in
 		pinMode(digitalPinInput, INPUT_PULLUP);
 		// and attach to it, it's momentary, so get if falling low
-		attachInterrupt(digitalPinInput, RelayLEDandSwitch::staticOnSwitchISR, FALLING );
+		attachInterrupt(digitalPinInput, RelayLEDandSwitch::staticOnSwitchISR, ONLOW );
 
 		// relay is output
 		pinMode(digitalPinOutput, OUTPUT);
@@ -883,7 +886,7 @@ class MCP23017MultiSwitch : public MultiSwitch
 public:
 
 	MCP23017MultiSwitch(debugBaseClass *dblog, unsigned numSwitches, int sdaPin, int sclPin, int intPin):
-		MultiSwitch(dblog),
+		MultiSwitch(dblog),m_isrHits(0),
 #ifdef USE_MCP_RELAY		
 		m_iochip(dblog, sdaPin,sclPin, D0, D3)
 #else
@@ -892,6 +895,7 @@ public:
 	{
 		pinMode(intPin, INPUT_PULLUP);
 		m_singleton=this;
+		// it's pulled up, so get it low
 		attachInterrupt(intPin,staticOnSwitchISR, FALLING);
 
 
@@ -925,9 +929,12 @@ public:
 	{
 		dblog->isr_println(debug::dbInfo,"MCP23017MultiSwitch::OnSwitchISR in");			
 
+		if(m_workToDo==w2dQuery)
+			return;
+
 		// just query
-		// m_workToDo=w2dQuery;
-		QueryStateAndAct();
+		m_workToDo=w2dQuery;
+		//QueryStateAndAct();
 
 	}
 
@@ -943,10 +950,11 @@ public:
 
 		}
 
-		m_workToDo=w2dNone;
+		if(m_isrHits && !(m_isrHits%10))
+			dblog->printf(debug::dbInfo,"isr hits = %lu\r",m_isrHits);
+		
 
-		// clear the port int flag (if set and missed)
-		m_iochip.readAllSwitches();
+		m_workToDo=w2dNone;
 
 		MultiSwitch::DoWork();
 
@@ -956,12 +964,18 @@ public:
 	{
 		unsigned causeAndState=m_iochip.QueryInterruptCauseAndCurrentState(false);
 
+		if(!(causeAndState&0xff00))
+		{
+			dblog->isr_println(debug::dbWarning,"QueryStateAndAct called with no cause");
+			return;
+		}
+
 		// just in case more than one fired
 		for(int each=0;each<this->ChildSwitchCount();each++)
 		{
 			if(causeAndState & (1<<(each+8)))
 			{
-				dblog->isr_printf(debug::dbInfo,"Port %u triggered ... ", each);			
+				dblog->isr_printf(debug::dbInfo,"Port %u triggered ... ", each);
 
 				if(m_children[each]->IsSwitchBounce())
 				{
@@ -983,8 +997,10 @@ public:
 		// get the switch, set the relay, save the girl
 		byte allSwitchStates=m_iochip.readAllSwitches(false);
 		dblog->printf(debug::dbInfo,"readAllSwitches %x\n\r",allSwitchStates);
+		// switches are the 'correct' way round, relays are inverted 
+		byte allRelayStates=~allSwitchStates;
 		// then set all relays
-		m_iochip.setAllRelays(allSwitchStates);
+		m_iochip.setAllRelays(allRelayStates);
 	}
 
 protected:
@@ -997,5 +1013,7 @@ protected:
 #endif	
 
 	static MCP23017MultiSwitch *m_singleton;
+
+	volatile unsigned long m_isrHits;
 
 };

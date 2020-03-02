@@ -87,10 +87,11 @@ void mcp23017::Initialise()
 
 			writeOneRegister(MCP_INTCON_A, 0);// interrupt on change from previous state
 
-			writeOneRegister(MCP_GPINTE_A, 0xff);// all signal interrupt
+			writeOneRegister(MCP_GPINTE_A, 0x3f);// all 6 signal interrupt
+			//writeOneRegister(MCP_GPINTE_A, 0);// all 6 signal interrupt
 
 			// and read them to clear any interrupt flags (to stop spurious ISRs when we attachInterrupt)
-			readAllSwitches();
+			readAllSwitches(true);
 		}
 
 	}
@@ -131,6 +132,8 @@ void mcp23017::flipPolarityPort(unsigned port)
 
 byte mcp23017::readAllSwitches(bool readInterrupt)
 {
+	m_dblog->println(debug::dbVerbose,"readAllSwitches");
+
 	byte state = readInterrupt ? readOneRegister(MCP_INTCAP_A) : readOneRegister(MCP_GPIO_A);
 
 #ifdef _IPOL_IN_SOFTWARE
@@ -155,7 +158,6 @@ bool mcp23017::readSwitch(unsigned switchNumber)
 		m_dblog->printf(debug::dbError,"readSwitch called out of bounds %u\n\r", switchNumber);
 		return false;
 	}
-
 
 	byte state = readAllSwitches();
 	return state & (1 << switchNumber) ? true : false;
@@ -192,6 +194,7 @@ bool mcp23017::ToggleRelay(unsigned relayNumber)
 
 bool mcp23017::GetRelay(unsigned relayNumber, bool &relayState)
 {
+	
 	if (relayNumber > 7)
 	{
 		m_dblog->printf(debug::dbError,"GetRelay called out of bounds %u\n\r", relayNumber);

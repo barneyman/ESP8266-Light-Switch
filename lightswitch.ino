@@ -116,7 +116,7 @@
 #endif
 
 
-#define _MYVERSION			_VERSION_ROOT "2.54"
+#define _MYVERSION			_VERSION_ROOT "3.00"
 
 #define _HTML_VER_FILE	"/html.json"
 unsigned _MYVERSION_HTML = 0;
@@ -150,6 +150,7 @@ void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState);
 #ifdef _USE_SYSLOG
 syslogDebug dblog(debug::dbWarning, "192.168.51.1", 514, "temp", "lights");
 #else
+// try to avoid verbose - it causes heisenbugs because all HTTP interactions are artificially slowed down
 SerialDebug dblog(debug::dbInfo);
 #endif
 
@@ -1803,9 +1804,6 @@ void InstallWebServerHandlers()
 		JsonObject &root = jsonBuffer.createObject();
 
 		root["name"] = wifiInstance.m_hostName.c_str();
-#ifdef NUM_SOCKETS
-		root["switchCount"] = NUM_SOCKETS;
-#endif
 		root["pageCount"] = servedFiles.size();
 		root["version"] = _MYVERSION;
 		root["versionHTML"] = _MYVERSION_HTML;
@@ -1905,56 +1903,6 @@ void InstallWebServerHandlers()
 		wifiInstance.server.send(200, "application/json", jsonText);
 	});
 
-#ifdef NUM_SOCKETS
-
-	wifiInstance.server.on("/json/maxSwitchCount", HTTP_GET, []() {
-		// give them back the port / switch map
-
-		dblog.println(debug::dbImportant, "json maxSwitchCount called");
-
-		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
-		jsonBuffer.clear();
-
-		JsonObject &root = jsonBuffer.createObject();
-
-		root["name"] = wifiInstance.m_hostName.c_str();
-
-#ifdef _OLD_WAY
-
-		root["switchCount"] = NUM_SOCKETS;
-
-		unsigned maxSwitch = -1, maxSwitchCount = 0;
-
-		for (unsigned each = 0; each < NUM_SOCKETS; each++)
-		{
-			if (Details.switches[each].switchCount > maxSwitchCount)
-			{
-				maxSwitchCount = Details.switches[each].switchCount;
-				maxSwitch = each;
-			}
-
-		}
-
-		{
-			root["maxSwitch"] = maxSwitch;
-			root["maxSwitchCount"] = maxSwitchCount;
-
-			dblog.printf(debug::dbInfo, "maxSwitch %u count %u \n\r", maxSwitch, maxSwitch);
-
-		}
-
-#endif
-
-		String jsonText;
-		root.prettyPrintTo(jsonText);
-
-		dblog.println(debug::dbVerbose, jsonText);
-
-		wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-		wifiInstance.server.send(200, "application/json", jsonText);
-	});
-
-#endif
 
 	wifiInstance.server.on("/json/config", HTTP_GET, []() {
 		// give them back the port / switch map
@@ -2014,10 +1962,6 @@ void InstallWebServerHandlers()
 			switchRelay["name"] = (*each)->GetName();
 		}
 
-
-
-
-
 		String jsonText;
 		root.prettyPrintTo(jsonText);
 
@@ -2066,60 +2010,8 @@ void InstallWebServerHandlers()
 		if(wifiInstance.localIP().isSet())
 			root["ip"] = wifiInstance.localIP().toString();
 
-#ifdef _OLD_WAY
-		JsonArray &peers = root.createNestedArray("peers");
 
-		for (size_t each = 0; each < services.size(); each++)
-		{
-
-			// query that one
-			String url("http://");
-			url += services[each].hostName + "/json/config";
-			HTTPClient http;
-			dblog.printf(debug::dbVerbose, "querying %s for htmlver\n\r", url.c_str());
-			//if (!http.begin(wifiInstance.m_wificlient,url))
-			if (!http.begin(url))
-			{
-				dblog.println(debug::dbError, "Failed begin");
-				continue;
-			}
-
-			int httpCode = http.GET();
-			if (httpCode != 200)
-			{
-				dblog.printf(debug::dbError, "Failed GET %d",httpCode );
-				continue;
-
-			}
-
-			String payload = http.getString();
-			dblog.println(debug::dbVerbose, payload);
-			http.end();
-			JsonObject& root = jsonBuffer.parseObject(payload);
-			if (!root.containsKey("versionHTML"))
-			{
-				dblog.println(debug::dbVerbose, "no versionHTML, ignored");
-				continue;
-			}
-
-			unsigned htmlVersion = root["versionHTML"];
-			if (htmlVersion > _MYVERSION_HTML)
-			{
-				dblog.println(debug::dbVerbose, "ignored");
-				continue;
-			}
-
-
-			JsonObject &peer = peers.createNestedObject();
-			peer["host"] = services[each].hostName;
-
-			dblog.printf(debug::dbInfo, "%d '%s'\n\r", each + 1, services[each].hostName.c_str());
-
-
-		}
-
-#else
-		// let's get all wifis we can see
+		// let's get all peers we can see
 		
 		JsonArray &peers = root.createNestedArray("peers");
 
@@ -2131,10 +2023,6 @@ void InstallWebServerHandlers()
 			peer["name"]=services[each].hostName;
 			peer["ip"]=services[each].IP.toString();
 		}
-
-
-
-#endif		
 
 
 		String jsonText;
@@ -2461,7 +2349,7 @@ void loop(void)
 		(*eachSwitch)->DoWork();
 	}
 
-
+	// sump any debug from isr
 	dblog.isr_pump();
 
 
