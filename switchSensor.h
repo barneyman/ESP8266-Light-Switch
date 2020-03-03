@@ -6,13 +6,14 @@
 #include <BME280I2C.h>
 #include <MAX44009.h>
 
+#include "announce.h"
 
-class baseThing
+class baseThing : public StateAnnouncer
 {
 
 public:
 
-	baseThing(debugBaseClass*dbg):dblog(dbg),
+	baseThing(debugBaseClass*dbg):StateAnnouncer(dbg),
 		thingName("Default")
 	{
 
@@ -32,7 +33,6 @@ protected:
 		return micros() / 1000;
 	}
 
-	debugBaseClass *dblog;
     String thingName;
 };
 
@@ -50,11 +50,6 @@ public:
 		// ask it to get sensor stuff
 		JsonArray &sensorElement = toHere.createNestedArray("elements");
 		GetSensorConfigElements(sensorElement);
-	}
-
-	virtual void AddSensorRecipient(IPAddress addr, unsigned port) 
-	{
-		dblog->println(debug::dbWarning,"base AddSensorRecipient called");
 	}
 
 	virtual void GetSensorConfigElements(JsonArray &toHere)=0;
@@ -303,18 +298,7 @@ protected:
 
 };
 
-#define _USE_UDP
 
-#ifdef _USE_UDP
-#else
-#include <WiFiClient.h>
-#endif
-
-
-class StateAnnouncer
-{
-
-};
 
 
 class instantSensor : public baseSensor
@@ -322,31 +306,6 @@ class instantSensor : public baseSensor
 
 protected:
 
-	class recipient
-	{
-		public:
-		recipient(IPAddress addr, unsigned port):m_addr(addr),m_port(port)
-		{
-
-		}
-
-		// only checks host, deliberately
-		// this allows the HA server to reboot, change ports, and we'll spot it
-		bool operator==(const recipient &other)
-		{
-			return m_addr==other.m_addr;// && m_port==other.m_port;
-		}
-
-
-		IPAddress m_addr;
-		unsigned m_port;
-	};
-
-	std::vector<recipient> m_HAhosts;
-
-	unsigned m_port;
-
-	StaticJsonBuffer<200> jsonBuffer;
 
 	bool m_currentState;
 
@@ -356,9 +315,7 @@ public:
 
 	instantSensor(debugBaseClass*dbg):baseSensor(dbg),m_currentState(false)
 	{
-		// 
-		// debug
-		
+	
 	}
 
     virtual bool GetSensorValue(JsonObject &toHere)
@@ -380,85 +337,6 @@ public:
 
 	}
 
-	virtual void AddSensorRecipient(IPAddress addr, unsigned port) 
-	{
-		dblog->printf(debug::dbInfo,"Adding recipient %s\r",addr.toString().c_str());
-		recipient potential(addr,port);
-		auto finder=std::find(m_HAhosts.begin(),m_HAhosts.end(),potential);
-		if(finder==m_HAhosts.end())
-		{
-			m_HAhosts.push_back(potential);
-			dblog->println(debug::dbInfo,"ADDED");
-		}
-		else
-		{
-			// cater for port change
-			if(finder->m_port==port)
-			{
-				dblog->println(debug::dbInfo,"already exists");
-
-			}
-			else
-			{
-				dblog->println(debug::dbInfo,"port has changed, re-mapping");
-				finder->m_port=port;
-			}
-
-		}
-	}
-
-
-protected:
-
-
-	void SendState(bool state)
-	{
-		// 
-		jsonBuffer.clear();
-		JsonObject& udproot = jsonBuffer.createObject();
-		udproot["state"]=m_currentState;
-		String bodyText;
-		udproot.printTo(bodyText);
-
-#ifdef _USE_UDP
-		WiFiUDP sender;
-#else
-		WiFiClient sender;
-#endif		
-
-		dblog->println(debug::dbInfo,"Starting IP yell");
-
-		for(auto eachHA=m_HAhosts.begin();eachHA!=m_HAhosts.end();eachHA++)
-		{
-
-#ifdef _USE_UDP
-
-			sender.beginPacket(eachHA->m_addr, eachHA->m_port);
-
-			dblog->printf(debug::dbInfo,"udp %s to %s:%u\r",bodyText.c_str(), eachHA->m_addr.toString().c_str(),eachHA->m_port);
-			sender.write(bodyText.c_str(),bodyText.length());
-
-			sender.endPacket();
-
-#else
-
-			if(sender.connect(eachHA->m_addr, eachHA->m_port)==1)
-			{
-				dblog->printf(debug::dbInfo,"tcp %s;%u to %s\r",bodyText.c_str(),eachHA->m_port, eachHA->m_addr.toString().c_str());
-				sender.write(bodyText.c_str(),bodyText.length());
-				sender.flush();
-				sender.stop();
-			}
-			else
-			{
-				dblog->printf(debug::dbError,"tcpconnect failed %s:%u\r", eachHA->m_addr.toString().c_str(),eachHA->m_port);
-			}
-
-#endif
-
-		}		
-
-	}
 
 
 
@@ -594,7 +472,11 @@ public:
 	// make the relay honour the switch
 	virtual void HonourCurrentSwitch()
 	{
+	}
 
+	virtual String GetImpl()
+	{
+		return String();
 	}
 
 	// to handle multiple switches 
@@ -800,30 +682,30 @@ protected:
 	class childSwitch : public toggleSwitch
 	{
 	public:
-		childSwitch(debugBaseClass *dblog, MultiSwitch *parent, unsigned port):
-			toggleSwitch(dblog),m_parent(parent),m_port(port)
+		childSwitch(debugBaseClass *dblog, MultiSwitch *parent, unsigned ordinal):
+			toggleSwitch(dblog),m_parent(parent),m_ordinal(ordinal)
 		{
-			thingName="Port "+String(port);
+			thingName="ordinal "+String(ordinal);
 		}
 
 		virtual void DoRelay(bool on, bool forceSwitchToReflect=false)
 		{
 			// ask dad
 			if(m_parent)
-				m_parent->DoChildRelay(m_port, on, forceSwitchToReflect);
+				m_parent->DoChildRelay(m_ordinal, on, forceSwitchToReflect);
 		}
 
 		virtual bool GetRelay()
 		{
 			// ask dad
 			if(m_parent)
-				return m_parent->GetChildRelay(m_port);
+				return m_parent->GetChildRelay(m_ordinal);
 			return false;
 		}
 
 	protected:
 		MultiSwitch*m_parent;
-		unsigned m_port;
+		unsigned m_ordinal;
 	};
 
 
@@ -883,6 +765,33 @@ class MCP23017MultiSwitch : public MultiSwitch
 {
 
 
+protected:
+
+	// TODO - one of the bases should inherit from StateAnnouncer
+	class MCP23071ChildSwitch : public MultiSwitch::childSwitch, public StateAnnouncer
+	{
+	public:
+		MCP23071ChildSwitch(debugBaseClass *dblog, MultiSwitch *parent, unsigned ordinal):
+			MultiSwitch::childSwitch(dblog,parent,ordinal),
+			StateAnnouncer(dblog)
+		{
+
+		}
+
+
+	virtual String GetImpl()
+	{
+#ifdef _USE_UDP		
+		return String("udp");
+#else
+		return String("tcp");
+#endif		
+	}
+
+
+	};
+
+
 public:
 
 	MCP23017MultiSwitch(debugBaseClass *dblog, unsigned numSwitches, int sdaPin, int sclPin, int intPin):
@@ -903,13 +812,15 @@ public:
 
 		for(unsigned each=0;each<numSwitches;each++)
 		{
-			m_children.push_back(new childSwitch(dblog, this, each));
+			m_children.push_back(new MCP23071ChildSwitch(dblog, this, each));
 		}
 	}
 
 	virtual void DoChildRelay(unsigned child,bool on, bool forceSwitchToReflect=false)
 	{
 		m_iochip.SetRelay(child,on);
+		// TODO - this should be in baseThing
+		((StateAnnouncer*)m_children[child])->SendState(on);
 	}
 
 	virtual bool GetChildRelay(unsigned child)

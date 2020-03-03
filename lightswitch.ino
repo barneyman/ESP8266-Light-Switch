@@ -1093,7 +1093,7 @@ void setup(void)
 #if defined(_USE_SYSLOG)
 	dblog.SetHostname(wifiInstance.m_hostName.c_str());
 #else
-	dblog.begin(9600);
+	dblog.begin(115200);
 #endif
 
 
@@ -1716,18 +1716,41 @@ void InstallWebServerHandlers()
 
 		IPAddress recipientAddr = wifiInstance.server.client().remoteIP();
 		int recipientPort = root["port"];
-		int recipientSensor = root["sensor"];
 
-		if(recipientSensor<Details.sensors.size())
+		// can be switch or sensor
+		if(root.containsKey("sensor"))
 		{
-			dblog.printf(debug::dbInfo, "Adding recipient %s:%d Sensor %d\n\r", recipientAddr.toString().c_str(), recipientPort, recipientSensor);
-			Details.sensors[recipientSensor]->AddSensorRecipient(recipientAddr,recipientPort);
-		}
-		else
-		{
-			dblog.println(debug::dbError, "Sensor exceeded bounds");
-		}
 
+			int recipientSensor = root["sensor"];
+
+			if(recipientSensor<Details.sensors.size())
+			{
+				dblog.printf(debug::dbInfo, "Adding recipient %s:%d Sensor %d\n\r", recipientAddr.toString().c_str(), recipientPort, recipientSensor);
+				Details.sensors[recipientSensor]->AddAnnounceRecipient(recipientAddr,recipientPort);
+			}
+			else
+			{
+				dblog.println(debug::dbError, "Sensor exceeded bounds");
+			}
+
+		}
+		else if (root.containsKey("switch"))
+		{
+			int recipientSwitch = root["switch"];
+
+			if(recipientSwitch<Details.switches.size())
+			{
+				dblog.printf(debug::dbInfo, "Adding recipient %s:%d Switch %d\n\r", recipientAddr.toString().c_str(), recipientPort, recipientSwitch);
+				Details.switches[recipientSwitch]->AddAnnounceRecipient(recipientAddr,recipientPort);
+
+
+			}
+			else
+			{
+				dblog.println(debug::dbError, "Switch exceeded bounds");
+			}
+
+		}
 
 		//delay(_WEB_TAR_PIT_DELAY);
 		wifiInstance.server.send(200, "text/html", "<html></html>");
@@ -1956,6 +1979,10 @@ void InstallWebServerHandlers()
 		{
 			JsonObject &switchRelay = switchConfig.createNestedObject();
 			switchRelay["switch"] = count;
+
+			String impl=(*each)->GetImpl();
+			if(impl.length())
+				switchRelay["impl"]=impl;
 
 			//(*each)->GetSwitchConfig(switchRelay);
 
