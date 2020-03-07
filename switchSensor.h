@@ -780,6 +780,7 @@ protected:
 		}
 
 
+
 	virtual String GetImpl()
 	{
 #ifdef _USE_UDP		
@@ -841,12 +842,17 @@ public:
 	{
 		dblog->isr_println(debug::dbInfo,"MCP23017MultiSwitch::OnSwitchISR in");			
 
+		m_isrHits++;
+
 		if(m_workToDo==w2dQuery)
+		{
+			// this is an error condition - we've rentered
+			dblog->isr_println(debug::dbError,"MCP23017MultiSwitch::OnSwitchISR re-entered");			
 			return;
+		}
 
 		// just query
 		m_workToDo=w2dQuery;
-		//QueryStateAndAct();
 
 	}
 
@@ -855,18 +861,23 @@ public:
 		switch(m_workToDo)
 		{
 			case w2dQuery:
+				// clear my state early, otherwise reading the state,
+				// clears the interrupt, allowing the ISR to fire,
+				// which sets a state, i then set to None too late
+				m_workToDo=w2dNone;
 				QueryStateAndAct();
-				break;
 			default:
 				break;	
 
 		}
 
-		if(m_isrHits && !(m_isrHits%10))
-			dblog->printf(debug::dbInfo,"isr hits = %lu\r",m_isrHits);
+		if(m_isrHits)
+		{
+			//dblog->printf(debug::dbInfo,"isr hits = %lu\r",m_isrHits);
+		}	
 		
 
-		m_workToDo=w2dNone;
+		
 
 		MultiSwitch::DoWork();
 
@@ -928,4 +939,5 @@ protected:
 
 	volatile unsigned long m_isrHits;
 
-};
+
+};	
