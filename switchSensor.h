@@ -263,9 +263,10 @@ protected:
 
 public:
 
-	MAX44009Sensor(debugBaseClass*dbg,int address=0x4a):I2CSensor(address, dbg),m_sensor(address)
+	MAX44009Sensor(debugBaseClass*dbg,int address=0x4a):I2CSensor(address, dbg)//,m_sensor(address)
 	{
 		thingName="MAX44009";
+		m_sensor.begin();
 	}
 
 	virtual void GetSensorConfigElements(JsonArray &toHere)
@@ -286,7 +287,7 @@ public:
             return false;
         }
 
-		toHere["illuminance"] = m_sensor.getLux();
+		toHere["illuminance"] = m_sensor.get_lux();
 
         return true;
     }
@@ -294,7 +295,7 @@ public:
 
 protected:
 
-	Max44009 m_sensor;
+	MAX44009 m_sensor;
 
 };
 
@@ -351,7 +352,7 @@ protected:
 	unsigned long m_millis, m_timeout;
 
 public:
-	testInstantSensor(debugBaseClass*dbg, unsigned long timeout):instantSensor(dbg),m_timeout(timeout)
+	testInstantSensor(debugBaseClass*dbg, unsigned long timeout=600000):instantSensor(dbg),m_timeout(timeout)
 	{
 		m_millis=millis();
 		thingName="testSensor";

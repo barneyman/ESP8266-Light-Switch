@@ -11,7 +11,6 @@
 //#define _6SWITCH						// my nodemcu with a 6 relay board attached
 
 
-
 // turn these OFF for the 6 switch one
 // the sonoff units
 // normal
@@ -133,6 +132,7 @@ StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 
 #ifdef _DEBUG
 #define _TEST_WFI_STATE	
+#include <GDBStub.h>
 #endif
 
 // forward
@@ -151,7 +151,7 @@ void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState);
 syslogDebug dblog(debug::dbWarning, "192.168.51.1", 514, "temp", "lights");
 #else
 // try to avoid verbose - it causes heisenbugs because all HTTP interactions are artificially slowed down
-SerialDebug dblog(debug::dbInfo);
+SerialDebug dblog(debug::dbVerbose);
 #endif
 
 //#define _OLD_WAY
@@ -190,23 +190,35 @@ myWifiClass wifiInstance("esp_", &dblog, mdsnNAME);
 #endif
 
 
+// millis timeouts
+#define QUICK_SWITCH_TIMEOUT_DEFAULT	6000
+#define BOUNCE_TIMEOUT_DEFAULT			100
+
+
+#define _ALLOW_WIFI_RESET_OVER_WIFI
+#define _ALLOW_WIFI_RESET_VIA_QUICKSWITCH
+#define _ALLOW_WIFI_RESET_AFTER_APIJOIN_TIMOUT (2*60*1000)
+
+#ifdef _ALLOW_WIFI_RESET_AFTER_APIJOIN_TIMOUT
+unsigned long runtimeWhenLastJoined=0;
+#endif
+
+#define _ALLOW_WIFI_RESET
+#define _ALLOW_WIFI_RESET_OVER_WIFI
+
+#ifdef _ALLOW_WIFI_RESET
+bool resetWIFI = false;
+#endif
 
 
 
 #ifdef _OLD_WAY
 
 
-// millis timeouts
-#define QUICK_SWITCH_TIMEOUT_DEFAULT	6000
-#define BOUNCE_TIMEOUT_DEFAULT			100
 
-#define _RESET_VIA_QUICK_SWITCH
-
-
-#ifdef _RESET_VIA_QUICK_SWITCH
+#ifdef _ALLOW_WIFI_RESET_VIA_QUICKSWITCH
 // how many transitions we have to see (on -> off and v-v) within Details.resetWindowms before we assume a resey has been asked for
 #define RESET_ARRAY_SIZE 12
-bool resetWIFI = false;
 #endif
 
 
@@ -272,7 +284,7 @@ struct
 
 
 // this must be last in the array (it gets cleaned specifically)
-#ifdef _RESET_VIA_QUICK_SWITCH
+#ifdef _ALLOW_WIFI_RESET_VIA_QUICKSWITCH
 		unsigned long lastSwitchesSeen[RESET_ARRAY_SIZE];
 #endif
 
@@ -619,7 +631,7 @@ void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState)
 		if (causeAndState & (1 << (switchPort + 8)))
 		{
 
-#if defined(_RESET_VIA_QUICK_SWITCH) 
+#if defined(_ALLOW_WIFI_RESET_VIA_QUICKSWITCH) 
 			unsigned long now = micros(), interval = 0;
 #endif
 
@@ -632,7 +644,7 @@ void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState)
 			unsigned long bounceToHonour = Details.switches[switchPort].switchType == stMomentary ? Details.debounceThresholdmsMomentary : Details.debounceThresholdmsToggle;
 			if (interval >= (unsigned long)(bounceToHonour * 1000))
 			{
-#ifdef _RESET_VIA_QUICK_SWITCH
+#ifdef _ALLOW_WIFI_RESET_VIA_QUICKSWITCH
 				// move the last seens along
 				for (unsigned mover = 0; mover < RESET_ARRAY_SIZE - 1; mover++)
 					Details.switches[switchPort].lastSwitchesSeen[mover] = Details.switches[switchPort].lastSwitchesSeen[mover + 1];
@@ -654,7 +666,7 @@ void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState)
 
 				Details.switches[switchPort].switchCount++;
 
-#ifdef _RESET_VIA_QUICK_SWITCH
+#ifdef _ALLOW_WIFI_RESET_VIA_QUICKSWITCH
 
 				// remember the last RESET_ARRAY_SIZE - i'm assuming we won't wrap
 				// only reset if we're currently STA
@@ -1026,19 +1038,16 @@ void ReadJSONconfig()
 
 
 
+// void ResetWIFI()
+// {
+// 	DEBUG(DEBUG_IMPORTANT, Serial.println("Resetting WIFI"));
 
+// 	wifiMode now = currentMode;
 
+// 	ConnectWifi(wifiMode::modeOff);
 
-//void ResetWIFI()
-//{
-//	DEBUG(DEBUG_IMPORTANT, Serial.println("Resetting WIFI"));
-//
-//	wifiMode now = currentMode;
-//
-//	ConnectWifi(wifiMode::modeOff);
-//
-//	ConnectWifi(now);
-//}
+// 	ConnectWifi(now);
+// }
 
 void RebootMe()
 {
@@ -1047,9 +1056,9 @@ void RebootMe()
 	//ESP.restart();
 }
 
-#ifdef _RESET_VIA_QUICK_SWITCH
+#ifdef _ALLOW_WIFI_RESET
 
-void ResetMe()
+void ResetToAP()
 {
 	dblog.printf(debug::dbImportant, "Resetting\n\r");
 
@@ -1063,6 +1072,18 @@ void ResetMe()
 	wifiInstance.ConnectWifi(myWifiClass::wifiMode::modeAP,Details.wifi);
 
 }
+
+// called when i haven't been connected to a configurid ssid for x
+// sideload an AP so i can be configured
+void AddAP()
+{
+	dblog.printf(debug::dbImportant, "AddAP\n\r");
+
+	wifiInstance.ConnectWifi(myWifiClass::wifiMode::modeSTAandAP,Details.wifi);
+
+
+}
+
 
 #endif
 
@@ -1089,6 +1110,11 @@ void AddSwitch(baseSwitch *newSwitch)
 
 void setup(void) 
 {
+#ifdef _DEBUG
+	gdbstub_init();
+#endif
+
+
 	// tell the debugger its name
 #if defined(_USE_SYSLOG)
 	dblog.SetHostname(wifiInstance.m_hostName.c_str());
@@ -1104,7 +1130,7 @@ void setup(void)
 	// reset the bounce thresh-holds
 	for (int eachSwitch = 0; eachSwitch < NUM_SOCKETS; eachSwitch++)
 	{
-#ifdef _RESET_VIA_QUICK_SWITCH
+#ifdef _ALLOW_WIFI_RESET_VIA_QUICKSWITCH
 		// clean up the switch times
 		memset(&Details.switches[eachSwitch].lastSwitchesSeen, 0, sizeof(Details.switches[eachSwitch].lastSwitchesSeen));
 #endif
@@ -1241,7 +1267,7 @@ void setup(void)
 // PIR
 //#define WEMOS_COM4
 // 6switch
-#define WEMOS_COM5
+#define WEMOS_COM5 
 
 #ifdef WEMOS_COM3
 	// load up the sensors and switches
@@ -1253,7 +1279,7 @@ void setup(void)
 	Details.sensors.push_back(new BME280Sensor(&dblog));
 	Details.sensors.push_back(new MAX44009Sensor(&dblog));
 
-	Details.sensors.push_back(new testInstantSensor(&dblog, 5000));
+	Details.sensors.push_back(new testInstantSensor(&dblog));
 
 #elif defined(WEMOS_COM4) 
 
@@ -1286,6 +1312,24 @@ void setup(void)
 // look for my siblings
 void FindPeers()
 {
+	// if we don't have wifi, dont mdns (it crashes for me)
+	switch(wifiInstance.currentMode)
+	{
+		case myWifiClass::modeOff: 
+		case myWifiClass::modeSTA_unjoined:
+		case myWifiClass::modeCold:
+		case myWifiClass::modeUnknown:
+			dblog.println(debug::dbInfo, "No WIFI not doing FindPeers");
+			// very bad form
+			return;
+		case myWifiClass::modeAP:
+		case myWifiClass::modeSTA:
+		case myWifiClass::modeSTAspeculative:
+		case myWifiClass::modeSTAandAP:
+		default:
+			break;
+	}
+
 	dblog.printf(debug::dbInfo, "Looking for '%s' siblings ...\n\r", mdsnNAME);
 	
 	// get a list of what's out there
@@ -1591,13 +1635,13 @@ void InstallWebServerHandlers()
 
 	});
 
-#ifdef _RESET_VIA_QUICK_SWITCH
+#ifdef _ALLOW_WIFI_RESET_OVER_WIFI
 
 	wifiInstance.server.on("/resetWIFI", []() {
 
 		dblog.println(debug::dbImportant, "/resetWIFI");
 
-		ResetMe();
+		ResetToAP();
 
 	});
 
@@ -2349,9 +2393,24 @@ unsigned long lastCheckedForPeers = 0;
 
 void loop(void) 
 {
-#ifdef _RESET_VIA_QUICK_SWITCH
+
+#ifdef _ALLOW_WIFI_RESET
 	if (resetWIFI)
-		ResetMe();
+		ResetToAP();
+#endif
+
+#ifdef _ALLOW_WIFI_RESET_AFTER_APIJOIN_TIMOUT
+
+	if(wifiInstance.currentMode!=myWifiClass::modeSTA_unjoined)
+	{
+		runtimeWhenLastJoined=millis();
+	}
+
+	if(millis()-runtimeWhenLastJoined > _ALLOW_WIFI_RESET_AFTER_APIJOIN_TIMOUT)
+	{
+		AddAP();
+		runtimeWhenLastJoined=millis();
+	}
 #endif
 
 	if (Details.configDirty)
@@ -2379,7 +2438,6 @@ void loop(void)
 	// sump any debug from isr
 	dblog.isr_pump();
 
-
 	unsigned long now = micros() / 1000;
 
 	if (!lastCheckedForPeers || ((now - lastCheckedForPeers) > _FETCH_PEERS_TIMEOUT_MS))
@@ -2390,13 +2448,13 @@ void loop(void)
 
 #ifdef _TEST_WFI_STATE
 
-	unsigned long now = micros() / 1000;
+	now = micros() / 1000;
 
 	if (!lastTested || ((now - lastTested) > _TEST_WIFI_MILLIS))
 	{
 		WiFiMode_t currentState = WiFi.getMode();
 
-		dblog.printf(debug::dbVerbose, "================ WIFI %d\n\r", currentState)''
+		dblog.printf(debug::dbVerbose, "================ WIFI %d\n\r", currentState);
 
 		WiFi.printDiag(Serial);
 
