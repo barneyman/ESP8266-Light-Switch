@@ -151,7 +151,7 @@ void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState);
 syslogDebug dblog(debug::dbWarning, "192.168.51.1", 514, "temp", "lights");
 #else
 // try to avoid verbose - it causes heisenbugs because all HTTP interactions are artificially slowed down
-SerialDebug dblog(debug::dbVerbose);
+SerialDebug dblog(debug::dbWarning);
 #endif
 
 //#define _OLD_WAY
@@ -1287,6 +1287,7 @@ void setup(void)
 
 #elif defined(WEMOS_COM5) 
 
+	Details.sensors.push_back(new testInstantSensor(&dblog, 10*60*1000));
 	AddSwitch(new MCP23017MultiSwitch(&dblog, 6, SDA, SCL, D5));
 
 
@@ -1750,7 +1751,9 @@ void InstallWebServerHandlers()
 
 	wifiInstance.server.on("/json/listen", HTTP_POST, []() {
 
-		dblog.println(debug::dbImportant, "json listen posted");
+		IPAddress recipientAddr = wifiInstance.server.client().remoteIP();
+
+		dblog.printf(debug::dbImportant, "json listen posted from %s\n\r",recipientAddr.toString().c_str());
 		dblog.println(debug::dbImportant, wifiInstance.server.arg("plain"));
 
 		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
@@ -1758,7 +1761,6 @@ void InstallWebServerHandlers()
 		// 'plain' is the secret source to get to the body
 		JsonObject& root = jsonBuffer.parseObject(wifiInstance.server.arg("plain"));
 
-		IPAddress recipientAddr = wifiInstance.server.client().remoteIP();
 		int recipientPort = root["port"];
 
 		// can be switch or sensor
@@ -1770,7 +1772,7 @@ void InstallWebServerHandlers()
 			if(recipientSensor<Details.sensors.size())
 			{
 				dblog.printf(debug::dbInfo, "Adding recipient %s:%d Sensor %d\n\r", recipientAddr.toString().c_str(), recipientPort, recipientSensor);
-				Details.sensors[recipientSensor]->AddAnnounceRecipient(recipientAddr,recipientPort);
+				Details.sensors[recipientSensor]->AddAnnounceRecipient(recipientAddr,recipientPort,wifiInstance.server.arg("plain"));
 			}
 			else
 			{
@@ -1785,7 +1787,7 @@ void InstallWebServerHandlers()
 			if(recipientSwitch<Details.switches.size())
 			{
 				dblog.printf(debug::dbInfo, "Adding recipient %s:%d Switch %d\n\r", recipientAddr.toString().c_str(), recipientPort, recipientSwitch);
-				Details.switches[recipientSwitch]->AddAnnounceRecipient(recipientAddr,recipientPort);
+				Details.switches[recipientSwitch]->AddAnnounceRecipient(recipientAddr,recipientPort,wifiInstance.server.arg("plain"));
 
 
 			}

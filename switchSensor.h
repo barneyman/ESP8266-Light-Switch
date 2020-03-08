@@ -331,8 +331,11 @@ public:
 		JsonObject &sensorElement = toHere.createNestedObject();
 #ifdef _USE_UDP
 		sensorElement["impl"]="udp";
-#else
+#elif defined(_USE_TCP)
 		sensorElement["impl"]="tcp";
+#elif defined(_USE_REST)		
+		sensorElement["impl"]="http";
+#else
 #endif
 		sensorElement["type"] = deviceClass;
 
@@ -523,7 +526,7 @@ protected:
 
 };
 
-#define _DEBOUNCE_WINDOW_MOMENTARY	300
+#define _DEBOUNCE_WINDOW_MOMENTARY	100
 #define _DEBOUNCE_WINDOW_TOGGLE		100
 
 class momentarySwitch : public baseSwitch
@@ -785,6 +788,8 @@ protected:
 	{
 #ifdef _USE_UDP		
 		return String("udp");
+#elif defined(_USE_REST)		
+		return String("http");
 #else
 		return String("tcp");
 #endif		
@@ -822,7 +827,7 @@ public:
 	{
 		m_iochip.SetRelay(child,on);
 		// TODO - this should be in baseThing
-		((StateAnnouncer*)m_children[child])->SendState(on);
+		m_children[child]->SendState(on);
 	}
 
 	virtual bool GetChildRelay(unsigned child)
@@ -889,7 +894,7 @@ public:
 
 		if(!(causeAndState&0xff00))
 		{
-			dblog->isr_println(debug::dbWarning,"QueryStateAndAct called with no cause");
+			dblog->println(debug::dbWarning,"QueryStateAndAct called with no cause");
 			return;
 		}
 
@@ -898,17 +903,17 @@ public:
 		{
 			if(causeAndState & (1<<(each+8)))
 			{
-				dblog->isr_printf(debug::dbInfo,"Port %u triggered ... ", each);
+				dblog->printf(debug::dbInfo,"Port %u triggered ... ", each);
 
 				if(m_children[each]->IsSwitchBounce())
 				{
-					dblog->isr_println(debug::dbInfo,"bounce");
+					dblog->println(debug::dbInfo,"bounce");
 					continue;
 				}
 
 				// get the state
 				bool state=(causeAndState&(1<<each))?true:false;
-				dblog->isr_printf(debug::dbInfo,"%s\r\n", state?"ON":"off");
+				dblog->printf(debug::dbInfo,"%s\r\n", state?"ON":"off");
 				DoChildRelay(each,state,false);
 			}
 		}

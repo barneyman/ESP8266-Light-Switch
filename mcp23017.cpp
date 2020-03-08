@@ -185,7 +185,7 @@ bool mcp23017::ToggleRelay(unsigned relayNumber)
 	bool currentState = false;
 	if (GetRelay(relayNumber, currentState))
 	{
-		m_dblog->printf(debug::dbInfo,"ToggleRelay %u %s -> %s\n\r", relayNumber,currentState?"ON":"off", !currentState ? "ON" : "off");
+		m_dblog->printf(debug::dbImportant,"ToggleRelay %u %s -> %s\n\r", relayNumber,currentState?"ON":"off", !currentState ? "ON" : "off");
 		return SetRelay(relayNumber, !currentState);
 	}
 
@@ -245,7 +245,7 @@ bool mcp23017::SetRelay(unsigned relayNumber, bool relayState)
 	if (!relayState)
 		state = state | (1 << relayNumber);
 
-	m_dblog->printf(debug::dbInfo,"SetRelay - new state %02x\n\r", (int)state);
+	m_dblog->printf(debug::dbImportant,"SetRelay - new state %02x\n\r", (int)state);
 
 	writeOneRegister(MCP_GPIO_B, state);
 
