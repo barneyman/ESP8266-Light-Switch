@@ -463,8 +463,32 @@ public:
 
 	virtual void DoRelay(bool on, bool forceSwitchToReflect=false)
 	{
+		if(forceSwitchToReflect)
+		{
+			SetSwitch(on);
+		}	
+		else
+		{
+			SetRelay(on);
+		}
+		
 		//dblog->isr_printf(debug::dbImportant, "DoRelay: %s %s\r\n", on ? "ON" : "off", forceSwitchToReflect ? "FORCE" : "");		
 	}
+
+	// switch and relay do not relate to exactly the same thing
+	// switch is the user side, relay is the power side
+
+	// in a simply situation switch==relay
+	virtual bool GetSwitch()
+	{
+		return GetRelay();
+	}
+
+	virtual void SetSwitch(bool on)
+	{
+		SetRelay(on);
+	}
+
 
 	virtual void ToggleRelay()
 	{
@@ -472,6 +496,7 @@ public:
 	}
 
 	virtual bool GetRelay()=0;
+	virtual void SetRelay(bool){}
 
 	// make the relay honour the switch
 	virtual void HonourCurrentSwitch()
@@ -540,11 +565,41 @@ public:
 
 class toggleSwitch : public baseSwitch
 {
+
+protected:
+
+	// a switch is bistable, if the SWITCH/RELAY is off and software sends a relayon, switch should be flipped
+	// or the next time is physically pressed it'll turn it on, ie do nothing
+	bool m_flipSwitchPolarity, m_currentSwitchState;
+
 public:
-	toggleSwitch(debugBaseClass *dblog):baseSwitch(dblog,_DEBOUNCE_WINDOW_TOGGLE)
+	toggleSwitch(debugBaseClass *dblog):baseSwitch(dblog,_DEBOUNCE_WINDOW_TOGGLE),m_flipSwitchPolarity(false),m_currentSwitchState(false)
 	{
 		m_type=stToggle;
 	}
+
+	// get's the compound answer, what the physical thing is doing, and what we've done to it 
+	virtual bool GetSwitch()
+	{
+		return m_flipSwitchPolarity?!m_currentSwitchState :m_currentSwitchState;
+	}
+
+	// resets, hard, the relationship between switch and relay
+	virtual void SetSwitch(bool on)
+	{
+		baseSwitch::SetRelay(on);
+		m_flipSwitchPolarity=false;
+		m_currentSwitchState=on;
+	}
+
+	// changes the relay, and remembers you 'swapped' the switch
+	virtual void SetRelay(bool on)
+	{
+		m_flipSwitchPolarity=!m_flipSwitchPolarity;
+		baseSwitch::SetRelay(on);
+	}
+
+
 };
 
 
@@ -622,7 +677,7 @@ public:
 		return digitalRead(m_ioPinOut)==HIGH;
 	}
 
-	virtual void DoRelay(bool on, bool forceSwitchToReflect=false)
+	virtual void SetRelay(bool on)
 	{
 		// have seen instances where firing this relay contributes enough
 		// noise to get detected as an inpout switch - so guard
@@ -692,11 +747,11 @@ protected:
 			thingName="ordinal "+String(ordinal);
 		}
 
-		virtual void DoRelay(bool on, bool forceSwitchToReflect=false)
+		virtual void SetRelay(bool on)
 		{
 			// ask dad
 			if(m_parent)
-				m_parent->DoChildRelay(m_ordinal, on, forceSwitchToReflect);
+				m_parent->SetChildRelay(m_ordinal, on);
 		}
 
 		virtual bool GetRelay()
@@ -738,7 +793,13 @@ public:
 
 	virtual bool GetRelay()
 	{
-		return false;
+		// if all the kids are on, i'm on
+		for(auto each=0;each<m_children.size();each++)
+		{
+			if(!GetChildRelay(each))
+				return false;
+		}
+		return true;
 	}
 
 	// turn all the children on or off
@@ -753,6 +814,7 @@ public:
 	}
 
 	virtual void DoChildRelay(unsigned child,bool on, bool forceSwitchToReflect=false)=0;
+	virtual void SetChildRelay(unsigned child, bool on)=0;
 	virtual bool GetChildRelay(unsigned child)=0;
 
 protected:
@@ -825,10 +887,16 @@ public:
 
 	virtual void DoChildRelay(unsigned child,bool on, bool forceSwitchToReflect=false)
 	{
+		SetChildRelay(child,on);
+	}
+
+	virtual void SetChildRelay(unsigned child,bool on)
+	{
 		m_iochip.SetRelay(child,on);
 		// TODO - this should be in baseThing
 		m_children[child]->SendState(on);
 	}
+
 
 	virtual bool GetChildRelay(unsigned child)
 	{
@@ -914,7 +982,7 @@ public:
 				// get the state
 				bool state=(causeAndState&(1<<each))?true:false;
 				dblog->printf(debug::dbInfo,"%s\r\n", state?"ON":"off");
-				DoChildRelay(each,state,false);
+				SetChildRelay(each,state);
 			}
 		}
 

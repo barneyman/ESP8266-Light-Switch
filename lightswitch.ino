@@ -1263,11 +1263,11 @@ void setup(void)
 	}
 
 // thermos and lux
-//#define WEMOS_COM3
+#define WEMOS_COM3
 // PIR
 //#define WEMOS_COM4
 // 6switch
-#define WEMOS_COM5 
+//#define WEMOS_COM5 
 
 #ifdef WEMOS_COM3
 	// load up the sensors and switches
