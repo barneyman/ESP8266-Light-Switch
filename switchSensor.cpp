@@ -1,6 +1,4 @@
 #include "switchSensor.h"
-#include <onewire.h>
-#include <DallasTemperature.h>
 
 
 

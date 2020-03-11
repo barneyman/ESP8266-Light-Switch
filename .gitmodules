@@ -1,0 +1,24 @@
+[submodule "libraries/OneWire"]
+	path = libraries/OneWire
+	url = https://github.com/PaulStoffregen/OneWire
+[submodule "libraries/myLibraries"]
+	path = libraries/myLibraries
+	url = https://github.com/barneyman/myLibraries
+[submodule "libraries/syslog"]
+	path = libraries/syslog
+	url = https://github.com/arcao/syslog
+[submodule "libraries/ArduinoJson"]
+	path = libraries/ArduinoJson
+	url = https://github.com/bblanchon/ArduinoJson.git
+[submodule "libraries/Arduino-Temperature-Control-Library"]
+	path = libraries/Arduino-Temperature-Control-Library
+	url = https://github.com/milesburton/Arduino-Temperature-Control-Library.git
+[submodule "libraries/BME280"]
+	path = libraries/BME280
+	url = https://github.com/finitespace/BME280.git
+[submodule "libraries/MAX44009"]
+	path = libraries/MAX44009
+	url = https://github.com/dantudose/MAX44009.git
+[submodule "libraries/myTemplates"]
+	path = libraries/myTemplates
+	url = https://github.com/barneyman/myTemplates
