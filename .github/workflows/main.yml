@@ -31,55 +31,55 @@ jobs:
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-    # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-    - name: Checking out
-      uses: actions/checkout@master
-      with:
-        submodules: true
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - name: Checking out
+        uses: actions/checkout@master
+        with:
+          submodules: true
 
-    # We use the arduino/setup-arduino-cli action to install and
-    # configure the Arduino CLI on the system.
-    - name: Setup Arduino CLI
-      uses: arduino/setup-arduino-cli@v1.0.0
-    
-    - name: Install platform
-      run: |
-          arduino-cli core update-index --additional-urls https://arduino.esp8266.com/stable/package_esp8266com_index.json
-          arduino-cli core install esp8266:esp8266 --additional-urls https://arduino.esp8266.com/stable/package_esp8266com_index.json
+      # We use the arduino/setup-arduino-cli action to install and
+      # configure the Arduino CLI on the system.
+      - name: Setup Arduino CLI
+        uses: arduino/setup-arduino-cli@v1.0.0
+      
+      - name: Install platform
+        run: |
+            arduino-cli core update-index --additional-urls https://arduino.esp8266.com/stable/package_esp8266com_index.json
+            arduino-cli core install esp8266:esp8266 --additional-urls https://arduino.esp8266.com/stable/package_esp8266com_index.json
 
-    # Finally, we compile the sketch, using the FQBN that was set
-    # in the build matrix.
-    - name: Compile Sketch Matrix
-      run: arduino-cli compile --fqbn ${{ matrix.platform }} --output lightswitch_${{ matrix.friendly }}  --libraries ./libraries ./lightswitch.ino 
-    
-    - name: Compress output
-      run: tar -czvf release.tar.gz *.elf *.bin
-        
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@latest
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
-      with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
-        body: |
-            Changes in this Release
-            - First Change
-            - Second Change
-        draft: true
-        prerelease: false
-        
-        
-    - name: Upload Release Asset
-      id: upload-release-asset 
-      uses: actions/upload-release-asset@v1
-      env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-          asset_path: ./release.tar.gz
-          asset_name: release.tar.gz
-          asset_content_type: application/tar+gzip    
+      # Finally, we compile the sketch, using the FQBN that was set
+      # in the build matrix.
+      - name: Compile Sketch Matrix
+        run: arduino-cli compile --fqbn ${{ matrix.platform }} --output lightswitch_${{ matrix.friendly }}  --libraries ./libraries ./lightswitch.ino 
+      
+      - name: Compress output
+        run: tar -czvf release.tar.gz *.elf *.bin
+          
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          body: |
+              Changes in this Release
+              - First Change
+              - Second Change
+          draft: true
+          prerelease: false
+          
+          
+      - name: Upload Release Asset
+        id: upload-release-asset 
+        uses: actions/upload-release-asset@v1
+        env:
+            GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+            upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
+            asset_path: ./release.tar.gz
+            asset_name: release.tar.gz
+            asset_content_type: application/tar+gzip    
         
     
