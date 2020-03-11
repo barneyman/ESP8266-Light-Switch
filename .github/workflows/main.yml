@@ -6,7 +6,7 @@ name: barneymanCI
 # events but only for the master branch
 on:
   release:
-    types: [prereleased, edited]
+    types: [prereleased, edited, published]
 
 #  push:
 #    branches: [ master ]
