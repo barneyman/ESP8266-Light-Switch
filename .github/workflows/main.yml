@@ -14,6 +14,18 @@ on:
 jobs:
   # This workflow contains a single job called "build"
   builder:
+
+    # create a matrix 
+    # wemos d1 - esp8266:esp8266:d1
+    - strategy:
+      matrix: 
+        platform: [esp8266:esp8266:generic, esp8266:esp8266:d1]
+        include:
+          - platform: "esp8266:esp8266:generic"
+            friendly: "sonoff_basic_"
+          - platform: "esp8266:esp8266:d1"
+            friendly: "wemosD1"        
+
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
 
@@ -34,19 +46,6 @@ jobs:
       run: |
           arduino-cli core update-index --additional-urls https://arduino.esp8266.com/stable/package_esp8266com_index.json
           arduino-cli core install esp8266:esp8266 --additional-urls https://arduino.esp8266.com/stable/package_esp8266com_index.json
-
-    # create a matrix 
-    # wemos d1 - esp8266:esp8266:d1
-    - strategy:
-      matrix: 
-        platform: [esp8266:esp8266:generic, esp8266:esp8266:d1]
-        include:
-          - platform: "esp8266:esp8266:generic"
-            friendly: "sonoff_basic_"
-          - platform: "esp8266:esp8266:d1"
-            friendly: "wemosD1"        
-
-
 
     # Finally, we compile the sketch, using the FQBN that was set
     # in the build matrix.
