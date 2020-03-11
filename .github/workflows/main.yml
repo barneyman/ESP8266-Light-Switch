@@ -18,13 +18,13 @@ jobs:
     # create a matrix 
     # wemos d1 - esp8266:esp8266:d1
     - strategy:
-      matrix: 
-        platform: [esp8266:esp8266:generic, esp8266:esp8266:d1]
-        include:
-          - platform: "esp8266:esp8266:generic"
-            friendly: "sonoff_basic_"
-          - platform: "esp8266:esp8266:d1"
-            friendly: "wemosD1"        
+        matrix: 
+          platform: [esp8266:esp8266:generic, esp8266:esp8266:d1]
+          include:
+            - platform: "esp8266:esp8266:generic"
+              friendly: "sonoff_basic_"
+            - platform: "esp8266:esp8266:d1"
+              friendly: "wemosD1"        
 
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
