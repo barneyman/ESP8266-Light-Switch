@@ -37,11 +37,11 @@ jobs:
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - name: Checking out ${{ $GITHUB_REF }}
+      - name: Checking out ${GITHUB_REF}
         uses: actions/checkout@master
         with:
           submodules: "true"
-          ref: ${{ $GITHUB_REF }}
+          ref: ${GITHUB_REF}
 
       # We use the arduino/setup-arduino-cli action to install and
       # configure the Arduino CLI on the system.
@@ -56,7 +56,7 @@ jobs:
       # Finally, we compile the sketch, using the FQBN that was set
       # in the build matrix.
       - name: Compile Sketch Matrix
-        run: arduino-cli compile --fqbn ${{ matrix.platform }} --output ${{ GITHUB_REF }}_lightswitch_${{ matrix.friendly }}  --libraries ./libraries ./lightswitch.ino 
+        run: arduino-cli compile --fqbn ${{ matrix.platform }} --output ${GITHUB_REF}_lightswitch_${{ matrix.friendly }}  --libraries ./libraries ./lightswitch.ino 
       
       - name: Compress output
         run: tar -czvf release.tar.gz *.elf *.bin
