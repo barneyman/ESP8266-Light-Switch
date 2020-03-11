@@ -56,6 +56,7 @@ __vm
 *.o
 Debug
 *.bin
+*.elf
 /eagle/6switch/6switch_03.pro
 /eagle/6switch/6switch_03.job
 /eagle/6switch/6switch_02.pro
