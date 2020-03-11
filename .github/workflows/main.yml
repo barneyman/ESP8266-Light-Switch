@@ -19,7 +19,7 @@ jobs:
     # wemos d1 - esp8266:esp8266:d1
     strategy:
       matrix: 
-        platform: [esp8266:esp8266:generic, esp8266:esp8266:d1]
+        platform: ["esp8266:esp8266:generic", "esp8266:esp8266:d1"]
         include:
           - platform: "esp8266:esp8266:generic"
             friendly: "sonoff_basic_"
