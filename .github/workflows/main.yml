@@ -13,7 +13,7 @@ on:
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   # This workflow contains a single job called "build"
-  build:
+  builder:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
 
@@ -35,12 +35,25 @@ jobs:
           arduino-cli core update-index --additional-urls https://arduino.esp8266.com/stable/package_esp8266com_index.json
           arduino-cli core install esp8266:esp8266 --additional-urls https://arduino.esp8266.com/stable/package_esp8266com_index.json
 
+    # create a matrix 
+    # wemos d1 - esp8266:esp8266:d1
+    - strategy:
+      matrix: 
+        platform: [esp8266:esp8266:generic, esp8266:esp8266:d1]
+        include:
+          - platform: "esp8266:esp8266:generic"
+            friendly: "sonoff_basic_"
+          - platform: "esp8266:esp8266:d1"
+            friendly: "wemosD1"        
+
+
+
     # Finally, we compile the sketch, using the FQBN that was set
     # in the build matrix.
-    - name: Compile Sketch
-      run: arduino-cli compile --fqbn esp8266:esp8266:d1 --libraries ./libraries ./lightswitch.ino 
+    - name: Compile Sketch Matrix
+      run: arduino-cli compile --fqbn ${{ matrix.platform }} --output lightswitch_${{ matrix.friendly }}  --libraries ./libraries ./lightswitch.ino 
     
-    - name: compress output
+    - name: Compress output
       run: tar -czvf release.tar.gz *.elf *.bin
         
     - name: Create Release
