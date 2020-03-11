@@ -41,7 +41,7 @@ jobs:
       run: arduino-cli compile --fqbn esp8266:esp8266:d1 --libraries ./libraries ./lightswitch.ino 
     
     - name: compress output
-      run: tar -czvf release.tar.gz *.elf *.hex
+      run: tar -czvf release.tar.gz *.elf *.bin
         
     - name: Create Release
       id: create_release
