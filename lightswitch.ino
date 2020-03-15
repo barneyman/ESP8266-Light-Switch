@@ -8,7 +8,6 @@
 #define _SONOFF_BASIC					// the basic normal sonoff
 //#define _SONOFF_BASIC_EXTRA_SWITCH		// one with the extra GPIO pin wired as a switch
 //#define _AT_RGBSTRIP					// a strip of RGBs
-//#define _6SWITCH						// my nodemcu with a 6 relay board attached
 
 
 // turn these OFF for the 6 switch one
@@ -22,7 +21,7 @@
 
 
 
-#if !defined(_SONOFF_BASIC) && !defined(_SONOFF_BASIC_EXTRA_SWITCH) && !defined(_AT_RGBSTRIP) && !defined(_6SWITCH)
+#if !defined(_SONOFF_BASIC) && !defined(_SONOFF_BASIC_EXTRA_SWITCH) && !defined(_AT_RGBSTRIP)
 #error "Something MUST be defined!"
 #endif
 
@@ -41,12 +40,6 @@
 #define NUM_SOCKETS	1
 
 
-#elif defined(_6SWITCH)
-
-// the 6switch board
-#define NUM_SOCKETS	6
-#define _OTA_AVAILABLE
-#define _USE_SWITCH_MUXER
 
 #endif
 
@@ -63,6 +56,9 @@
 // With it off, hold the button down and power it up, keep the button down for a second or two
 
 // a number of exceptions in 2.4.0 & LWIP2 - currently only works reliably with 2.3.0 and LWIP1.4
+
+// do not exceed 1Mb of spiffs in wemos (and maybe others) - you get assertions in DataSource.h
+
 
 #define GPIO_RELAY		12	// GPIO12
 #define GPIO_LED		13
@@ -151,7 +147,7 @@ void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState);
 syslogDebug dblog(debug::dbWarning, "192.168.51.1", 514, "temp", "lights");
 #else
 // try to avoid verbose - it causes heisenbugs because all HTTP interactions are artificially slowed down
-SerialDebug dblog(debug::dbWarning);
+SerialDebug dblog(debug::dbInfo);
 #endif
 
 //#define _OLD_WAY
@@ -166,10 +162,6 @@ SerialDebug dblog(debug::dbWarning);
 
 #if defined(_SONOFF_BASIC) || defined(_SONOFF_BASIC_EXTRA_SWITCH)
 myWifiClass wifiInstance("sonoff_", &dblog, mdsnNAME);
-#elif defined(_6SWITCH)
-// for serial
-SerialDebug dblog(debug::dbWarning);
-myWifiClass wifiInstance("6switch_", &dblog, mdsnNAME);
 #elif defined(_AT_RGBSTRIP)
 SerialDebug dblog(debug::dbVerbose);
 myWifiClass wifiInstance("rgb_", &dblog, mdsnNAME);
@@ -341,30 +333,7 @@ struct
 		{ "Device A",0, swUnknown,swOff, stMomentary, 0,0 }
 	}
 
-#elif defined(_6SWITCH)
-
-#ifdef _BOARD_VER_1_1
-	{
-		{ "Device A", 0, swUnknown,swOff, stToggle, 0,0 },
-		{ "Device B", 5, swUnknown,swOff, stToggle, 0,0 },
-		{ "Device C", 4, swUnknown,swOff, stToggle, 0,0 },
-		{ "Device D", 3, swUnknown,swOff, stToggle, 0,0 },
-		{ "Device E", 2, swUnknown,swOff, stToggle, 0,0 },
-		{ "Device F", 1, swUnknown,swOff, stToggle, 0,0 }
-	}
-#else
-	{
-		{ "Device A", 0 },
-		{ "Device B", 1 },
-		{ "Device C", 2 },
-		{ "Device D", 3 },
-		{ "Device E", 4 },
-		{ "Device F", 5 }
-	}
 #endif
-
-#endif
-
 };
 
 
@@ -416,22 +385,6 @@ std::vector<myWifiClass::mdnsService> services;
 
 
 
-#ifdef _6SWITCH
-
-
-#include "mcp23017.h"
-
-// light manual trigger IN, driven by the INT pin on the MCP
-int inputSwitchPin = 14; // D5
-// pin that controls power to the MCP
-int resetMCPpin = 16;// D0;
-// pin that controls power to the relay board
-int powerRelayBoardNPN = 0; // d3
-
-
-mcp23017AndRelay mcp(4, 5, resetMCPpin, powerRelayBoardNPN);
-
-#endif
 
 
 
@@ -753,12 +706,6 @@ void DoSwitch(unsigned portNumber, bool on, bool forceSwitchToReflect)
 	digitalWrite(GPIO_LED, on ? HIGH : LOW);
 #endif
 
-#elif defined(_6SWITCH)
-	DoRelay(MapSwitchToRelay(portNumber), on);
-	if (forceSwitchToReflect)
-	{
-		mcp.SetSwitch(portNumber, on);
-	}
 
 #else
 
@@ -782,25 +729,6 @@ void DoSwitch(unsigned portNumber, bool on, bool forceSwitchToReflect)
 #endif
 
 
-#ifdef _6SWITCH
-
-// do, portNumber is 0 thru 7
-void DoRelay(unsigned portNumber, bool on)
-{
-	if (portNumber > 7 || portNumber < 0)
-	{
-		dblog.printf(debug::dbError, "DoRelay called out of bounds %u\n\r", portNumber);
-		return;
-	}
-
-
-	dblog.printf(debug::dbImportant, "DoRelay: relay %d %s\r\n", portNumber, on ? "ON" : "off");
-
-	mcp.SetRelay(portNumber, on);
-
-}
-
-#endif
 
 
 void ReadHTLMversion()
@@ -1204,14 +1132,6 @@ void setup(void)
 	attachInterrupt(GPIO_SWITCH2, OnSwitchISR2, Details.switches[0].altSwitchType == stMomentary ? FALLING : CHANGE);
 #endif
 
-#elif defined(_6SWITCH)
-	// initialise the MCP
-	dblog.println(debug::dbVerbose, "Initialising MCP");
-	mcp.Initialise();
-	// preparing GPIOs
-	pinMode(inputSwitchPin, INPUT_PULLUP);
-	// the MCP interrupt is configured to fire on change, and goes LOW when fired
-	attachInterrupt(inputSwitchPin, OnSwitchISR, ONLOW);
 #endif
 
 #ifdef GPIO_LED
@@ -1263,9 +1183,9 @@ void setup(void)
 	}
 
 // thermos and lux
-#define WEMOS_COM3
+//#define WEMOS_COM3
 // PIR
-//#define WEMOS_COM4
+#define WEMOS_COM4
 // 6switch
 //#define WEMOS_COM5 
 
@@ -1502,43 +1422,6 @@ void InstallWebServerHandlers()
 
 #ifdef _OLD_WAY
 
-#ifdef _6SWITCH
-		// these have to be in port/action pairs
-		if (wifiInstance.server.args() % 2)
-		{
-			dblog.println(debug::dbWarning, "/button had an odd number of params");
-			return;
-		}
-
-
-		for (uint8_t i = 0; i < wifiInstance.server.args(); i += 2)
-		{
-			int port = -1; bool action = false;
-			if (wifiInstance.server.argName(i) == "port" && wifiInstance.server.argName(i + 1) == "action")
-			{
-				port = wifiInstance.server.arg(i).toInt();
-				wifiInstance.server.arg(i + 1).toLowerCase();
-				action = wifiInstance.server.arg(i + 1) == "on" ? true : false;
-			}
-			else if (wifiInstance.server.argName(i) == "action" && wifiInstance.server.argName(i + 1) == "port")
-			{
-				port = wifiInstance.server.arg(i + 1).toInt();
-				wifiInstance.server.arg(i).toLowerCase();
-				action = wifiInstance.server.arg(i) == "on" ? true : false;
-			}
-
-			if (port != -1)
-			{
-				DoSwitchAntiBounce(port, action);
-				//DoSwitch(port, action, true);
-			}
-			else
-			{
-				dblog.println(debug::dbWarning, "/button didn't get a port");
-			}
-		}
-
-#else // 6switch
 
 		// one trick pony
 		if (wifiInstance.server.hasArg("action"))
@@ -1578,8 +1461,6 @@ void InstallWebServerHandlers()
 #endif		
 		}
 
-
-#endif // 6switch
 
 #endif
 
@@ -2169,7 +2050,7 @@ void InstallWebServerHandlers()
 		// cache it for an hour
 		wifiInstance.server.serveStatic(file.c_str(), SPIFFS, file.c_str(),"Cache-Control: public, max-age=60");
 
-		dblog.printf(debug::dbVerbose, "Serving %s\r", file.c_str());
+		dblog.printf(debug::dbInfo, "Serving %s\r\n", file.c_str());
 
 		// remove the slash
 		// file.remove(0,1);
@@ -2348,10 +2229,21 @@ void SendServerPage()
 		break;
 
 	}
-	File f = SPIFFS.open(toOpen, "r");
 
-	wifiInstance.server.streamFile(f, "text/html");
-	f.close();
+	if(SPIFFS.exists(toOpen))
+	{
+
+		File f = SPIFFS.open(toOpen, "r");
+
+		// let's make sure it bloody exists !
+		wifiInstance.server.streamFile(f, "text/html");
+		f.close();
+
+	}
+	else
+	{
+		dblog.printf(debug::dbError,"SPIFFS error - %s does not exist\n\r", toOpen.c_str());
+	}
 
 }
 
