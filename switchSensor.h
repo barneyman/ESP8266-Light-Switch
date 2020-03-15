@@ -384,7 +384,7 @@ class GPIOInstantSensor : public instantSensor
 {
 protected:
 
-	unsigned m_gpio;
+	unsigned m_gpio, m_gpOut;
 	volatile bool m_ioChanged;
 
 	static void ICACHE_RAM_ATTR static_isr()
@@ -396,11 +396,14 @@ protected:
 
 public:
 
-	GPIOInstantSensor(debugBaseClass*dbg,unsigned gpio):instantSensor(dbg),m_gpio(gpio),m_ioChanged(false)
+	GPIOInstantSensor(debugBaseClass*dbg,unsigned gpio, unsigned displayPin=-1):instantSensor(dbg),m_gpio(gpio),m_ioChanged(false),m_gpOut(displayPin)
 	{
 		m_singleton=this;
 		pinMode(m_gpio, INPUT);
 		attachInterrupt(m_gpio, static_isr, CHANGE);
+
+		if(m_gpOut!=-1)
+			pinMode(m_gpOut,OUTPUT);
 	}
 
 	virtual void DoWork()
@@ -411,6 +414,9 @@ public:
 			m_currentState=(digitalRead(m_gpio)==HIGH)?true:false;
 
 			dblog->printf(debug::dbInfo,"sensor changed %s\r",m_currentState?"HIGH":"LOW");
+
+			if(m_gpOut!=-1)
+				digitalWrite(m_gpOut,m_currentState?HIGH:LOW);
 
 			SendState(m_currentState);
 			m_ioChanged=false;
@@ -426,7 +432,7 @@ public:
 class PIRInstantSensor : public GPIOInstantSensor
 {
 public:
-	PIRInstantSensor(debugBaseClass*dbg,unsigned gpio):GPIOInstantSensor(dbg, gpio)
+	PIRInstantSensor(debugBaseClass*dbg,unsigned gpio, unsigned displayPin=LED_BUILTIN):GPIOInstantSensor(dbg, gpio, displayPin)
 	{
 		thingName="PIR";
 		deviceClass="motion";
