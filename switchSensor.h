@@ -385,6 +385,7 @@ class GPIOInstantSensor : public instantSensor
 protected:
 
 	unsigned m_gpio, m_gpOut;
+	bool m_inverted;
 	volatile bool m_ioChanged;
 
 	static void ICACHE_RAM_ATTR static_isr()
@@ -404,6 +405,8 @@ public:
 
 		if(m_gpOut!=-1)
 			pinMode(m_gpOut,OUTPUT);
+
+		m_inverted=(displayPin==LED_BUILTIN)?true:false;
 	}
 
 	virtual void DoWork()
@@ -411,7 +414,9 @@ public:
 		// if our state has changed send State
 		if(m_ioChanged)
 		{
-			m_currentState=(digitalRead(m_gpio)==HIGH)?true:false;
+			
+
+			m_currentState=(digitalRead(m_gpio)==m_inverted?LOW:HIGH)?true:false;
 
 			dblog->printf(debug::dbInfo,"sensor changed %s\r",m_currentState?"HIGH":"LOW");
 

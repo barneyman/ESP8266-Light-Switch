@@ -1344,44 +1344,67 @@ void InstallWebServerHandlers()
 		// 'plain' is the secret source to get to the body
 		JsonObject& root = jsonBuffer.parseObject(wifiInstance.server.arg("plain"));
 
-		String host = root["host"];
-		int port = root["port"];
+		//String host = root["host"];
+		//int port = root["port"];
 		String url= root["url"];
+		String urlSpiffs= root["urlSpiffs"];
 
 		delay(_WEB_TAR_PIT_DELAY);
-
-		enum HTTPUpdateResult result = ESPhttpUpdate.update(host, port, url, _MYVERSION);
-		//enum HTTPUpdateResult result = ESPhttpUpdate.update(wifiInstance.m_wificlient, host, port, url, _MYVERSION);
-
-		switch (result)
-		{
-		case HTTP_UPDATE_FAILED:
-			dblog.printf(debug::dbError, "HTTP_UPDATE_FAILD Error (%d): %s", ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
-			break;
-		case HTTP_UPDATE_NO_UPDATES:
-			dblog.println(debug::dbImportant, "no updates");
-			break;
-		case HTTP_UPDATE_OK:
-			dblog.println(debug::dbImportant, "update succeeded");
-			break;
-		}
 
 		StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer2;
 		
 		// 'plain' is the secret source to get to the body
 		JsonObject&replyroot = jsonBuffer2.createObject();
-		replyroot["result"] = result;
-		if (result != HTTP_UPDATE_OK)
+		String bodyText;
+
+		for(int updates=0;updates<2;updates++)
 		{
-			JsonObject &details = replyroot.createNestedObject("Details");
-			details["espNarrative"] = ESPhttpUpdate.getLastErrorString();
-			details["espResult"] = ESPhttpUpdate.getLastError();
+
+			// lets check for SPIFFs update first
+			enum HTTPUpdateResult result = !updates ? ESPhttpUpdate.updateSpiffs(urlSpiffs,_MYVERSION):ESPhttpUpdate.update(url, _MYVERSION);;
+
+			switch (result)
+			{
+			case HTTP_UPDATE_FAILED:
+				dblog.printf(debug::dbError, "HTTP_UPDATE_FAILD Error (%d): %s", ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
+				break;
+			case HTTP_UPDATE_NO_UPDATES:
+				dblog.println(debug::dbImportant, "no updates");
+				break;
+			case HTTP_UPDATE_OK:
+				dblog.println(debug::dbImportant, "update succeeded");
+				break;
+			}
+
+			replyroot[!updates?"resultSpiffs":"result"] = result;
+			if (result != HTTP_UPDATE_OK)
+			{
+				JsonObject &details = replyroot.createNestedObject("Details");
+				details["espNarrative"] = ESPhttpUpdate.getLastErrorString();
+				details["espResult"] = ESPhttpUpdate.getLastError();
+
+			}
+
+			replyroot.printTo(bodyText);
+
+			if (result != HTTP_UPDATE_OK)
+			{
+				dblog.println(debug::dbError, bodyText);
+			}
+			else
+			{
+				dblog.println(debug::dbImportant, bodyText);
+			}
+
+			// first time round, save our config
+			if(!updates)
+			{
+				WriteJSONconfig();
+			}
+
 		}
 
-		String bodyText;
-		replyroot.printTo(bodyText);
 
-		dblog.println(debug::dbVerbose, bodyText);
 
 		wifiInstance.server.send(200, "application/json", bodyText);
 
