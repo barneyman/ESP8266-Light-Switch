@@ -38,11 +38,10 @@ jobs:
     steps:
       - name: Environment
         run: |
-          echo ------------
+          echo "setting up env ..."
           echo ${GITHUB_REF}
           echo ${GITHUB_REPOSITORY}
-          echo ------------
-          echo "::set-env name=RELEASE_TAG::${GITHUB_REF#refs/tags/"
+          echo "::set-env name=RELEASE_TAG::${GITHUB_REF#refs/tags/}"
           
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - name: Checking out tag ${{ github.ref }}
