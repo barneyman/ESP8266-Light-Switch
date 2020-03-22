@@ -79,9 +79,8 @@ jobs:
           # https://help.github.com/en/actions/reference/context-and-expression-syntax-for-github-actions#github-context
           tag_name: ${{ github.ref }}
           release_name: Release ${{ github.ref }}
-          body: |
-              Changes in this Release - ${{ github.event.release.name }}
-              ${{ github.event.release.body }}
+          # ${{ github.event.release.body }}
+          body: ${{ github.event.release.name }}
           draft: ${{ github.event.release.draft }}
           prerelease: ${{ github.event.release.prerelease }}
           
