@@ -74,7 +74,8 @@ jobs:
         id: create_release
         uses: actions/create-release@latest
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+          # This token is provided by Actions, you do not need to create your own token
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
         with:
           # https://help.github.com/en/actions/reference/context-and-expression-syntax-for-github-actions#github-context
           tag_name: ${{ github.ref }}
@@ -83,8 +84,7 @@ jobs:
           body: ${{ github.event.release.name }}
           draft: ${{ github.event.release.draft }}
           prerelease: ${{ github.event.release.prerelease }}
-          
-          
+
       - name: Upload Release Asset
         id: upload-release-asset 
         uses: actions/upload-release-asset@v1
