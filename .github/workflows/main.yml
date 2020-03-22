@@ -71,6 +71,9 @@ jobs:
       - name: Compile Sketch Matrix
         run: arduino-cli compile --fqbn ${{ matrix.platform }} --output ${GITHUB_REF#refs/tags/}_lightswitch_${{ matrix.friendly }}  --libraries ./libraries ./lightswitch.ino 
       
+      - name: Create SPIFFS
+        run: mkspiffs --version
+      
       - name: Compress output
         run: tar -czvf release.tar.gz *.elf *.bin
           
