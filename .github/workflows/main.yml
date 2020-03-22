@@ -5,10 +5,14 @@ name: barneymanCI
 # Controls when the action will run. Triggers the workflow on push or pull request 
 # events but only for the master branch
 on:
-  release:
+  # when a branch or tag is created
+  create:
+    
+  
+  #release:
     # can get to the payload of the request https://developer.github.com/v3/repos/releases/#create-a-release
     # via github.event.release.
-    types: [published]
+    #types: [published]
 
 #  push:
 #    branches: [ master ]
@@ -43,7 +47,7 @@ jobs:
           echo "setting up env ..."
           echo ${GITHUB_REF}
           echo ${GITHUB_REPOSITORY}
-          echo "::set-env name=RELEASE_TAG::${GITHUB_REF#refs/tags/}"
+          echo "::set-env name=NEW_TAG::${GITHUB_REF#refs/tags/}"
           
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - name: Checking out tag ${{ github.ref }}
@@ -83,10 +87,10 @@ jobs:
           release_name: Release ${{ github.ref }} (from Action)
           # ${{ github.event.release.body }}
           body: | 
-            ${{ github.event.release.name }}
-            ${{ github.event.release.body }}
-          draft: ${{ github.event.release.draft }}
-          prerelease: ${{ github.event.release.prerelease }}
+            Release auto created by 
+            'create tag' event
+          draft: false
+          prerelease: true
 
       - name: Upload Release Asset
         id: upload-release-asset 
@@ -96,7 +100,7 @@ jobs:
         with:
             upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
             asset_path: ./release.tar.gz
-            asset_name: release_${{ env.RELEASE_TAG }}.tar.gz
+            asset_name: release_${{ env.NEW_TAG }}.tar.gz
             asset_content_type: application/tar+gzip    
         
     
