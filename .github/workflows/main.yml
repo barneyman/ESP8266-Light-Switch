@@ -83,7 +83,7 @@ jobs:
       - name: Create SPIFFS
         run: |
           ${{ env.MKSPIFFS_DIR }}/mkspiffs --version
-          ${{ env.MKSPIFFS_DIR }}/mkspiffs -c ./data -p 256 -b 8192 -s 1000 ${{ matrix.friendly }}_spiffs.bin
+          ${{ env.MKSPIFFS_DIR }}/mkspiffs -c ./data -p 256 -b 8192 -s 1028096 ${{ matrix.friendly }}_spiffs.bin
       
       
       - name: Compress output
