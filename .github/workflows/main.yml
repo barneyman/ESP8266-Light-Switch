@@ -49,6 +49,7 @@ jobs:
           echo ${GITHUB_REF}
           echo ${GITHUB_REPOSITORY}
           echo "::set-env name=NEW_TAG::${GITHUB_REF#refs/tags/}"
+          echo "::set-env name=NEW_HEAD::${GITHUB_REF#refs/heads/}"
           
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - name: Checking out tag ${{ github.ref }}
@@ -80,7 +81,7 @@ jobs:
       # Finally, we compile the sketch, using the FQBN that was set
       # in the build matrix.
       - name: Compile Sketch Matrix
-        run: arduino-cli compile --fqbn ${{ matrix.platform }} --output ${GITHUB_REF#refs/tags/}_lightswitch_${{ matrix.friendly }}  --libraries ./libraries ./lightswitch.ino 
+        run: arduino-cli compile --fqbn ${{ matrix.platform }} --output ${GITHUB_RUN_ID}_lightswitch_${{ matrix.friendly }}  --libraries ./libraries ./lightswitch.ino 
       
       
       - name: Compress output
