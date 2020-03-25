@@ -57,6 +57,16 @@ jobs:
           submodules: "true"
           ref: ${{ github.ref }}
 
+      - name: Install mkspiffs
+        run: |
+          wget https://github.com/igrr/mkspiffs/releases/download/0.2.3/mkspiffs-0.2.3-generic-linux64.tar.gz
+          tar -xvf mkspiffs-0.2.3-generic-linux64.tar.gz
+          echo "::set-env name=MKSPIFFS_DIR::./mkspiffs-0.2.3-generic-linux64"
+      
+      - name: Create SPIFFS
+        run: ${{ env.MKSPIFFS_DIR }}/mkspiffs --version
+
+
       # We use the arduino/setup-arduino-cli action to install and
       # configure the Arduino CLI on the system.
       - name: Setup Arduino CLI
@@ -72,14 +82,6 @@ jobs:
       - name: Compile Sketch Matrix
         run: arduino-cli compile --fqbn ${{ matrix.platform }} --output ${GITHUB_REF#refs/tags/}_lightswitch_${{ matrix.friendly }}  --libraries ./libraries ./lightswitch.ino 
       
-      - name: Install mkspiffs
-        run: |
-          wget https://github.com/igrr/mkspiffs/releases/download/0.2.3/mkspiffs-0.2.3-generic-linux64.tar.gz
-          tar -xvf mkspiffs-0.2.3-generic-linux64.tar.gz
-          echo "::set-env name=MKSPIFFS_DIR::./mkspiffs-0.2.3-generic-linux64"
-      
-      - name: Create SPIFFS
-        run: ${{ env.MKSPIFFS_DIR }}/mkspiffs --version
       
       - name: Compress output
         run: tar -czvf release.tar.gz *.elf *.bin
