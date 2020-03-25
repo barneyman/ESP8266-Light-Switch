@@ -7,8 +7,8 @@ name: barneymanCI
 on:
   # when a branch or tag is created
   create:
-  schedule:
-    - cron:  '*/10 * * * *'    
+#  schedule:
+#    - cron:  '*/10 * * * *'    
   
   #release:
     # can get to the payload of the request https://developer.github.com/v3/repos/releases/#create-a-release
