@@ -7,8 +7,8 @@ name: barneymanCI
 on:
   # when a branch or tag is created
   create:
-#  schedule:
-#    - cron:  '*/10 * * * *'    
+  schedule:
+    - cron:  '*/10 * * * *'    
   
   #release:
     # can get to the payload of the request https://developer.github.com/v3/repos/releases/#create-a-release
@@ -81,13 +81,11 @@ jobs:
       
       
       - name: Create SPIFFS
-        run: |
-          ${{ env.MKSPIFFS_DIR }}/mkspiffs --version
-          ${{ env.MKSPIFFS_DIR }}/mkspiffs -c ./data -p 256 -b 8192 -s 1028096 ${{ matrix.friendly }}_spiffs.bin
+        run: ${{ env.MKSPIFFS_DIR }}/mkspiffs -c ./data -p 256 -b 8192 -s 1028096 ${{ matrix.friendly }}.spiffs
       
       
       - name: Compress output
-        run: tar -czvf release.tar.gz *.elf *.bin
+        run: tar -czvf release.tar.gz *.elf *.bin *.spiffs
           
       - name: Create Release
         id: create_release
