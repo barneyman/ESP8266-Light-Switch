@@ -7,8 +7,8 @@ name: barneymanCI
 on:
   # when a branch or tag is created
   create:
-  schedule:
-    - cron:  '*/30 * * * *'    
+#  schedule:
+#    - cron:  '*/30 * * * *'    
 #    - cron:  '10 * * * *'    
   
   #release:
