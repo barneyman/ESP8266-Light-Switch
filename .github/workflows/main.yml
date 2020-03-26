@@ -8,7 +8,7 @@ on:
   # when a branch or tag is created
   create:
 #  schedule:
-#    - cron:  '*/30 * * * *'    
+    - cron:  '*/30 * * * *'    
 #    - cron:  '10 * * * *'    
   
   #release:
@@ -31,12 +31,12 @@ jobs:
     strategy:
       matrix: 
         # generic needs some #define love - D7 doesnt exist
-        #platform: ["esp8266:esp8266:generic", "esp8266:esp8266:d1"]
-        platform: ["esp8266:esp8266:d1"]
+        platform: ["esp8266:esp8266:generic", "esp8266:esp8266:d1"]
+        #platform: ["esp8266:esp8266:d1"]
         include:
-          #- platform: "esp8266:esp8266:generic"
-          #  friendly: "sonoff_basic_"
-          #  spiffsCmdLine: -p 256 -b 8192 -s 1028096
+          - platform: "esp8266:esp8266:generic"
+            friendly: "sonoff_basic_"
+            spiffsCmdLine: -p 256 -b 8192 -s 0x80000
           - platform: "esp8266:esp8266:d1"
             friendly: "wemosD1"        
             spiffsCmdLine: -p 256 -b 8192 -s 1028096  
@@ -88,8 +88,9 @@ jobs:
       
       - name: Compress output
         run: tar -czvf release.tar.gz *.elf *.bin *.spiffs
-          
+        
       - name: Create Release
+        if: ${{ false }}
         id: create_release
         uses: actions/create-release@latest
         env:
@@ -108,6 +109,7 @@ jobs:
           prerelease: true
 
       - name: Upload Release Asset
+        if: ${{ false }}
         id: upload-release-asset 
         uses: actions/upload-release-asset@v1
         env:
