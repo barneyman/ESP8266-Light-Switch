@@ -8,7 +8,8 @@ on:
   # when a branch or tag is created
   create:
   schedule:
-    - cron:  '*/10 * * * *'    
+    - cron:  '*/30 * * * *'    
+#    - cron:  '10 * * * *'    
   
   #release:
     # can get to the payload of the request https://developer.github.com/v3/repos/releases/#create-a-release
@@ -35,8 +36,10 @@ jobs:
         include:
           - platform: "esp8266:esp8266:generic"
             friendly: "sonoff_basic_"
+            spiffsCmdLine: -p 256 -b 8192 -s 1028096
           - platform: "esp8266:esp8266:d1"
             friendly: "wemosD1"        
+            spiffsCmdLine: -p 256 -b 8192 -s 1028096  
 
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
@@ -64,9 +67,6 @@ jobs:
           tar -xvf mkspiffs-0.2.3-generic-linux64.tar.gz
           echo "::set-env name=MKSPIFFS_DIR::./mkspiffs-0.2.3-generic-linux64"
       
-      - name: Create SPIFFS
-        run: ${{ env.MKSPIFFS_DIR }}/mkspiffs -c ./data -p 256 -b 8192 -s 1028096 ${{ matrix.friendly }}.spiffs
-      
       
       # We use the arduino/setup-arduino-cli action to install and
       # configure the Arduino CLI on the system.
@@ -78,12 +78,14 @@ jobs:
             arduino-cli core update-index --additional-urls https://arduino.esp8266.com/stable/package_esp8266com_index.json
             arduino-cli core install esp8266:esp8266@2.6.3 --additional-urls https://arduino.esp8266.com/stable/package_esp8266com_index.json
 
+      - name: Create SPIFFS
+        run: ${{ env.MKSPIFFS_DIR }}/mkspiffs -c ./data ${{ matrix.spiffsCmdLine }} ${{ matrix.friendly }}.spiffs
+
       # Finally, we compile the sketch, using the FQBN that was set
       # in the build matrix.
       - name: Compile Sketch Matrix
         run: arduino-cli compile --fqbn ${{ matrix.platform }} --output ${GITHUB_RUN_ID}_lightswitch_${{ matrix.friendly }}  --libraries ./libraries ./lightswitch.ino 
       
-     
       - name: Compress output
         run: tar -czvf release.tar.gz *.elf *.bin *.spiffs
           
