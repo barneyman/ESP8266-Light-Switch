@@ -732,6 +732,8 @@ public:
 
 };
 
+
+#ifndef ARDUINO_ESP8266_GENERIC // generic
 // TODO - untested
 class WemosRelayShield : public RelayLEDandSwitch
 {
@@ -740,6 +742,7 @@ public:
 	{}
 };
 
+#endif // ARDUINO_ESP8266_GENERIC // generic
 
 #define _DEBOUNCE_WINDOW_LOGIC_TTL	10
 
