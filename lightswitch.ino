@@ -1199,6 +1199,15 @@ void setup(void)
 
 	}
 
+
+#ifdef ARDUINO_ESP8266_GENERIC // generic
+
+	// load up the sensors and switches
+	AddSwitch(new SonoffBasicNoLED(&dblog));
+
+#else ARDUINO_ESP8266_GENERIC
+
+
 // thermos and lux
 //#define WEMOS_COM3
 // PIR
@@ -1229,6 +1238,9 @@ void setup(void)
 
 
 #endif
+
+#endif ARDUINO_ESP8266_GENERIC
+
 
 	// default off, and don't force switches
 	// DoAllSwitch(false,false);

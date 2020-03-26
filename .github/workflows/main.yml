@@ -7,7 +7,9 @@ name: barneymanCI
 on:
   # when a branch or tag is created
   create:
-    
+#  schedule:
+#    - cron:  '*/30 * * * *'    
+#    - cron:  '10 * * * *'    
   
   #release:
     # can get to the payload of the request https://developer.github.com/v3/repos/releases/#create-a-release
@@ -29,13 +31,15 @@ jobs:
     strategy:
       matrix: 
         # generic needs some #define love - D7 doesnt exist
-        #platform: ["esp8266:esp8266:generic", "esp8266:esp8266:d1"]
-        platform: ["esp8266:esp8266:d1"]
+        platform: ["esp8266:esp8266:generic", "esp8266:esp8266:d1"]
+        #platform: ["esp8266:esp8266:d1"]
         include:
           - platform: "esp8266:esp8266:generic"
             friendly: "sonoff_basic_"
+            spiffsCmdLine: -p 256 -b 8192 -s 0x80000
           - platform: "esp8266:esp8266:d1"
             friendly: "wemosD1"        
+            spiffsCmdLine: -p 256 -b 8192 -s 1028096  
 
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
@@ -48,6 +52,7 @@ jobs:
           echo ${GITHUB_REF}
           echo ${GITHUB_REPOSITORY}
           echo "::set-env name=NEW_TAG::${GITHUB_REF#refs/tags/}"
+          echo "::set-env name=NEW_HEAD::${GITHUB_REF#refs/heads/}"
           
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - name: Checking out tag ${{ github.ref }}
@@ -56,6 +61,13 @@ jobs:
           submodules: "true"
           ref: ${{ github.ref }}
 
+      - name: Install mkspiffs
+        run: |
+          wget https://github.com/igrr/mkspiffs/releases/download/0.2.3/mkspiffs-0.2.3-generic-linux64.tar.gz
+          tar -xvf mkspiffs-0.2.3-generic-linux64.tar.gz
+          echo "::set-env name=MKSPIFFS_DIR::./mkspiffs-0.2.3-generic-linux64"
+      
+      
       # We use the arduino/setup-arduino-cli action to install and
       # configure the Arduino CLI on the system.
       - name: Setup Arduino CLI
@@ -66,17 +78,17 @@ jobs:
             arduino-cli core update-index --additional-urls https://arduino.esp8266.com/stable/package_esp8266com_index.json
             arduino-cli core install esp8266:esp8266@2.6.3 --additional-urls https://arduino.esp8266.com/stable/package_esp8266com_index.json
 
+      - name: Create SPIFFS
+        run: ${{ env.MKSPIFFS_DIR }}/mkspiffs -c ./data ${{ matrix.spiffsCmdLine }} ${{ matrix.friendly }}.spiffs
+
       # Finally, we compile the sketch, using the FQBN that was set
       # in the build matrix.
       - name: Compile Sketch Matrix
-        run: arduino-cli compile --fqbn ${{ matrix.platform }} --output ${GITHUB_REF#refs/tags/}_lightswitch_${{ matrix.friendly }}  --libraries ./libraries ./lightswitch.ino 
-      
-      - name: Create SPIFFS
-        run: mkspiffs --version
+        run: arduino-cli compile --fqbn ${{ matrix.platform }} --output ${GITHUB_RUN_ID}_lightswitch_${{ matrix.friendly }}  --libraries ./libraries ./lightswitch.ino 
       
       - name: Compress output
-        run: tar -czvf release.tar.gz *.elf *.bin
-          
+        run: tar -czvf release.tar.gz *.elf *.bin *.spiffs
+        
       - name: Create Release
         id: create_release
         uses: actions/create-release@latest
@@ -87,7 +99,7 @@ jobs:
           # https://help.github.com/en/actions/reference/context-and-expression-syntax-for-github-actions#github-context
           tag_name: ${{ github.ref }}
           # must use another release name! Release ${{ github.ref }} got created to get here
-          release_name: Release ${{ github.ref }} (from Action)
+          release_name: Release ${{ github.run_id }} (from Action)
           # ${{ github.event.release.body }}
           body: | 
             Release auto created by 
