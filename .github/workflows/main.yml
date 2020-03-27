@@ -140,6 +140,6 @@ jobs:
         with:
             upload_url: ${{ steps.get_release_info.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
             asset_path: ./${{ matrix.friendly }}.tar.gz
-            asset_name: release_${{ env.NEW_TAG }}.tar.gz
+            asset_name: release_${{ matrix.friendly }}_${{ env.NEW_TAG }}.tar.gz
             asset_content_type: application/tar+gzip            
         
