@@ -23,8 +23,40 @@ on:
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
+  
+  createRelease:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@latest
+        env:
+          # This token is provided by Actions, you do not need to create your own token
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+        with:
+          # https://help.github.com/en/actions/reference/context-and-expression-syntax-for-github-actions#github-context
+          tag_name: ${{ github.ref }}
+          # must use another release name! Release ${{ github.ref }} got created to get here
+          release_name: Release ${{ github.run_id }} (from Action)
+          # ${{ github.event.release.body }}
+          body: | 
+            Release auto created by 
+            'create tag' event
+          draft: false
+          prerelease: true
+  
+      - name: Output Release URL File
+        run: echo "${{ steps.create_release.outputs.upload_url }}" > release_url.txt
+        
+      - name: Save Release URL File for publish
+        uses: actions/upload-artifact@v1
+        with:
+          name: release_url
+          path: release_url.txt  
+     
   # This workflow contains a single job called "build"
   builder:
+    needs: [createRelease]
 
     # create a matrix 
     # wemos d1 - esp8266:esp8266:d1
@@ -87,25 +119,18 @@ jobs:
         run: arduino-cli compile --fqbn ${{ matrix.platform }} --output ${GITHUB_RUN_ID}_lightswitch_${{ matrix.friendly }}  --libraries ./libraries ./lightswitch.ino 
       
       - name: Compress output
-        run: tar -czvf release.tar.gz *.elf *.bin *.spiffs
+        run: tar -czvf ${{ matrix.platform }}.tar.gz *.elf *.bin *.spiffs
         
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@latest
-        env:
-          # This token is provided by Actions, you do not need to create your own token
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+      - name: Load Release URL File from release job
+        uses: actions/download-artifact@v1
         with:
-          # https://help.github.com/en/actions/reference/context-and-expression-syntax-for-github-actions#github-context
-          tag_name: ${{ github.ref }}
-          # must use another release name! Release ${{ github.ref }} got created to get here
-          release_name: Release ${{ github.run_id }} (from Action)
-          # ${{ github.event.release.body }}
-          body: | 
-            Release auto created by 
-            'create tag' event
-          draft: false
-          prerelease: true
+          name: release_url
+      - name: Get Release File Name & Upload URL
+        id: get_release_info
+        run: |
+          value=`cat release_url/release_url.txt`
+          echo ::set-output name=upload_url::$value
+        
 
       - name: Upload Release Asset
         id: upload-release-asset 
@@ -113,9 +138,8 @@ jobs:
         env:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-            upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-            asset_path: ./release.tar.gz
+            upload_url: ${{ steps.get_release_info.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
+            asset_path: ./${{ matrix.platform }}.tar.gz
             asset_name: release_${{ env.NEW_TAG }}.tar.gz
-            asset_content_type: application/tar+gzip    
+            asset_content_type: application/tar+gzip            
         
-    
