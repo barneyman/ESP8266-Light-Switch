@@ -119,7 +119,7 @@ jobs:
         run: arduino-cli compile --fqbn ${{ matrix.platform }} --output ${GITHUB_RUN_ID}_lightswitch_${{ matrix.friendly }}  --libraries ./libraries ./lightswitch.ino 
       
       - name: Compress output
-        run: tar -czvf ${{ matrix.platform }}.tar.gz *.elf *.bin *.spiffs
+        run: tar -czvf ${{ matrix.friendly }}.tar.gz *.elf *.bin *.spiffs
         
       - name: Load Release URL File from release job
         uses: actions/download-artifact@v1
@@ -139,7 +139,7 @@ jobs:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
             upload_url: ${{ steps.get_release_info.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-            asset_path: ./${{ matrix.platform }}.tar.gz
+            asset_path: ./${{ matrix.friendly }}.tar.gz
             asset_name: release_${{ env.NEW_TAG }}.tar.gz
             asset_content_type: application/tar+gzip            
         
