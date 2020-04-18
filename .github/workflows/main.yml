@@ -5,7 +5,7 @@ name: barneymanCI
 # Controls when the action will run. Triggers the workflow on push or pull request 
 # events but only for the master branch
 on:
-  # when a branch or tag is created - if the tag has 'pr' in it, it will be a pre-release 
+  # when a branch or tag is created - if the tag ends in 'pr' in it, it will be a pre-release 
   create:
 #  schedule:
 #    - cron:  '*/30 * * * *'    
@@ -44,7 +44,7 @@ jobs:
             'create tag' event
           # save it as draft until all assets are uploaded, then undraft it at the end
           draft: true
-          prerelease: ${{contains(github.ref,"pr")}}
+          prerelease: ${{endsWith(github.ref,'pr')}}
   
       - name: Output Release URL File
         run: echo "${{ steps.create_release.outputs.upload_url }}" > release_url.txt
