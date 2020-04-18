@@ -42,7 +42,8 @@ jobs:
           body: | 
             Release auto created by 
             'create tag' event
-          draft: false
+          # save it as draft until all assets are uploaded, then undraft it at the end
+          draft: true
           prerelease: true
   
       - name: Output Release URL File
@@ -53,7 +54,16 @@ jobs:
         with:
           name: release_url
           path: release_url.txt  
-     
+
+      - name: Output Release ID File
+        run: echo "${{ steps.create_release.outputs.upload_url }}" > release_id.txt
+
+      - name: Save Release ID File for publish
+        uses: actions/upload-artifact@v1
+        with:
+          name: release_id
+          path: release_id.txt  
+
   # This workflow contains a single job called "build"
   builder:
     needs: [createRelease]
@@ -142,4 +152,29 @@ jobs:
             asset_path: ./${{ matrix.friendly }}.tar.gz
             asset_name: ${{ matrix.friendly }}_${{ env.NEW_TAG }}.tar.gz
             asset_content_type: application/tar+gzip            
+        
+  undraft:
+    runs-on: ubuntu-latest
+    needs: [builder]
+    steps:
+      - name: Load Release ID File from release job
+        uses: actions/download-artifact@v1
+        with:
+          name: release_id
+      - name: Get Release File Name & id
+        id: get_release_id
+        run: |
+          value=`cat release_id/release_id.txt`
+          echo ::set-output name=release_id::$value
+          
+      - uses: octokit/request-action@v2.x
+        id: changeDraft
+        with:
+          route: PATCH /repos/:repository/releases/:id
+          repository: ${{ github.repository }}
+          id: ${{ steps.get_release_id.outputs.release_id }}
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
         
