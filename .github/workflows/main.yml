@@ -56,7 +56,7 @@ jobs:
           path: release_url.txt  
 
       - name: Output Release ID File
-        run: echo "${{ steps.create_release.outputs.upload_url }}" > release_id.txt
+        run: echo "${{ steps.create_release.outputs.id }}" > release_id.txt
 
       - name: Save Release ID File for publish
         uses: actions/upload-artifact@v1
