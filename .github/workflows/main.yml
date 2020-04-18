@@ -1,4 +1,4 @@
-# This is a basic workflow to help you get started with Actions
+#
 
 name: barneymanCI
 
@@ -116,7 +116,7 @@ jobs:
       # Finally, we compile the sketch, using the FQBN that was set
       # in the build matrix.
       - name: Compile Sketch Matrix
-        run: arduino-cli compile --fqbn ${{ matrix.platform }} --output ${GITHUB_RUN_ID}_lightswitch_${{ matrix.friendly }}  --libraries ./libraries ./lightswitch.ino 
+        run: arduino-cli compile --fqbn ${{ matrix.platform }} --output ${{ matrix.friendly }}_lightswitch_${GITHUB_RUN_ID}  --libraries ./libraries ./lightswitch.ino 
       
       - name: Compress output
         run: tar -czvf ${{ matrix.friendly }}.tar.gz *.elf *.bin *.spiffs
@@ -140,6 +140,6 @@ jobs:
         with:
             upload_url: ${{ steps.get_release_info.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
             asset_path: ./${{ matrix.friendly }}.tar.gz
-            asset_name: release_${{ matrix.friendly }}_${{ env.NEW_TAG }}.tar.gz
+            asset_name: ${{ matrix.friendly }}_${{ env.NEW_TAG }}.tar.gz
             asset_content_type: application/tar+gzip            
         
