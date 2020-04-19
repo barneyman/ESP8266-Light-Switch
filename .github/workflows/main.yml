@@ -121,7 +121,7 @@ jobs:
             arduino-cli core install esp8266:esp8266@2.6.3 --additional-urls https://arduino.esp8266.com/stable/package_esp8266com_index.json
 
       - name: Create SPIFFS
-        run: ${{ env.MKSPIFFS_DIR }}/mkspiffs -c ./data ${{ matrix.spiffsCmdLine }} ${{ matrix.friendly }}.spiffs
+        run: ${{ env.MKSPIFFS_DIR }}/mkspiffs -c ./data ${{ matrix.spiffsCmdLine }} ${{ matrix.friendly }}.spiffs_${GITHUB_RUN_ID}
 
       # Finally, we compile the sketch, using the FQBN that was set
       # in the build matrix.
