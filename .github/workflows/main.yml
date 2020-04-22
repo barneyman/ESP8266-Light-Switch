@@ -106,9 +106,9 @@ jobs:
 
       - name: Install mkspiffs
         run: |
-          wget https://github.com/igrr/mkspiffs/releases/download/0.2.0/mkspiffs-0.2.0-generic-linux64.tar.gz
-          tar -xvf mkspiffs-0.2.0-generic-linux64.tar.gz
-          echo "::set-env name=MKSPIFFS_DIR::./mkspiffs-0.2.0-generic-linux64"
+          wget https://github.com/igrr/mkspiffs/releases/download/0.2.0/mkspiffs-0.2.0-no_magic_length-linux64.tar.gz
+          tar -xvf mkspiffs-0.2.0-no_magic_length-linux64.tar.gz
+          echo "::set-env name=MKSPIFFS_DIR::./mkspiffs-0.2.0-no_magic_length-linux64"
       
       
       # We use the arduino/setup-arduino-cli action to install and
