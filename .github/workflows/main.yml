@@ -80,7 +80,7 @@ jobs:
             platform_options: "eesz=1M512"
             friendly: "sonoff_basic"
             spiffsCmdLine: -p 256 -b 8192 -s 0x80000
-          - platform: "esp8266:esp8266:d1_mini:"
+          - platform: "esp8266:esp8266:d1_mini"
             platform_options: "eesz=4M1M"
             friendly: "wemosD1"        
             spiffsCmdLine: -p 256 -b 8192 -s 1024000
