@@ -73,17 +73,18 @@ jobs:
     strategy:
       matrix: 
         # generic needs some #define love - D7 doesnt exist
-        platform: ["esp8266:esp8266:generic", "esp8266:esp8266:d1_mini"]
+        platform: ["sonoff", "d1_mini"]
         #platform: ["esp8266:esp8266:d1"]
         include:
-          - platform: "esp8266:esp8266:generic"
-            platform_options: "eesz=1M512"
+          - platform: "sonoff"
+            # may have to make SPIFFS bigger very soon
+            platform_options: "esp8266:esp8266:sonoff:BoardModel=sonoffBasic,xtal=80,vt=flash,exception=legacy,ssl=all,eesz=1M256,ip=lm2f,dbg=Disabled"
             friendly: "sonoff_basic"
-            spiffsCmdLine: -p 256 -b 8192 -s 0x80000
-          - platform: "esp8266:esp8266:d1_mini"
-            platform_options: "eesz=4M1M"
+            spiffsCmdLine: -p 256 -b 4096 -s 0x40000
+          - platform: "d1_mini"
+            platform_options: "esp8266:esp8266:d1_mini:xtal=80,vt=flash,exception=legacy,ssl=all,eesz=4M1M,ip=lm2f,dbg=Disabled"
             friendly: "wemosD1"        
-            spiffsCmdLine: -p 256 -b 8192 -s 1024000
+            spiffsCmdLine: -p 256 -b 8192 -s 0xFA000
             # 1028096:  
 
     # The type of runner that the job will run on
@@ -129,7 +130,7 @@ jobs:
       # Finally, we compile the sketch, using the FQBN that was set
       # in the build matrix.
       - name: Compile Sketch Matrix
-        run: arduino-cli compile --fqbn ${{ matrix.platform }}:${{ matrix.platform_options }} --output ${{ matrix.friendly }}_lightswitch_${GITHUB_RUN_ID} --build-properties compiler.c.extra_flags="-D_VERSION_PLATFORM=${{ matrix.platform }} -D_VERSION_NUM=${{ env.NEW_TAG }}"  --libraries ./libraries ./lightswitch.ino 
+        run: arduino-cli compile --fqbn ${{ matrix.platform_options }} --output ${{ matrix.friendly }}_lightswitch_${GITHUB_RUN_ID} --build-properties compiler.c.extra_flags="-D_VERSION_PLATFORM=${{ matrix.platform }} -D_VERSION_NUM=${{ env.NEW_TAG }}"  --libraries ./libraries ./lightswitch.ino 
       
       - name: Compress output
         run: tar -czvf ${{ matrix.friendly }}.tar.gz *.elf *.bin *.spiffs
