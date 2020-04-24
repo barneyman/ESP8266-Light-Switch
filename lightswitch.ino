@@ -1363,19 +1363,28 @@ void InstallWebServerHandlers()
 		StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer2;
 		JsonObject&replyroot = jsonBuffer2.createObject();
 		String bodyText;
+		enum HTTPUpdateResult result=HTTP_UPDATE_FAILED;
 
-		//for(int updates=0;updates<2;updates++)
-		for(int updates=1;updates<2;updates++)
+		for(int updates=0;updates<2;updates++)
 		{
 
 			// lets check for SPIFFs update first
-			dblog.println(debug::dbImportant, "about to update");
-			enum HTTPUpdateResult result = (!updates) ? ESPhttpUpdate.updateSpiffs(urlSpiffs,_MYVERSION):ESPhttpUpdate.update(url, _MYVERSION);;
+			
+			if(!updates)
+			{
+				dblog.println(debug::dbImportant, "about to update SPIFFS");
+				result=ESPhttpUpdate.updateSpiffs(urlSpiffs,_MYVERSION);
+			}
+			else
+			{
+				dblog.println(debug::dbImportant, "about to update BIN");
+				result=ESPhttpUpdate.update(url, _MYVERSION);
+			}
 
 			switch (result)
 			{
 			case HTTP_UPDATE_FAILED:
-				dblog.printf(debug::dbError, "HTTP_UPDATE_FAILD Error (%d): %s", ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
+				dblog.printf(debug::dbError, "HTTP_UPDATE_FAILED Error (%d): %s", ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
 				break;
 			case HTTP_UPDATE_NO_UPDATES:
 				dblog.println(debug::dbImportant, "no updates");
@@ -1412,6 +1421,7 @@ void InstallWebServerHandlers()
 			// first time round, save our config
 			if(!updates)
 			{
+				dblog.println(debug::dbImportant, "rewriting config");
 				WriteJSONconfig();
 			}
 
@@ -1421,8 +1431,12 @@ void InstallWebServerHandlers()
 
 		wifiInstance.server.send(200, "application/json", bodyText);
 
-		// reboot , regardless
-		ESP.restart();
+		// reboot, if it worked
+		if(result==HTTP_UPDATE_OK)
+		{
+			dblog.println(debug::dbImportant, "restarting ...\n\r");
+			ESP.restart();
+		}
 
 	});
 
