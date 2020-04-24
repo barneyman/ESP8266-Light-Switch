@@ -131,7 +131,7 @@ jobs:
       # Finally, we compile the sketch, using the FQBN that was set
       # in the build matrix.
       - name: Compile Sketch Matrix
-        run: arduino-cli compile --fqbn ${{ matrix.platform_options }} --output ${{ matrix.friendly }}_lightswitch_${GITHUB_RUN_ID} --build-properties compiler.cpp.extra_flags=-D_VERSION_PLATFORM=${{ matrix.platform }} -D_VERSION_NUM=${{ env.NEW_TAG }}  --libraries ./libraries ./lightswitch.ino 
+        run: arduino-cli compile --fqbn ${{ matrix.platform_options }} --output ${{ matrix.friendly }}_lightswitch_${GITHUB_RUN_ID} --build-properties compiler.cpp.extra_flags="-D_VERSION_PLATFORM=${{ matrix.platform }} -D_VERSION_NUM=${{ env.NEW_TAG }}"  --libraries ./libraries ./lightswitch.ino 
       
       - name: Compress output
         run: tar -czvf ${{ matrix.friendly }}.tar.gz *.elf *.bin *.spiffs
