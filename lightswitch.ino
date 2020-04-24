@@ -353,9 +353,12 @@ struct
 
 
 
+#define CURRENT_SCHEMA_VER	2
+
 // main config
 struct 
 {
+	unsigned schemaVersion;
 	// does this need saving
 	bool configDirty;
 	// wifi deets
@@ -372,6 +375,8 @@ struct
 
 } Details=
 {
+	CURRENT_SCHEMA_VER,
+
 	false,	// dirty
 
 	// wifi deets
@@ -773,6 +778,8 @@ void WriteJSONconfig()
 	root["resetWindowms"] = Details.resetWindowms;
 #endif
 
+	root["schemaVersion"]=CURRENT_SCHEMA_VER;
+
 	root["friendlyName"] = Details.friendlyName;
 
 	wifiInstance.WriteDetailsToJSON(root, Details.wifi);
@@ -903,12 +910,22 @@ void ReadJSONconfig()
 
 #endif
 
-#ifdef _OLD_WAY
-	Details.debounceThresholdmsMomentary= root["debounceThresholdmsMomentary"];
-	Details.debounceThresholdmsToggle=root["debounceThresholdmsToggle"];
-	Details.resetWindowms= root["resetWindowms"];
+	// check for schemaVersion
+	if(!root.containsKey("schemaVersion") || root["schemaVersion"]<CURRENT_SCHEMA_VER)
+	{
+		dblog.printf(debug::dbError, "JSON parsed OLD file\n\r");
 
-#endif
+		// kill it - and write it again
+		SPIFFS.remove(_JSON_CONFIG_FILE);
+
+		dblog.printf(debug::dbInfo, "JSON file deleted\n\r");
+
+		WriteJSONconfig();
+
+		return;
+
+	}
+
 
 	if (root.containsKey("friendlyName"))
 	{
@@ -1014,7 +1031,7 @@ void AddSwitch(baseSwitch *newSwitch)
 		dblog.println(debug::dbInfo, "Adding switch");
 		Details.switches.push_back(newSwitch);
 
-#ifndef ARDUINO_SONOFF_BASIC
+#ifndef ARDUINO_ESP8266_GENERIC
 
 		MultiSwitch* multi=(MultiSwitch*)newSwitch;
 		for(unsigned eachChild=0;eachChild<newSwitch->ChildSwitchCount();eachChild++)
@@ -1177,11 +1194,11 @@ void setup(void)
 
 	}
 
-#ifdef ARDUINO_SONOFF_BASIC
+#ifdef ARDUINO_ESP8266_GENERIC
 
 	AddSwitch(new SonoffBasicNoLED(&dblog));
 
-#elif defined(ARDUINO_WEMOS)
+#elif defined(ARDUINO_ESP8266_WEMOS_D1MINI)
 
 	Details.sensors.push_back(new PIRInstantSensor(&dblog, D7));
 
@@ -1192,9 +1209,9 @@ void setup(void)
 // thermos and lux
 //#define WEMOS_COM3
 // PIR
-#define WEMOS_COM4
+//#define WEMOS_COM4
 // 6switch
-//#define WEMOS_COM5 
+#define WEMOS_COM5 
 
 #ifdef WEMOS_COM3
 	// load up the sensors and switches

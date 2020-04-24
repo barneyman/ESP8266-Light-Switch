@@ -1,12 +1,20 @@
-# This is a basic workflow to help you get started with Actions
+#
 
 name: barneymanCI
 
 # Controls when the action will run. Triggers the workflow on push or pull request 
 # events but only for the master branch
 on:
-  release:
-    types: [published]
+  # when a branch or tag is created - if the tag ends in 'pr' in it, it will be a pre-release 
+  create:
+#  schedule:
+#    - cron:  '*/30 * * * *'    
+#    - cron:  '10 * * * *'    
+  
+  #release:
+    # can get to the payload of the request https://developer.github.com/v3/repos/releases/#create-a-release
+    # via github.event.release.
+    #types: [published]
 
 #  push:
 #    branches: [ master ]
@@ -15,34 +23,98 @@ on:
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
+  
+  createRelease:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@latest
+        env:
+          # This token is provided by Actions, you do not need to create your own token
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+        with:
+          # https://help.github.com/en/actions/reference/context-and-expression-syntax-for-github-actions#github-context
+          tag_name: ${{ github.ref }}
+          # must use another release name! Release ${{ github.ref }} got created to get here
+          release_name: Release ${{ github.run_id }} (from Action)
+          # ${{ github.event.release.body }}
+          body: | 
+            Release auto created by 
+            'create tag' event
+          # save it as draft until all assets are uploaded, then undraft it at the end
+          draft: true
+          prerelease: ${{endsWith(github.ref,'pr')}}
+  
+      - name: Output Release URL File
+        run: echo "${{ steps.create_release.outputs.upload_url }}" > release_url.txt
+        
+      - name: Save Release URL File for publish
+        uses: actions/upload-artifact@v1
+        with:
+          name: release_url
+          path: release_url.txt  
+
+      - name: Output Release ID File
+        run: echo "${{ steps.create_release.outputs.id }}" > release_id.txt
+
+      - name: Save Release ID File for publish
+        uses: actions/upload-artifact@v1
+        with:
+          name: release_id
+          path: release_id.txt  
+
   # This workflow contains a single job called "build"
   builder:
+    needs: [createRelease]
 
     # create a matrix 
     # wemos d1 - esp8266:esp8266:d1
     strategy:
       matrix: 
         # generic needs some #define love - D7 doesnt exist
-        #platform: ["esp8266:esp8266:generic", "esp8266:esp8266:d1"]
-        platform: ["esp8266:esp8266:d1"]
+        platform: ["sonoff", "d1_mini"]
+        #platform: ["esp8266:esp8266:d1"]
         include:
-          - platform: "esp8266:esp8266:generic"
-            friendly: "sonoff_basic_"
-          - platform: "esp8266:esp8266:d1"
+          - platform: "sonoff"
+            # have to use generic, because the sonoff board doesn't SDA & others defined
+            # platform_options: "esp8266:esp8266:sonoff:BoardModel=sonoffBasic,xtal=80,vt=flash,exception=legacy,ssl=all,eesz=1M256,ip=lm2f,dbg=Disabled"
+            platform_options: "esp8266:esp8266:generic:xtal=80,vt=flash,exception=legacy,ssl=all,eesz=1M256,led=2,sdk=nonosdk_190703,ip=lm2f,dbg=Disabled"
+            friendly: "sonoff_basic"
+            spiffsCmdLine: -p 256 -b 4096 -s 0x40000
+          - platform: "d1_mini"
+            platform_options: "esp8266:esp8266:d1_mini:xtal=80,vt=flash,exception=legacy,ssl=all,eesz=4M1M,ip=lm2f,dbg=Disabled"
             friendly: "wemosD1"        
+            spiffsCmdLine: -p 256 -b 8192 -s 0xFA000
+            # 1028096:  
 
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
+      - name: Environment
+        run: |
+          echo "setting up env ..."
+          echo ${GITHUB_REF}
+          echo ${GITHUB_REPOSITORY}
+          echo "::set-env name=NEW_TAG::${GITHUB_REF#refs/tags/}"
+          echo "::set-env name=NEW_HEAD::${GITHUB_REF#refs/heads/}"
+          
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - name: Checking out ${GITHUB_REF}
+      - name: Checking out tag ${{ github.ref }}
         uses: actions/checkout@master
         with:
           submodules: "true"
-          ref: ${GITHUB_REF}
+          ref: ${{ github.ref }}
 
+      - name: Install mkspiffs
+        run: |
+          wget https://github.com/igrr/mkspiffs/releases/download/0.2.0/mkspiffs-0.2.0-no_magic_length-linux64.tar.gz
+          tar -xvf mkspiffs-0.2.0-no_magic_length-linux64.tar.gz
+          echo "::set-env name=MKSPIFFS_DIR::./mkspiffs-0.2.0-no_magic_length-linux64"
+      
+      
       # We use the arduino/setup-arduino-cli action to install and
       # configure the Arduino CLI on the system.
       - name: Setup Arduino CLI
@@ -53,40 +125,61 @@ jobs:
             arduino-cli core update-index --additional-urls https://arduino.esp8266.com/stable/package_esp8266com_index.json
             arduino-cli core install esp8266:esp8266@2.6.3 --additional-urls https://arduino.esp8266.com/stable/package_esp8266com_index.json
 
+      - name: Create SPIFFS
+        run: ${{ env.MKSPIFFS_DIR }}/mkspiffs -c ./data ${{ matrix.spiffsCmdLine }} ${{ matrix.friendly }}_${GITHUB_RUN_ID}.spiffs
+
       # Finally, we compile the sketch, using the FQBN that was set
       # in the build matrix.
       - name: Compile Sketch Matrix
-        run: arduino-cli compile --fqbn ${{ matrix.platform }} --output ${GITHUB_REF}_lightswitch_${{ matrix.friendly }}  --libraries ./libraries ./lightswitch.ino 
+        run: arduino-cli compile --fqbn ${{ matrix.platform_options }} --output ${{ matrix.friendly }}_lightswitch_${GITHUB_RUN_ID} --build-properties compiler.c.extra_flags="-D_VERSION_PLATFORM=${{ matrix.platform }} -D_VERSION_NUM=${{ env.NEW_TAG }}"  --libraries ./libraries ./lightswitch.ino 
       
       - name: Compress output
-        run: tar -czvf release.tar.gz *.elf *.bin
-          
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@latest
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+        run: tar -czvf ${{ matrix.friendly }}.tar.gz *.elf *.bin *.spiffs
+        
+      - name: Load Release URL File from release job
+        uses: actions/download-artifact@v1
         with:
-          # https://help.github.com/en/actions/reference/context-and-expression-syntax-for-github-actions#github-context
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
-          body: |
-              Changes in this Release
-              - First Change
-              - Second Change
-          draft: "true"
-          prerelease: "false"
-          
-          
+          name: release_url
+      - name: Get Release File Name & Upload URL
+        id: get_release_info
+        run: |
+          value=`cat release_url/release_url.txt`
+          echo ::set-output name=upload_url::$value
+        
+
       - name: Upload Release Asset
         id: upload-release-asset 
         uses: actions/upload-release-asset@v1
         env:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-            upload_url: ${{ steps.create_release.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
-            asset_path: ./release.tar.gz
-            asset_name: release_${GITHUB_REF}.tar.gz
-            asset_content_type: application/tar+gzip    
+            upload_url: ${{ steps.get_release_info.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
+            asset_path: ./${{ matrix.friendly }}.tar.gz
+            asset_name: ${{ matrix.friendly }}_${{ env.NEW_TAG }}.tar.gz
+            asset_content_type: application/tar+gzip            
         
-    
+  undraft:
+    runs-on: ubuntu-latest
+    needs: [builder]
+    steps:
+      - name: Load Release ID File from release job
+        uses: actions/download-artifact@v1
+        with:
+          name: release_id
+      - name: Get Release File Name & id
+        id: get_release_id
+        run: |
+          value=`cat release_id/release_id.txt`
+          echo ::set-output name=release_id::$value
+          
+      - uses: octokit/request-action@v2.x
+        id: changeDraft
+        with:
+          route: PATCH /repos/:repository/releases/:id
+          repository: ${{ github.repository }}
+          id: ${{ steps.get_release_id.outputs.release_id }}
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+        
