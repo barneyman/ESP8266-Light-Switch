@@ -1,7 +1,8 @@
-#include <OneWire.h>
+
 
 #include <WiFiClient.h>
 #include <debugLogger.h>
+#include "switchSensor.h"
 
 // define one of the following ... 
 // nothing defined == 6 switch nodemcu
@@ -96,25 +97,34 @@
 #include <algorithm> 
 
 #ifdef _OTA_AVAILABLE
-// sonoff isn't big enough for a decent SPIFFs
+// 
 #include <ESP8266httpUpdate.h>
 #endif
 
-#ifdef _SONOFF_BASIC
-#define _VERSION_ROOT	"lightS_"
-#elif defined (_SONOFF_BASIC_EXTRA_SWITCH)
-#define _VERSION_ROOT	"lightE_"
-#elif defined(_AT_RGBSTRIP)
-#define _VERSION_ROOT	"lightRGB_"
-#else
-#define _VERSION_ROOT	"light6_"
+// this gets set by the github build action
+#ifndef _VERSION_PLATFORM
+
+
+	#ifdef _SONOFF_BASIC
+	#define _VERSION_PLATFORM	"wemosD1"
+	#elif defined (_SONOFF_BASIC_EXTRA_SWITCH)
+	#define _VERSION_PLATFORM	"lightE_"
+	#elif defined(_AT_RGBSTRIP)
+	#define _VERSION_PLATFORM	"lightRGB_"
+	#else
+	#define _VERSION_PLATFORM	"wemosD1"
+	#endif
+
 #endif
 
+#ifndef _VERSION_NUM
 
-#define _MYVERSION			_VERSION_ROOT "3.00"
+//	#define _VERSION_NUM "v99.99.99.pr"
+	#define _VERSION_NUM "v0.0.0.pr"
 
-#define _HTML_VER_FILE	"/html.json"
-unsigned _MYVERSION_HTML = 0;
+#endif
+
+#define _MYVERSION			_VERSION_PLATFORM "|" _VERSION_NUM
 
 // set this to reset the file
 //#define _ERASE_JSON_CONFIG
@@ -147,7 +157,8 @@ void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState);
 syslogDebug dblog(debug::dbWarning, "192.168.51.1", 514, "temp", "lights");
 #else
 // try to avoid verbose - it causes heisenbugs because all HTTP interactions are artificially slowed down
-SerialDebug dblog(debug::dbInfo);
+//SerialDebug dblog(debug::dbInfo);
+SerialDebug dblog(debug::dbVerbose);
 #endif
 
 //#define _OLD_WAY
@@ -340,7 +351,7 @@ struct
 #else
 
 
-#include "switchSensor.h"
+
 
 // main config
 struct 
@@ -731,32 +742,11 @@ void DoSwitch(unsigned portNumber, bool on, bool forceSwitchToReflect)
 
 
 
-void ReadHTLMversion()
-{
-	_MYVERSION_HTML = 0;
-	// check for legacy!
-	if (SPIFFS.exists(_HTML_VER_FILE))
-	{
-		fs::File json = SPIFFS.open(_HTML_VER_FILE, "r");
-		String jsonString = json.readString();
-		json.close();
-
-		jsonBuffer.clear();
-		JsonObject& root = jsonBuffer.parseObject(jsonString);
-
-		if (root.success())
-		{
-			_MYVERSION_HTML = root["version"];
-		}
-
-	}
-
-}
 
 
 void WriteJSONconfig()
 {
-	dblog.printf(debug::dbInfo, "WriteJSONconfig");
+	dblog.printf(debug::dbInfo, "WriteJSONconfig\n\r");
 
 	// try to create it
 	fs::File json = SPIFFS.open(_JSON_CONFIG_FILE, "w");
@@ -1023,11 +1013,16 @@ void AddSwitch(baseSwitch *newSwitch)
 	{
 		dblog.println(debug::dbInfo, "Adding switch");
 		Details.switches.push_back(newSwitch);
+
+#ifndef ARDUINO_SONOFF_BASIC
+
 		MultiSwitch* multi=(MultiSwitch*)newSwitch;
 		for(unsigned eachChild=0;eachChild<newSwitch->ChildSwitchCount();eachChild++)
 		{
 			Details.switches.push_back(multi->GetChild(eachChild));
 		}
+
+#endif		
 		dblog.println(debug::dbInfo, "Added switch");
 		newSwitch->HonourCurrentSwitch();
 	}
@@ -1078,7 +1073,6 @@ void setup(void)
 
 	ReadJSONconfig();
 
-	ReadHTLMversion();
 
 	dblog.println(debug::dbImportant, wifiInstance.m_hostName.c_str());
 	dblog.printf(debug::dbVerbose, "bounceMomentary %lu\n\r", Details.debounceThresholdmsMomentary);
@@ -1155,14 +1149,15 @@ void setup(void)
 
 #else
 
+	// just sleep (to let the serial monitor attach)
+	delay(2000);
+
 	dblog.printf(debug::dbImportant, "\r\n\n\nRunning %s\n\r", _MYVERSION);
 	dblog.printf(debug::dbImportant, "Hostname %s\n\r", wifiInstance.m_hostName.c_str());
 
 	SPIFFS.begin();
 
 	ReadJSONconfig();
-
-	ReadHTLMversion();
 
 	dblog.println(debug::dbImportant, wifiInstance.m_hostName.c_str());
 
@@ -1181,6 +1176,18 @@ void setup(void)
 		intent = myWifiClass::wifiMode::modeAP;
 
 	}
+
+#ifdef ARDUINO_SONOFF_BASIC
+
+	AddSwitch(new SonoffBasicNoLED(&dblog));
+
+#elif defined(ARDUINO_WEMOS)
+
+	Details.sensors.push_back(new PIRInstantSensor(&dblog, D7));
+
+#endif
+
+#ifdef _WIP
 
 // thermos and lux
 //#define WEMOS_COM3
@@ -1212,6 +1219,8 @@ void setup(void)
 
 
 #endif
+
+#endif // _WIP
 
 	// default off, and don't force switches
 	// DoAllSwitch(false,false);
@@ -1313,23 +1322,6 @@ void InstallWebServerHandlers()
 		SendServerPage();
 	});
 
-	// fetch the latest set of html pages from a peer
-	wifiInstance.server.on("/json/updatehtml", HTTP_POST, []() {
-
-		// we need the host
-		dblog.println(debug::dbImportant, "json updatehtml posted");
-		dblog.println(debug::dbImportant, wifiInstance.server.arg("plain"));
-
-		jsonBuffer.clear();
-		// 'plain' is the secret source to get to the body
-		JsonObject& root = jsonBuffer.parseObject(wifiInstance.server.arg("plain"));
-
-		String host = root["host"];
-
-		FetchNewPages(host);
-
-		wifiInstance.server.send(200, "application/json", "");
-	});
 
 #ifdef _OTA_AVAILABLE
 
@@ -1352,16 +1344,16 @@ void InstallWebServerHandlers()
 		delay(_WEB_TAR_PIT_DELAY);
 
 		StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer2;
-		
-		// 'plain' is the secret source to get to the body
 		JsonObject&replyroot = jsonBuffer2.createObject();
 		String bodyText;
 
-		for(int updates=0;updates<2;updates++)
+		//for(int updates=0;updates<2;updates++)
+		for(int updates=1;updates<2;updates++)
 		{
 
 			// lets check for SPIFFs update first
-			enum HTTPUpdateResult result = !updates ? ESPhttpUpdate.updateSpiffs(urlSpiffs,_MYVERSION):ESPhttpUpdate.update(url, _MYVERSION);;
+			dblog.println(debug::dbImportant, "about to update");
+			enum HTTPUpdateResult result = (!updates) ? ESPhttpUpdate.updateSpiffs(urlSpiffs,_MYVERSION):ESPhttpUpdate.update(url, _MYVERSION);;
 
 			switch (result)
 			{
@@ -1376,16 +1368,20 @@ void InstallWebServerHandlers()
 				break;
 			}
 
-			replyroot[!updates?"resultSpiffs":"result"] = result;
+			JsonObject &thisLoop=replyroot.createNestedObject((!updates)?"SPIFFS":"BIN");
+
+			thisLoop["result"]=result;
+
 			if (result != HTTP_UPDATE_OK)
 			{
-				JsonObject &details = replyroot.createNestedObject("Details");
+				JsonObject &details = thisLoop.createNestedObject("Details");
 				details["espNarrative"] = ESPhttpUpdate.getLastErrorString();
 				details["espResult"] = ESPhttpUpdate.getLastError();
 
 			}
 
-			replyroot.printTo(bodyText);
+			bodyText=String();
+			replyroot.prettyPrintTo(bodyText);
 
 			if (result != HTTP_UPDATE_OK)
 			{
@@ -1404,9 +1400,12 @@ void InstallWebServerHandlers()
 
 		}
 
-
+		dblog.println(debug::dbImportant, "returning\n\r");
 
 		wifiInstance.server.send(200, "application/json", bodyText);
+
+		// reboot , regardless
+		ESP.restart();
 
 	});
 
@@ -1766,41 +1765,7 @@ void InstallWebServerHandlers()
 
 	// GET
 
-	wifiInstance.server.on("/json/htmlPages", HTTP_GET, []() {
-		// give them back the port / switch map
-
-		dblog.println(debug::dbInfo, "json htmlPages called");
-
-		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
-		jsonBuffer.clear();
-
-		JsonObject &root = jsonBuffer.createObject();
-
-		root["name"] = wifiInstance.m_hostName.c_str();
-		root["pageCount"] = servedFiles.size();
-		root["version"] = _MYVERSION;
-		root["versionHTML"] = _MYVERSION_HTML;
-
-		JsonArray &htmlFiles = root.createNestedArray("htmlPages");
-		//for (unsigned each = 0; each < servedFiles.size(); each++)
-		for(auto each=servedFiles.begin();each!=servedFiles.end();each++)
-		{
-			JsonObject &htmlFile = htmlFiles.createNestedObject();
-			htmlFile["name"] = each->first.c_str();
-			htmlFile["size"] = each->second;
-			
-			dblog.printf(debug::dbInfo, "adding %s (%lu)\n\r",each->first.c_str(), each->second);
-		}
-
-		String jsonText;
-		root.prettyPrintTo(jsonText);
-
-		dblog.println(debug::dbVerbose, jsonText);
-
-		wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-		wifiInstance.server.send(200, "application/json", jsonText);
-	});
-
+	
 	wifiInstance.server.on("/json/state", HTTP_GET, []() {
 		// give them back the port / switch map
 
@@ -1889,7 +1854,6 @@ void InstallWebServerHandlers()
 
 		root["name"] = wifiInstance.m_hostName.c_str();
 		root["version"] = _MYVERSION;
-		root["versionHTML"] = _MYVERSION_HTML;
 		if(wifiInstance.localIP().isSet())
 			root["ip"] = wifiInstance.localIP().toString();
 		root["mac"] = wifiInstance.macAddress();
@@ -2084,151 +2048,6 @@ void InstallWebServerHandlers()
 
 }
 
-void FetchNewPages(String src)
-{
-	// build the url
-	String url("http://");
-	url += src + "/json/htmlPages";
-	dblog.printf(debug::dbVerbose, "About to query %s\n\r", url.c_str());
-	// query for the pages available
-	HTTPClient http;
-	//if (!http.begin(wifiInstance.m_wificlient, url))
-	if (!http.begin(url))
-	{
-		dblog.println(debug::dbError, "Failed in http.begin()");
-	}
-
-	int httpCode=http.GET();
-
-	// check the result
-	if (httpCode != 200)
-	{
-		dblog.printf(debug::dbError, "http.GET() returned %d\n\r", httpCode);
-		return;
-	}
-
-	// get the body
-	String payload = http.getString();
-	dblog.println(debug::dbVerbose,  payload);
-	http.end();
-
-	// then iterate thru the files
-	JsonObject& root = jsonBuffer.parseObject(payload);
-
-	int htmlPagesCount = root["htmlPages"].size();
-
-	// get the totalsize
-	size_t totalFileSize = 0;
-	for (int each = 0; each < htmlPagesCount; each++)
-		totalFileSize += (size_t)root["htmlPages"][each]["size"];
-
-	fs::FSInfo spiffInfo;
-	SPIFFS.info(spiffInfo);
-
-	size_t availSpace = spiffInfo.totalBytes - spiffInfo.usedBytes;
-	if (totalFileSize > availSpace)
-	{
-		dblog.println(debug::dbError, "Not enough space for files!");
-		return;
-	}
-
-	dblog.printf(debug::dbInfo, "Writing %lu bytes into %lu space\n\r", totalFileSize, availSpace);
-
-	for (int each = 0; each < htmlPagesCount; each++)
-	{
-		String fileToFetch = root["htmlPages"][each]["name"];
-		size_t fileSize = root["htmlPages"][each]["size"];
-		String fileToFetchInterim = fileToFetch + ".new";
-
-		dblog.printf(debug::dbInfo, "Fetching %s to %s ", fileToFetch.c_str(), fileToFetchInterim.c_str());
-
-		url = "http://";
-		url += src;
-		url += fileToFetch;
-
-		//if (!http.begin(wifiInstance.m_wificlient, url))
-		if (!http.begin( url))
-		{
-			dblog.println(debug::dbError, "\n\rFailed in http.begin()");
-			return;
-		}
-
-		httpCode = http.GET();
-		if (httpCode != 200)
-		{
-			// clean up
-			dblog.printf(debug::dbError, "\n\rFailed in http.get() : %d \n\r", httpCode);
-			return;
-		}
-
-		size_t written = 0;
-		fs::File f = SPIFFS.open(fileToFetchInterim, "w");
-		if(f)
-		{
-#define _MAX_STREAM_BLOB	512
-			uint8_t blob[_MAX_STREAM_BLOB];
-			WiFiClient wific=http.getStream();
-			for (size_t progress=0;progress<fileSize;)
-			{
-
-
-				// fix it up for max buffer size
-				int available = wific.available();
-				dblog.printf(debug::dbInfo, available?".":"_");
-				//dblog.printf(debug::dbVerbose, "%d Available\n\r", available);
-				size_t count = available > _MAX_STREAM_BLOB ? _MAX_STREAM_BLOB : available;
-				count = wific.readBytes(&blob[0], count);
-				progress += count;
-
-				if (f.write(&blob[0], count) != count)
-				{
-					dblog.printf(debug::dbError, "\n\rFailed in write all bytes %d \n\r", count);
-					f.close();
-					http.end();
-					return;
-				}
-
-				written += count;
-				yield();
-			}
-
-			// does this make the numbers match?
-			f.flush();
-			dblog.println(debug::dbInfo, "");
-
-			// check that we committed the right size!
-			size_t currentSize = written;// f.size();
-			if (currentSize != fileSize)
-			{
-				dblog.printf(debug::dbError, "Mismatch in filesize - mine %lu, original %lu \n\r", currentSize, fileSize);
-				http.end();
-				f.close();
-				continue;
-			}
-			else
-			{
-				SPIFFS.remove(fileToFetch);
-				dblog.printf(debug::dbInfo, "Renaming %s to %s\n\r", fileToFetchInterim.c_str(), fileToFetch.c_str());
-				if (!SPIFFS.rename(fileToFetchInterim, fileToFetch))
-				{
-					dblog.printf(debug::dbError, "Rename of %s Failed\n\r", fileToFetchInterim.c_str());
-					http.end();
-					f.close();
-					return;
-				}
-			}
-
-			f.close();
-			dblog.println(debug::dbVerbose, "written OK");
-
-		}
-		http.end();
-
-	}
-	dblog.println(debug::dbVerbose, "Finished");
-	ReadHTLMversion();
-
-}
 
 void SendServerPage()
 {

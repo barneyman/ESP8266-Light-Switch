@@ -1,10 +1,6 @@
 #include <Arduino.h>
 #include <debugLogger.h>
 #include <ArduinoJson.h>
-#include <OneWire.h>
-#include <DallasTemperature.h>
-#include <BME280I2C.h>
-#include <MAX44009.h>
 
 #include "announce.h"
 
@@ -61,6 +57,10 @@ public:
 
 };
 
+#ifndef ARDUINO_ESP8266_GENERIC
+
+#include <OneWire.h>
+
 class OneWireSensor : public baseSensor
 {
 
@@ -78,6 +78,8 @@ protected:
 
 };
 
+
+#include <Wire.h>
 
 class I2CSensor : public baseSensor
 {
@@ -143,6 +145,7 @@ public:
 
 
 
+#include <DallasTemperature.h>
 
 class DallasSingleSensor : public OneWireSensor
 {
@@ -201,6 +204,8 @@ protected:
 
 
 
+#include <BME280I2C.h>
+
 class BME280Sensor : public I2CSensor
 {
 
@@ -257,6 +262,8 @@ protected:
 
 };
 
+#include <MAX44009.h>
+
 class MAX44009Sensor: public I2CSensor
 {
 protected:
@@ -299,7 +306,7 @@ protected:
 
 };
 
-
+#endif ARDUINO_ESP8266_GENERIC
 
 
 class instantSensor : public baseSensor
@@ -614,6 +621,8 @@ public:
 };
 
 
+
+
 class RelayLEDandSwitch : public momentarySwitch
 {
 
@@ -732,6 +741,8 @@ public:
 
 };
 
+#ifndef ARDUINO_ESP8266_GENERIC
+
 // TODO - untested
 class WemosRelayShield : public RelayLEDandSwitch
 {
@@ -740,6 +751,7 @@ public:
 	{}
 };
 
+#endif ARDUINO_ESP8266_GENERIC
 
 #define _DEBOUNCE_WINDOW_LOGIC_TTL	10
 
@@ -835,6 +847,8 @@ protected:
 	unsigned m_numSwitches;
 
 };
+
+#ifndef ARDUINO_ESP8266_GENERIC
 
 #include "mcp23017.h"
 
@@ -1025,3 +1039,5 @@ protected:
 
 
 };	
+
+#endif ARDUINO_ESP8266_GENERIC
