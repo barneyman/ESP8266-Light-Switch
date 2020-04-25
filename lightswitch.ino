@@ -99,6 +99,7 @@
 #ifdef _OTA_AVAILABLE
 // 
 #include <ESP8266httpUpdate.h>
+volatile bool updateInProgress=false;
 #endif
 
 // passing strings from command line as defines, don't come thru as strings
@@ -107,29 +108,29 @@
 #define TOSTRING(x)	VAL(x)
 
 // this gets set by the github build action
-#ifndef _VERSION_PLATFORM_CLI
+#ifndef _VERSION_FRIENDLY_CLI
 
 
 	#ifdef _SONOFF_BASIC
-	#define _VERSION_PLATFORM	"wemosD1"
+	#define _VERSION_FRIENDLY	"wemosD1"
 	#elif defined (_SONOFF_BASIC_EXTRA_SWITCH)
-	#define _VERSION_PLATFORM	"lightE_"
+	#define _VERSION_FRIENDLY	"lightE_"
 	#elif defined(_AT_RGBSTRIP)
-	#define _VERSION_PLATFORM	"lightRGB_"
+	#define _VERSION_FRIENDLY	"lightRGB_"
 	#else
-	#define _VERSION_PLATFORM	"wemosD1"
+	#define _VERSION_FRIENDLY	"wemosD1"
 	#endif
 
 #else
 
-	#define _VERSION_PLATFORM TOSTRING(_VERSION_PLATFORM_CLI)
+	#define _VERSION_FRIENDLY TOSTRING(_VERSION_FRIENDLY_CLI)
 
 #endif
 
 #ifndef _VERSION_NUM_CLI
 
 //	#define _VERSION_NUM "v99.99.99.pr"
-	#define _VERSION_NUM "v0.0.0.pr"
+	#define _VERSION_NUM "v0.0.1.pr"
 
 #else
 
@@ -137,7 +138,7 @@
 
 #endif
 
-#define _MYVERSION			_VERSION_PLATFORM "|" _VERSION_NUM
+#define _MYVERSION			_VERSION_FRIENDLY "|" _VERSION_NUM
 
 // set this to reset the file
 //#define _ERASE_JSON_CONFIG
@@ -1366,8 +1367,16 @@ void InstallWebServerHandlers()
 		// 'plain' is the secret source to get to the body
 		JsonObject& root = jsonBuffer.parseObject(wifiInstance.server.arg("plain"));
 
-		//String host = root["host"];
-		//int port = root["port"];
+/*
+		// Legacy data was this
+
+		String host = root["host"];
+		int port = root["port"];
+		String url= root["url"];		
+
+*/
+		updateInProgress=true;
+
 		String url= root["url"];
 		String urlSpiffs= root["urlSpiffs"];
 
@@ -1376,9 +1385,9 @@ void InstallWebServerHandlers()
 		StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer2;
 		JsonObject&replyroot = jsonBuffer2.createObject();
 		String bodyText;
-		enum HTTPUpdateResult result=HTTP_UPDATE_FAILED;
+		enum HTTPUpdateResult result=HTTP_UPDATE_OK;
 
-		for(int updates=0;updates<2;updates++)
+		for(int updates=0;(updates<2) && (result==HTTP_UPDATE_OK);updates++)
 		{
 
 			// lets check for SPIFFs update first
@@ -1386,7 +1395,7 @@ void InstallWebServerHandlers()
 			if(!updates)
 			{
 				dblog.println(debug::dbImportant, "about to update SPIFFS");
-				result=ESPhttpUpdate.updateSpiffs(urlSpiffs,_MYVERSION);
+				result=ESPhttpUpdate.updateSpiffs(wifiInstance.m_wificlient ,urlSpiffs,_MYVERSION);
 			}
 			else
 			{
@@ -1431,6 +1440,14 @@ void InstallWebServerHandlers()
 				dblog.println(debug::dbImportant, bodyText);
 			}
 
+			// throw in a pause ... does that make it more reliable?
+			dblog.println(debug::dbInfo, "Pausing ....");
+
+			delay(2000);
+
+			dblog.println(debug::dbInfo, "Resuming ....");
+
+
 			// first time round, save our config
 			if(!updates)
 			{
@@ -1440,9 +1457,12 @@ void InstallWebServerHandlers()
 
 		}
 
+		updateInProgress=false;
+
 		dblog.println(debug::dbImportant, "returning\n\r");
 
-		wifiInstance.server.send(200, "application/json", bodyText);
+		// no point - core killed the IP stack during the update
+		//wifiInstance.server.send(200, "application/json", bodyText);
 
 		// reboot, if it worked
 		if(result==HTTP_UPDATE_OK)
@@ -2173,6 +2193,9 @@ unsigned long lastCheckedForPeers = 0;
 
 void loop(void) 
 {
+
+	if(updateInProgress)
+		return;
 
 #ifdef _ALLOW_WIFI_RESET
 	if (resetWIFI)
