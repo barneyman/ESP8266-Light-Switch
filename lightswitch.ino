@@ -101,8 +101,13 @@
 #include <ESP8266httpUpdate.h>
 #endif
 
+// passing strings from command line as defines, don't come thru as strings
+// so we need to jump thru preprocessing hell to get what i want
+#define VAL(x)	#x
+#define TOSTRING(x)	VAL(x)
+
 // this gets set by the github build action
-#ifndef _VERSION_PLATFORM
+#ifndef _VERSION_PLATFORM_CLI
 
 
 	#ifdef _SONOFF_BASIC
@@ -115,12 +120,20 @@
 	#define _VERSION_PLATFORM	"wemosD1"
 	#endif
 
+#else
+
+	#define _VERSION_PLATFORM TOSTRING(_VERSION_PLATFORM_CLI)
+
 #endif
 
-#ifndef _VERSION_NUM
+#ifndef _VERSION_NUM_CLI
 
 //	#define _VERSION_NUM "v99.99.99.pr"
 	#define _VERSION_NUM "v0.0.0.pr"
+
+#else
+
+	#define _VERSION_NUM TOSTRING(_VERSION_NUM_CLI)
 
 #endif
 
