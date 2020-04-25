@@ -79,11 +79,11 @@ jobs:
           - platform: "sonoff"
             # have to use generic, because the sonoff board doesn't SDA & others defined
             # platform_options: "esp8266:esp8266:sonoff:BoardModel=sonoffBasic,xtal=80,vt=flash,exception=legacy,ssl=all,eesz=1M256,ip=lm2f,dbg=Disabled"
-            platform_options: "esp8266:esp8266:generic:xtal=80,vt=flash,exception=legacy,ssl=all,eesz=1M256,led=2,sdk=nonosdk_190703,ip=lm2f,dbg=Disabled"
+            platform_options: "esp8266:esp8266:generic:xtal=80,vt=iram,exception=legacy,ssl=all,eesz=1M256,led=2,sdk=nonosdk_190703,ip=lm2f,dbg=Disabled"
             friendly: "sonoff_basic"
             spiffsCmdLine: -p 256 -b 4096 -s 0x40000
           - platform: "d1_mini"
-            platform_options: "esp8266:esp8266:d1_mini:xtal=80,vt=flash,exception=legacy,ssl=all,eesz=4M1M,ip=lm2f,dbg=Disabled"
+            platform_options: "esp8266:esp8266:d1_mini:xtal=80,vt=iram,exception=legacy,ssl=all,eesz=4M1M,ip=lm2f,dbg=Disabled"
             friendly: "wemosD1"        
             spiffsCmdLine: -p 256 -b 8192 -s 0xFA000
             # 1028096:  

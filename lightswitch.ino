@@ -1183,7 +1183,8 @@ void setup(void)
 	// just sleep (to let the serial monitor attach)
 	delay(2000);
 
-	dblog.printf(debug::dbImportant, "\r\n\n\nRunning %s\n\r", _MYVERSION);
+	dblog.printf(debug::dbInfo, "\r\n\n\n===========================================");
+	dblog.printf(debug::dbImportant, "Running %s\n\r", _MYVERSION);
 	dblog.printf(debug::dbImportant, "Hostname %s\n\r", wifiInstance.m_hostName.c_str());
 
 	SPIFFS.begin();
@@ -1441,11 +1442,9 @@ void InstallWebServerHandlers()
 			}
 
 			// throw in a pause ... does that make it more reliable?
-			dblog.println(debug::dbInfo, "Pausing ....");
-
-			delay(2000);
-
-			dblog.println(debug::dbInfo, "Resuming ....");
+			// dblog.println(debug::dbInfo, "Pausing ....");
+			// delay(2000);
+			// dblog.println(debug::dbInfo, "Resuming ....");
 
 
 			// first time round, save our config
