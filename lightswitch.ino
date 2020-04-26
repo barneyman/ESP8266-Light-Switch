@@ -50,8 +50,8 @@
 // IMPORTANT - for programming SONOFF Basics
 // https://github.com/arendst/Sonoff-Tasmota/wiki/Arduino-IDE
 // Generic ESP8266 (beware, some 8255s out there!)
-// Flashmode DOUT
-// FlashSize 1M 128k SPIFFS
+// Flashmode DOUT, 115200, ck
+// FlashSize 1M 128k SPIFFS (any more and spiffs upload will fail)
 // Upload Sketch AND Publish Server Files
 // Connect the internal header up to an FTDI
 // With it off, hold the button down and power it up, keep the button down for a second or two
@@ -111,7 +111,9 @@ volatile bool updateInProgress=false;
 #ifndef _VERSION_FRIENDLY_CLI
 
 
-	#ifdef _SONOFF_BASIC
+	#ifdef ARDUINO_ESP8266_GENERIC
+	#define _VERSION_FRIENDLY	"sonoff_basic"
+	#elif defined(ARDUINO_ESP8266_WEMOS_D1MINI)
 	#define _VERSION_FRIENDLY	"wemosD1"
 	#elif defined (_SONOFF_BASIC_EXTRA_SWITCH)
 	#define _VERSION_FRIENDLY	"lightE_"
@@ -1073,7 +1075,8 @@ void setup(void)
 #if defined(_USE_SYSLOG)
 	dblog.SetHostname(wifiInstance.m_hostName.c_str());
 #else
-	dblog.begin(115200);
+// Sonoff doesn't APPEAR to handle any faster
+	dblog.begin(9600);
 #endif
 
 
@@ -1181,7 +1184,7 @@ void setup(void)
 #else
 
 	// just sleep (to let the serial monitor attach)
-	delay(2000);
+	delay(10000);
 
 	dblog.printf(debug::dbInfo, "\r\n\n\n===========================================");
 	dblog.printf(debug::dbImportant, "Running %s\n\r", _MYVERSION);
