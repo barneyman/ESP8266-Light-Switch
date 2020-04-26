@@ -741,6 +741,19 @@ public:
 
 };
 
+class SonoffBasic : public RelayLEDandSwitch
+{
+public:
+	SonoffBasic(debugBaseClass *dblog,int digitalPinInput=0, int digitalPinOutput=12,int digitalPinLED=13):
+		RelayLEDandSwitch(dblog,digitalPinInput,digitalPinOutput,digitalPinLED)
+		{
+			
+		}
+
+
+};
+
+
 #ifndef ARDUINO_ESP8266_GENERIC
 
 // TODO - untested

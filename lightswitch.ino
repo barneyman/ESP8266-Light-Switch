@@ -1214,7 +1214,7 @@ void setup(void)
 
 #ifdef ARDUINO_ESP8266_GENERIC
 
-	AddSwitch(new SonoffBasicNoLED(&dblog));
+	AddSwitch(new SonoffBasic(&dblog));
 
 #elif defined(ARDUINO_ESP8266_WEMOS_D1MINI)
 
