@@ -127,7 +127,7 @@ jobs:
 
       # space is at a premium, so lets minify
       - name: Minify output
-        uses: nizarmah/auto-minify
+        uses: nizarmah/auto-minify@v1.6
         with:
           directory: 'data'
 
