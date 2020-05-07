@@ -341,7 +341,7 @@ public:
 #elif defined(_USE_TCP)
 		sensorElement["impl"]="tcp";
 #elif defined(_USE_REST)		
-		sensorElement["impl"]="http";
+		sensorElement["impl"]="rest";
 #else
 #endif
 		sensorElement["type"] = deviceClass;
@@ -631,7 +631,7 @@ protected:
 
 public:
 
-	RelayLEDandSwitch(debugBaseClass *dblog,int digitalPinInput=0, int digitalPinOutput=12,int digitalPinLED=13):
+	RelayLEDandSwitch(debugBaseClass *dblog,int digitalPinInput=0, int digitalPinOutput=12,int digitalPinLED=13, bool switchOnGND=true):
 		m_ioPinIn(digitalPinInput), m_ioPinOut(digitalPinOutput), m_ioPinLED(digitalPinLED),
 		ignoreISRrequests(false),
 		momentarySwitch(dblog)
@@ -639,10 +639,18 @@ public:
 		// and remember shit
 		m_singleton=this;
 
-		// pull up in
-		pinMode(digitalPinInput, INPUT_PULLUP);
-		// and attach to it, it's momentary, so get if falling low
-		attachInterrupt(digitalPinInput, RelayLEDandSwitch::staticOnSwitchISR, ONLOW );
+		if(switchOnGND)
+		{
+			// pull up in
+			pinMode(digitalPinInput, INPUT_PULLUP);
+			// and attach to it, it's momentary, so get if falling low
+			attachInterrupt(digitalPinInput, RelayLEDandSwitch::staticOnSwitchISR, ONLOW );
+		}
+		else
+		{
+			// and attach to it, it's momentary, so get if falling low
+			attachInterrupt(digitalPinInput, RelayLEDandSwitch::staticOnSwitchISR, ONHIGH );
+		}
 
 		// relay is output
 		pinMode(digitalPinOutput, OUTPUT);
@@ -680,6 +688,8 @@ public:
 		{
 			case w2dToggle:
 				ToggleRelay();
+				// and announce it
+				SendState(GetRelay());
 				break;
 			default:
 				break;	
@@ -733,8 +743,8 @@ class SonoffBasicNoLED : public RelayLEDandSwitch
 public:
 
 	// ctor sig is the same as Sooff Basic, but LED pin is ignored
-	SonoffBasicNoLED(debugBaseClass *dblog,int digitalPinInput=0, int digitalPinOutput=12,int digitalPinLED=-1):
-		RelayLEDandSwitch(dblog,digitalPinInput,digitalPinOutput,-1)
+	SonoffBasicNoLED(debugBaseClass *dblog,int digitalPinInput=0, int digitalPinOutput=12):
+		RelayLEDandSwitch(dblog,digitalPinInput,digitalPinOutput,-1, true)
 	{
 
 	}
@@ -745,11 +755,21 @@ class SonoffBasic : public RelayLEDandSwitch
 {
 public:
 	SonoffBasic(debugBaseClass *dblog,int digitalPinInput=0, int digitalPinOutput=12,int digitalPinLED=13):
-		RelayLEDandSwitch(dblog,digitalPinInput,digitalPinOutput,digitalPinLED)
+		RelayLEDandSwitch(dblog,digitalPinInput,digitalPinOutput,digitalPinLED, true)
 		{
 			
 		}
 
+	virtual String GetImpl()
+	{
+#ifdef _USE_UDP		
+		return String("udp");
+#elif defined(_USE_REST)		
+		return String("rest");
+#else
+		return String("tcp");
+#endif		
+	}
 
 };
 
@@ -889,7 +909,7 @@ protected:
 #ifdef _USE_UDP		
 		return String("udp");
 #elif defined(_USE_REST)		
-		return String("http");
+		return String("rest");
 #else
 		return String("tcp");
 #endif		
