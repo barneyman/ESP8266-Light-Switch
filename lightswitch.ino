@@ -148,6 +148,7 @@ volatile bool updateInProgress=false;
 //#define _ERASE_JSON_CONFIG
 // has a leading underscore so we can spot it, and not serve it statically
 #define _JSON_CONFIG_FILE "/_config.json"
+#define _JSON_PRESERVED_STATE_FILE "/_state.json"
 // legacy, so we can convert old systems 
 #define _LEGACY_JSON_CONFIG_FILE "/config.json"
 
@@ -176,7 +177,13 @@ syslogDebug dblog(debug::dbWarning, "192.168.51.1", 514, "temp", "lights");
 #else
 // try to avoid verbose - it causes heisenbugs because all HTTP interactions are artificially slowed down
 //SerialDebug dblog(debug::dbInfo);
+
+#ifdef _DEVELOPER_BUILD
 SerialDebug dblog(debug::dbVerbose);
+#else
+SerialDebug dblog(debug::dbWarning);
+#endif
+
 #endif
 
 //#define _OLD_WAY
@@ -990,6 +997,80 @@ void ReadJSONconfig()
 }
 
 
+void PreserveState()
+{
+	dblog.println(debug::dbVerbose, "PreserveState");
+
+	jsonBuffer.clear();
+	JsonObject &root = jsonBuffer.createObject();
+	JsonArray &stateArray=root.createNestedArray("states");
+	root["count"]=Details.switches.size();
+
+	// store the state of switches
+	int count=0;
+	for(auto each=Details.switches.begin();each!=Details.switches.end();each++, count++)
+	{
+		JsonObject &switchState = stateArray.createNestedObject();
+		switchState["switch"] = count;
+		// html js expects 1 or 0
+		switchState["state"] = (*each)->GetRelay()?1:0;
+	}
+
+	fs::File json = SPIFFS.open(_JSON_PRESERVED_STATE_FILE, "w");
+
+	String jsonText;
+	root.prettyPrintTo(jsonText);
+
+	dblog.printf(debug::dbVerbose, "JSON : -- %s --\n\r", jsonText.c_str());
+
+	json.write((byte*)jsonText.c_str(), jsonText.length());
+
+	json.close();
+
+}
+
+void RestoreState()
+{
+	dblog.println(debug::dbVerbose, "RestoreState");
+
+	// see if there is a preserved state
+	if (SPIFFS.exists(_JSON_PRESERVED_STATE_FILE))
+	{
+
+		dblog.println(debug::dbImportant, "PreserveState file exists");
+
+		fs::File json = SPIFFS.open(_JSON_PRESERVED_STATE_FILE, "r");
+
+		String jsonString = json.readString();
+
+		json.close();
+
+		jsonBuffer.clear();
+		JsonObject& root = jsonBuffer.parseObject(jsonString);
+
+		int maxcount=root["count"];
+
+		for(int count=0;count<maxcount;count++)
+		{
+			int state=root["states"][count]["state"];
+			int switchNum=root["states"][count]["switch"];
+
+			dblog.printf(debug::dbVerbose, "switch %d state %d\n\r",switchNum,state);
+
+			if(switchNum<Details.switches.size())
+			{
+				Details.switches[switchNum]->SetRelay(state?true:false);
+			}
+		}
+
+		dblog.println(debug::dbImportant, "remote PreserveState file");
+		SPIFFS.remove(_JSON_PRESERVED_STATE_FILE);
+
+	}
+
+}
+
+
 
 // void ResetWIFI()
 // {
@@ -1002,11 +1083,14 @@ void ReadJSONconfig()
 // 	ConnectWifi(now);
 // }
 
-void RebootMe()
+void RebootMe(bool preserve)
 {
-	// hangs the esp
-	//WiFi.forceSleepBegin(); wdt_reset(); ESP.restart(); while (1)wdt_reset();
-	//ESP.restart();
+	if(preserve)
+	{
+		PreserveState();
+	}
+
+	ESP.restart();
 }
 
 #ifdef _ALLOW_WIFI_RESET
@@ -1261,6 +1345,8 @@ void setup(void)
 
 #endif // _WIP
 
+	RestoreState();
+
 	// default off, and don't force switches
 	// DoAllSwitch(false,false);
 
@@ -1442,20 +1528,15 @@ void InstallWebServerHandlers()
 			if (result != HTTP_UPDATE_OK)
 			{
 				dblog.println(debug::dbError, bodyText);
+				break;
 			}
 			else
 			{
 				dblog.println(debug::dbImportant, bodyText);
 			}
 
-			// throw in a pause ... does that make it more reliable?
-			// dblog.println(debug::dbInfo, "Pausing ....");
-			// delay(2000);
-			// dblog.println(debug::dbInfo, "Resuming ....");
-
-
 			// first time round, save our config
-			if(!updates)
+			if(!updates && (result==HTTP_UPDATE_OK))
 			{
 				dblog.println(debug::dbImportant, "rewriting config");
 				WriteJSONconfig();
@@ -1465,16 +1546,15 @@ void InstallWebServerHandlers()
 
 		updateInProgress=false;
 
-		dblog.println(debug::dbImportant, "returning\n\r");
+		dblog.println(debug::dbImportant, "saving switch state\n\r");
 
 		// no point - core killed the IP stack during the update
 		//wifiInstance.server.send(200, "application/json", bodyText);
 
-		// reboot, if it worked
+		// preserve, reboot, if it worked
 		if(result==HTTP_UPDATE_OK)
 		{
-			dblog.println(debug::dbImportant, "restarting ...\n\r");
-			ESP.restart();
+			RebootMe(true);
 		}
 
 	});
@@ -1491,7 +1571,7 @@ void InstallWebServerHandlers()
 
 		// TODO pick the right one
 		// just go thru them all
-		for(auto each=Details.switches.begin();each!=Details.switches.end();each)
+		for(auto each=Details.switches.begin();each!=Details.switches.end();each++)
 			(*each)->ToggleRelay();
 
 
@@ -1601,13 +1681,17 @@ void InstallWebServerHandlers()
 
 	});
 
+#ifdef _DEVELOPER_BUILD
+
 	wifiInstance.server.on("/reboot", []() {
 
 		dblog.println(debug::dbImportant, "/reboot");
 
-		RebootMe();
+		RebootMe(true);
 
 	});
+
+#endif
 
 #ifdef _ALLOW_WIFI_RESET_OVER_WIFI
 
