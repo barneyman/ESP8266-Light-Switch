@@ -737,7 +737,6 @@ public:
 
 		if(m_ioPinLED!=-1)
 			SetLEDstate(on);
-			//digitalWrite(m_ioPinLED, on ? LOW : HIGH);
 
 		// and inc
 		switchCount++;
@@ -760,25 +759,6 @@ public:
 
 };
 
-class SonoffBasicNoLED : public RelayLEDandSwitch
-{
-public:
-
-	// ctor sig is the same as Sooff Basic, but LED pin is ignored
-	SonoffBasicNoLED(debugBaseClass *dblog,int digitalPinInput=0, int digitalPinOutput=12):
-		RelayLEDandSwitch(dblog,digitalPinInput,digitalPinOutput,-1, true)
-	{
-
-	}
-
-	// virtual void SetLEDstate(bool on)
-	// {
-	// 	// LED is inverted on the wemos
-	// 	digitalWrite(m_ioPinLED, on ? LOW : HIGH);
-	// }
-
-
-};
 
 class SonoffBasic : public RelayLEDandSwitch
 {
@@ -788,6 +768,13 @@ public:
 		{
 			
 		}
+
+
+	virtual void SetLEDstate(bool on)
+	{
+		// LED is inverted on the sonoff
+		digitalWrite(m_ioPinLED, on ? LOW : HIGH);
+	}
 
 	virtual String GetImpl()
 	{
