@@ -131,8 +131,8 @@ volatile bool updateInProgress=false;
 
 #ifndef _VERSION_NUM_CLI
 
-	#define _VERSION_NUM "v99.99.99.pr"
-//	#define _VERSION_NUM "v0.0.1.pr"
+//	#define _VERSION_NUM "v99.99.99.pr"
+	#define _VERSION_NUM "v0.0.1.pr"
 
 	#define _DEVELOPER_BUILD
 
@@ -999,7 +999,7 @@ void ReadJSONconfig()
 
 void PreserveState()
 {
-	dblog.println(debug::dbVerbose, "PreserveState");
+	dblog.println(debug::dbImportant, "PreserveState");
 
 	jsonBuffer.clear();
 	JsonObject &root = jsonBuffer.createObject();
@@ -1085,10 +1085,13 @@ void RestoreState()
 
 void RebootMe(bool preserve)
 {
+	dblog.printf(debug::dbImportant, "RebootMe\n\r");
 	if(preserve)
 	{
 		PreserveState();
 	}
+
+	delay(2000);
 
 	ESP.restart();
 }
@@ -1488,12 +1491,14 @@ void InstallWebServerHandlers()
 			
 			if(!updates)
 			{
-				dblog.println(debug::dbImportant, "about to update SPIFFS");
+				dblog.println(debug::dbImportant, "updating SPIFFS");
 				result=ESPhttpUpdate.updateSpiffs(wifiInstance.m_wificlient ,urlSpiffs,_MYVERSION);
 			}
 			else
 			{
-				dblog.println(debug::dbImportant, "about to update BIN");
+				dblog.println(debug::dbImportant, "updating BIN");
+				// sonoff (at least) doesn't make it out the other side
+				PreserveState();
 				result=ESPhttpUpdate.update(url, _MYVERSION);
 			}
 
