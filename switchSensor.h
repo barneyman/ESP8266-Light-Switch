@@ -771,11 +771,11 @@ public:
 
 	}
 
-	virtual void SetLEDstate(bool on)
-	{
-		// LED is inverted on the sonoff
-		digitalWrite(m_ioPinLED, on ? LOW : HIGH);
-	}
+	// virtual void SetLEDstate(bool on)
+	// {
+	// 	// LED is inverted on the wemos
+	// 	digitalWrite(m_ioPinLED, on ? LOW : HIGH);
+	// }
 
 
 };
