@@ -131,8 +131,10 @@ volatile bool updateInProgress=false;
 
 #ifndef _VERSION_NUM_CLI
 
-//	#define _VERSION_NUM "v99.99.99.pr"
-	#define _VERSION_NUM "v0.0.1.pr"
+	#define _VERSION_NUM "v99.99.99.pr"
+//	#define _VERSION_NUM "v0.0.1.pr"
+
+	#define _DEVELOPER_BUILD
 
 #else
 
@@ -1183,8 +1185,10 @@ void setup(void)
 
 #else
 
+#ifdef _DEVELOPER_BUILD
 	// just sleep (to let the serial monitor attach)
 	delay(10000);
+#endif	
 
 	dblog.printf(debug::dbInfo, "\r\n\n\n===========================================");
 	dblog.printf(debug::dbImportant, "Running %s\n\r", _MYVERSION);
@@ -1305,7 +1309,7 @@ void FindPeers()
 		dblog.printf(debug::dbInfo, "Found %d sibling%c!!\n\r", found, found==1?' ':'s');
 		for (auto iterator = services.begin(); iterator != services.end(); iterator++)
 		{
-			dblog.printf(debug::dbInfo, "\t%s.local @ %s\n\r", iterator->hostName.c_str(), iterator->IP.toString().c_str());
+			dblog.printf(debug::dbInfo, "\t%s @ %s\n\r", iterator->hostName.c_str(), iterator->IP.toString().c_str());
 		}
 		
 	}
@@ -1858,6 +1862,7 @@ void InstallWebServerHandlers()
 			switchRelay["state"] = (*each)->GetRelay()?1:0;
 			switchRelay["stateChanges"] = (*each)->GetTransitionCount();
 
+
 			switch ((*each)->GetSwitchType())
 			{
 			case baseSwitch::stUndefined:
@@ -1963,8 +1968,6 @@ void InstallWebServerHandlers()
 			String impl=(*each)->GetImpl();
 			if(impl.length())
 				switchRelay["impl"]=impl;
-
-			//(*each)->GetSwitchConfig(switchRelay);
 
 			switchRelay["name"] = (*each)->GetName();
 		}
