@@ -575,10 +575,25 @@ protected:
 class momentarySwitch : public baseSwitch
 {
 public:
-	momentarySwitch(debugBaseClass *dblog):baseSwitch(dblog,_DEBOUNCE_WINDOW_MOMENTARY)
+	momentarySwitch(debugBaseClass *dblog, bool defaultState=false):baseSwitch(dblog,_DEBOUNCE_WINDOW_MOMENTARY),
+		m_defaultState(defaultState)
 	{
 		m_type=stMomentary;
 	}
+
+	virtual void HonourCurrentSwitch()
+	{
+		// honour what we were told
+		SetRelay(m_defaultState);
+	}
+
+protected:
+
+	bool m_defaultState;
+
+
+
+
 };
 
 class toggleSwitch : public baseSwitch
@@ -688,8 +703,6 @@ public:
 		{
 			case w2dToggle:
 				ToggleRelay();
-				// and announce it
-				SendState(GetRelay());
 				break;
 			default:
 				break;	
@@ -707,23 +720,32 @@ public:
 		return digitalRead(m_ioPinOut)==HIGH;
 	}
 
+
+	virtual void SetLEDstate(bool on)
+	{
+		digitalWrite(m_ioPinLED, on ? HIGH : LOW);
+	}
+
 	virtual void SetRelay(bool on)
 	{
 		// have seen instances where firing this relay contributes enough
-		// noise to get detected as an inpout switch - so guard
+		// noise to get detected as an input switch - so guard
 		ignoreISRrequests=true;
 
 		// closely tied
 		digitalWrite(m_ioPinOut, on ? HIGH : LOW);
 
-		// LED is inverted on the sonoff
 		if(m_ioPinLED!=-1)
-			digitalWrite(m_ioPinLED, on ? LOW : HIGH);
+			SetLEDstate(on);
+			//digitalWrite(m_ioPinLED, on ? LOW : HIGH);
 
 		// and inc
 		switchCount++;
 
 		ignoreISRrequests=false;
+
+		// and announce
+		SendState(on);
 	}
 
 
@@ -748,6 +770,13 @@ public:
 	{
 
 	}
+
+	virtual void SetLEDstate(bool on)
+	{
+		// LED is inverted on the sonoff
+		digitalWrite(m_ioPinLED, on ? LOW : HIGH);
+	}
+
 
 };
 
