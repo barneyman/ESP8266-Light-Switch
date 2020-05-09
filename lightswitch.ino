@@ -1497,8 +1497,8 @@ void InstallWebServerHandlers()
 			else
 			{
 				dblog.println(debug::dbImportant, "updating BIN");
-				// sonoff (at least) doesn't make it out the other side
-				PreserveState();
+				// we do some clean up so let me boot
+				ESPhttpUpdate.rebootOnUpdate(false);
 				result=ESPhttpUpdate.update(url, _MYVERSION);
 			}
 
