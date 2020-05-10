@@ -163,7 +163,6 @@ public:
 	virtual void GetSensorConfigElements(JsonArray &toHere)
 	{
 		JsonObject &sensorElement = toHere.createNestedObject();
-		sensorElement["impl"]="rest";
 		sensorElement["type"] = "temperature";
 		sensorElement["uom"] = "°C";
 		sensorElement["round"] = "1";
@@ -220,19 +219,16 @@ public:
 	virtual void GetSensorConfigElements(JsonArray &toHere)
 	{
 		JsonObject &sensorElement1 = toHere.createNestedObject();
-		sensorElement1["impl"]="rest";
 		sensorElement1["type"] = "temperature";
 		sensorElement1["uom"] = "°C";
 		sensorElement1["round"] = "1";
 
 		JsonObject &sensorElement2 = toHere.createNestedObject();
-		sensorElement2["impl"]="rest";
 		sensorElement2["type"] = "pressure";
 		sensorElement2["uom"] = "hPA";
 		sensorElement2["round"] = "1";
 
 		JsonObject &sensorElement3 = toHere.createNestedObject();
-		sensorElement3["impl"]="rest";
 		sensorElement3["type"] = "humidity";
 		sensorElement3["uom"] = "%";
 		sensorElement3["round"] = "0";
@@ -279,7 +275,6 @@ public:
 	virtual void GetSensorConfigElements(JsonArray &toHere)
 	{
 		JsonObject &sensorElement = toHere.createNestedObject();
-		sensorElement["impl"]="rest";
 		sensorElement["type"] = "illuminance";
 		sensorElement["uom"] = "Lux";
 		sensorElement["round"] = "0";
@@ -392,7 +387,7 @@ class GPIOInstantSensor : public instantSensor
 protected:
 
 	unsigned m_gpio, m_gpOut;
-	bool m_inverted;
+	bool m_invertedInput, m_invertedOutput;
 	volatile bool m_ioChanged;
 
 	static void ICACHE_RAM_ATTR static_isr()
@@ -404,7 +399,7 @@ protected:
 
 public:
 
-	GPIOInstantSensor(debugBaseClass*dbg,unsigned gpio, unsigned displayPin=-1):instantSensor(dbg),m_gpio(gpio),m_ioChanged(false),m_gpOut(displayPin)
+	GPIOInstantSensor(debugBaseClass*dbg,unsigned gpio, unsigned displayPin=-1, bool invertedInput=false, bool invertedOutput=false):instantSensor(dbg),m_gpio(gpio),m_ioChanged(false),m_gpOut(displayPin)
 	{
 		m_singleton=this;
 		pinMode(m_gpio, INPUT);
@@ -413,7 +408,9 @@ public:
 		if(m_gpOut!=-1)
 			pinMode(m_gpOut,OUTPUT);
 
-		m_inverted=(displayPin==LED_BUILTIN)?true:false;
+		m_invertedInput=invertedInput;
+		m_invertedOutput=invertedOutput;
+
 	}
 
 	virtual void DoWork()
@@ -421,14 +418,19 @@ public:
 		// if our state has changed send State
 		if(m_ioChanged)
 		{
-			
 
-			m_currentState=(digitalRead(m_gpio)==m_inverted?LOW:HIGH)?true:false;
+			m_currentState=(digitalRead(m_gpio)==(m_invertedInput?LOW:HIGH))?true:false;
 
 			dblog->printf(debug::dbInfo,"sensor changed %s\r",m_currentState?"HIGH":"LOW");
 
 			if(m_gpOut!=-1)
-				digitalWrite(m_gpOut,m_currentState?HIGH:LOW);
+			{
+				bool ledState=m_currentState;
+				if(m_invertedOutput)
+					ledState=!ledState;
+
+				digitalWrite(m_gpOut,ledState);
+			}	
 
 			SendState(m_currentState);
 			m_ioChanged=false;
@@ -444,7 +446,9 @@ public:
 class PIRInstantSensor : public GPIOInstantSensor
 {
 public:
-	PIRInstantSensor(debugBaseClass*dbg,unsigned gpio, unsigned displayPin=LED_BUILTIN):GPIOInstantSensor(dbg, gpio, displayPin)
+	// wemos is inverted LED
+	PIRInstantSensor(debugBaseClass*dbg,unsigned gpio, unsigned displayPin=LED_BUILTIN, bool invertedLED=true):
+		GPIOInstantSensor(dbg, gpio, displayPin,false,invertedLED)
 	{
 		thingName="PIR";
 		deviceClass="motion";
@@ -517,14 +521,8 @@ public:
 	virtual void SetRelay(bool){}
 
 	// make the relay honour the switch
-	virtual void HonourCurrentSwitch()
-	{
-	}
+	virtual void HonourCurrentSwitch()=0;
 
-	virtual String GetImpl()
-	{
-		return String();
-	}
 
 	// to handle multiple switches 
 	virtual unsigned ChildSwitchCount()
@@ -575,22 +573,15 @@ protected:
 class momentarySwitch : public baseSwitch
 {
 public:
-	momentarySwitch(debugBaseClass *dblog, bool defaultState=false):baseSwitch(dblog,_DEBOUNCE_WINDOW_MOMENTARY),
-		m_defaultState(defaultState)
+	momentarySwitch(debugBaseClass *dblog):baseSwitch(dblog,_DEBOUNCE_WINDOW_MOMENTARY)
 	{
 		m_type=stMomentary;
 	}
 
+	// do nothing
 	virtual void HonourCurrentSwitch()
 	{
-		// honour what we were told
-		SetRelay(m_defaultState);
 	}
-
-protected:
-
-	bool m_defaultState;
-
 
 
 
@@ -630,6 +621,11 @@ public:
 	{
 		m_flipSwitchPolarity=!m_flipSwitchPolarity;
 		baseSwitch::SetRelay(on);
+	}
+
+	virtual void HonourCurrentSwitch()
+	{
+		SetSwitch(GetSwitch());
 	}
 
 
@@ -748,7 +744,6 @@ public:
 	}
 
 
-
 protected:
 
 	unsigned m_ioPinIn, m_ioPinOut, m_ioPinLED;
@@ -776,16 +771,6 @@ public:
 		digitalWrite(m_ioPinLED, on ? LOW : HIGH);
 	}
 
-	virtual String GetImpl()
-	{
-#ifdef _USE_UDP		
-		return String("udp");
-#elif defined(_USE_REST)		
-		return String("rest");
-#else
-		return String("tcp");
-#endif		
-	}
 
 };
 
@@ -920,16 +905,6 @@ protected:
 
 
 
-	virtual String GetImpl()
-	{
-#ifdef _USE_UDP		
-		return String("udp");
-#elif defined(_USE_REST)		
-		return String("rest");
-#else
-		return String("tcp");
-#endif		
-	}
 
 
 	};

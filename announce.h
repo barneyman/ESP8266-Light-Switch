@@ -83,6 +83,16 @@ public:
 		}
 	}
 
+	virtual String GetImpl()
+	{
+#ifdef _USE_UDP		
+		return String("udp");
+#elif defined(_USE_REST)		
+		return String("rest");
+#else
+		return String("tcp");
+#endif		
+	}
 
 public:
 
