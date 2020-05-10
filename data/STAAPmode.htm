@@ -1,6 +1,7 @@
 <HTML>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <HEAD>
-<META NAME="GENERATOR" Content="Microsoft Visual Studio">
+
 <TITLE>ESP8266 Provisioning</TITLE>
     <link rel="stylesheet" type="text/css" href="switch.css">
 </HEAD>
@@ -8,11 +9,20 @@
 
     <iframe src="HeaderFrame.htm" id="header" name="header" onload="headerLoaded()"></iframe>
 
-    <h2>Wifi Details</h2>
-    Successfully logged onto network <b><span id="ssid">???</span></b><br />
-    IP address is <b><span id="ip">???</span></b>
-    <hr />
-    <button id="stopAP" onclick="StopAP()" disabled>Stop AP</button>
+    <div class="verticalContainer">
+        <fieldset>
+            <legend>Logged onto WIFI</legend>
+            <div>
+                Successfully logged onto network <b><span id="ssid">???</span></b><br />
+            </div>
+            <div>
+                IP address is <b><a id="ip">???</span></b>
+            </div>
+        </fieldset>
+        <div class="horizontalContainerRight">
+            <button id="stopAP" onclick="StopAP()" disabled>Stop AP</button>
+        </div>
+    </div>
 
 
     <script src="common.js"></script>
@@ -24,10 +34,6 @@
         {
             let url = base + '/json/wificonfig'
 
-            // disable scan
-            //document.getElementById("rescan").disabled = true;
-            //document.getElementById("join").disabled = true;
-
             fetch(url)
                 .then(function (response) {
                     if (response.ok)
@@ -38,7 +44,9 @@
 
                     //document.getElementById("devicename").innerText = data["name"] + ".local"
                     document.getElementById("ssid").innerText = data["ssid"]
-                    document.getElementById("ip").innerText = data["ip"]
+                    var anchor=document.getElementById("ip")
+                    anchor.innerText = data["ip"]
+                    anchor.setAttribute("href", "http://"+data["ip"])
 
 
 

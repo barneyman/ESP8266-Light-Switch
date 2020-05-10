@@ -1,6 +1,6 @@
-// when testing these web pages from the PC ...
+// when testing these web pages from the PC ... base should point to the esp mule
 // chrome --disable-web-security --user-data-dir="[some directory here]"
-//let base = "http://192.168.82.135"
+//let base = "http://192.168.42.121"
 let base = "."
 
 
@@ -16,11 +16,22 @@ function headerLoaded() {
 
             // get the name
             iframe.document.getElementById('name').innerText = data['name']
-            iframe.document.getElementById('version').innerText = data['version']
-            iframe.document.getElementById('versionHTML').innerText = data['versionHTML']
+            // crack the version
+            const verData=data['version'].split('|')
+            iframe.document.getElementById('hardware').innerText = verData[0]
+            iframe.document.getElementById('version').innerText = verData[1]
             
         })
+}
 
+function showStatus(text)
+{
+    document.getElementById("statustext").innerText=text
+    document.getElementById("statusbar").hidden=false
+}
 
-
+function clearStatus()
+{
+    document.getElementById("statustext").innerText=""
+    document.getElementById("statusbar").hidden=true
 }

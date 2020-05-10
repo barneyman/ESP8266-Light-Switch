@@ -1,6 +1,6 @@
 <HTML>
-<HEAD>
-<META NAME="GENERATOR" Content="Microsoft Visual Studio">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <HEAD>
 <TITLE>ESP8266 Provisioning</TITLE>
     <link rel="stylesheet" type="text/css" href="switch.css">
 </HEAD>
@@ -8,51 +8,72 @@
 
     <iframe src="HeaderFrame.htm" id="header" name="header" onload="headerLoaded()"></iframe>
 
-    <h2>Wifi Details</h2>
-    After successful configuration, this device will join that network and be available
-    as either <b><span id="devicename">???</span></b> or via configured IP address<br />
-    If configuration fails, this screen, on this AP, will be available again
-    <hr />
-    <table>
-        <tr>
-            <td>
-                ssid (2.4Ghz)
-            </td>
-            <td id="wifis">
-               
-            </td>
-        </tr>
-        <tr>
-            <td>
-                password
-            </td>
-            <td>
-                <input name="pwd" size="15" type="password" id="pwd" />
-            </td>
-        </tr>
-        <tr>
-            <td>Type</td>
-            <td>
-                <select id="dhcp" onchange="chooseDHCP()">
-                    <option value="1">DHCP</option>
-                    <option value="0">Static</option>
-                </select>
-            </td>
-        </tr>
-        <tr hidden id="staticInfo"> 
-            <td>
-                IP Address<br />Gateway<br />Netmask<br />
-            </td>
-            <td>
-                <input type="text" id="ip"/><br />
-                <input type="text" id="gateway"/><br />
-                <input type="text" id="netmask" value="255.255.255.0"><br />
-            </td>
-        </tr>
-    </table>        
-    <button id="rescan" onclick="OnLoad()" disabled>Rescan</button>
-    <button id="join" onclick="JoinWifi()" disabled>Join WiFi</button>
+<div id="statusbar" hidden>
+    <fieldset>
+        <div id="statustext"></div>
+    </fieldset>
+</div>
 
+<div class="verticalContainer">
+    <fieldset>
+        <legend>Name</legend>
+        <fieldset>
+            ID for the device; use something that expresses its function (ie Bedroom Lamp)
+        </fieldset>
+        <br>
+        <fieldset>
+            <div class="horizontalContainer">
+                <div>Device Name</div>
+                <div><input name="name" size="15" type="text" id="friendlyName" /></div>
+            </div>
+        </fieldset>
+    </fieldset>
+    <br>
+    <fieldset>
+        <legend>Wifi Details</legend>
+            <fieldset>
+                <div>
+                    Configure network access for this device       
+                </div>
+            </fieldset>
+            <br>
+        <fieldset>
+            <div class="horizontalContainer">
+                <div>SSID</div>
+                <div  class="horizontalContainer">
+                    <button id="rescan" onclick="OnLoad()" disabled>Rescan</button>            
+                    <div id="wifis"></div>
+                </div>
+            </div>
+        
+
+            <div class="horizontalContainer">
+                <div>Password</div><div><input name="pwd" size="15" type="password" id="pwd" /></div>
+            </div>
+            <div class="horizontalContainer">
+                <div>Address Type</div>
+                <div>
+                    <select id="dhcp" onchange="chooseDHCP()">
+                        <option value="1">DHCP</option>
+                        <option value="0">Static</option>
+                    </select>
+                </div>
+            </div>
+            <fieldset hidden id="staticInfo">
+                <legend>Static Details</legend>
+                <div class="horizontalContainer"><div>IP:</div><div><input type="text" id="ip"/></div></div>
+                <div class="horizontalContainer"><div>Gateway:</div><div><input type="text" id="gateway"/></div></div>
+                <div class="horizontalContainer"><div>Netmask:</div><div><input type="text" id="netmask" value="255.255.255.0"></div></div>
+            </fieldset>
+        </fieldset>
+    </fieldset>
+    <div class="horizontalContainerRight">
+        <button id="join" onclick="JoinWifi()" disabled>Commit</button>
+    </div>
+
+
+
+</div>
 
     <script src="common.js"></script>
 
@@ -77,11 +98,14 @@
         {
             let url = base+'/json/wifi'
             var wifis = document.getElementById("wifis");
-            wifis.innerText = "Searching .... [" + url+"]"
+
+            showStatus("Searching ....")
 
             // disable scan
             document.getElementById("rescan").disabled = true;
             document.getElementById("join").disabled = true;
+
+
 
             fetch(url)
                 .then(function (response) {
@@ -91,7 +115,7 @@
                 })
                 .then(function (data) {
 
-                    document.getElementById("devicename").innerText=data["name"]+".local"
+                    document.getElementById("friendlyName").value=data["friendlyName"]
 
                     wifis.innerText = ""
                     select = document.createElement("select")
@@ -108,12 +132,15 @@
                         select.appendChild(wifi);
                     }
 
+                    clearStatus()
 
-                document.getElementById("rescan").disabled = false;
-                document.getElementById("join").disabled = false;
-                }).catch(function (error) {
-                    wifis.innerText = "Error"
-                })
+                    document.getElementById("rescan").disabled = false;
+                    document.getElementById("join").disabled = false;
+                    })
+                    .catch(function (error) {
+                        wifis.innerText = "Error"
+                        alert(error.message)
+                    })
 
 
         }
@@ -125,11 +152,13 @@
 
             // get all inputs
             var pwd = document.getElementById('pwd')
+            var friendlyName= document.getElementById('friendlyName')
             var selects = document.getElementById('wifisids')
             var ssid=selects.options[selects.selectedIndex].value;
 
             jsonData['pwd'] = pwd.value;
             jsonData['ssid'] = ssid;
+            jsonData['friendlyName']=friendlyName.value;
 
             var select = document.getElementById("dhcp");
             var dhcp = select.options[select.selectedIndex].value

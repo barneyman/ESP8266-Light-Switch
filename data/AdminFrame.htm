@@ -1,58 +1,66 @@
 <HTML>
 <HEAD>
-<META NAME="GENERATOR" Content="Microsoft Visual Studio">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <TITLE></TITLE>
     <link rel="stylesheet" type="text/css" href="switch.css">
 </HEAD>
 <BODY onload="OnLoad()">
-    <span id="otaUpdating" hidden></span>
-    <table id="otaDetails">
-        <tr>
-            <th>Host</th>
-            <td><input type="text" id="host" value="192.168.51.1"></td>
-            <td rowspan="3"><button onclick="OTAupdate()">Update OTA</button></td>
-        </tr>
-        <tr>
-            <th>Port</th>
-            <td><input type="text" id="port" value="5000" /></td>
-        </tr>
-        <tr>
-            <th>Url</th>
-            <td><input type="text" id="url" value="/upgrades/"/></td>
-        </tr>
-    </table>
-    
-    <hr />
-    <span id="scanning"></span>
-        <div id="htmlUpdate" hidden>
-            <table>
-                <tr>
-                    <th>Peers to Push to</th>
-                    <td><select id="peers" /></td>
-                    <td><button onclick="OTA_HTMLupdate()">Update HTML</button></td>
-                </tr>
-            </table>
-        </div>
-    
-    <button onclick="fetchPeersWithHTML()" id="rescanPeers" hidden>Rescan for HTML Updates</button>
-    <hr />
 
-    <button onclick="ResetWIFI()">WiFi Reset</button>
+    <div id="statusbar" hidden>
+        <fieldset>
+            <div id="statustext"></div>
+        </fieldset>
+    </div>
+    
+
+    <div class="verticalContainer">
+        <fieldset>
+            <legend>Options</legend>
+                <div class="horizontalContainer">
+                    <div>Reboot the device</div>
+                    <div><button onclick="Reboot()">Reboot</button></div>
+                </div>
+                <div class="horizontalContainer">
+                    <div>Reset WIFI</div>
+                    <div><button onclick="ResetWIFI()">Reset</button></div>
+                </div>
+        </fieldset>
+        <br hidden>
+        <fieldset hidden>
+            <legend>Upgrade</legend>
+            <div class="horizontalContainer">
+                <div>url</div>
+                <div><input type="text" id="host"></div>
+            </div>
+            <div>
+                <div class="horizontalContainerRight"><button onclick="OTAupdate()">Commit</button></div>
+            </div>
+        </fieldset>
+        <br>
+        <fieldset>
+            <legend>Peers</legend>
+            <div class="verticalContainer" id="peers"></div>
+            <div class="horizontalContainerRight"><button onclick="fetchPeers()">Rescan</button></div>
+        </fieldset>
+
+
+    </div>
+
+   
 
     <script src="common.js"></script>
 
     <script>
 
         function OnLoad() {
-            fetchPeersWithHTML();
+            fetchPeers();
         }
 
-        function fetchPeersWithHTML()
+        function fetchPeers()
         {
-            document.getElementById('rescanPeers').hidden = true;
-            document.getElementById('scanning').innerText="Scanning for Peers ...";
+            showStatus("Fetching Peers")
 
-            let url = base + '/json/htmlPeers'
+            let url = base + '/json/peers'
             var numPages = 0;
             fetch(url)
                 .then(function (response) { return response.json(); })
@@ -69,24 +77,45 @@
                         {
                             // we should find out if it's html version beats ours
                             // todo
-
-
-
-
-                            var opt = document.createElement("option")
-                            opt.setAttribute("value", peerArray[eachNode]["host"])
-                            opt.innerText = peerArray[eachNode]["host"];
-                            peers.appendChild(opt);
+                            var row=document.createElement("div")
+                            row.className="horizontalContainer"
+                            var opt1 = document.createElement("div")
+                            var opt2 = document.createElement("div")
+                            //opt.setAttribute("value", peerArray[eachNode]["host"])
+                            opt1.innerText = peerArray[eachNode]["name"];
+                            var anchor=document.createElement("a")
+                            anchor.innerText=peerArray[eachNode]["ip"];
+                            anchor.href="http://"+peerArray[eachNode]["ip"];
+                            anchor.target="_blank"
+                            opt2.appendChild(anchor)
+                            row.appendChild(opt1)
+                            row.appendChild(opt2)
+                            peers.appendChild(row);
                         }
 
-                        document.getElementById('htmlUpdate').hidden = false;
                     }
 
-                    document.getElementById('rescanPeers').hidden = false;
-                    document.getElementById('scanning').innerText = "";
+                    clearStatus();
+                    //document.getElementById('rescanPeers').hidden = false;
+                    //document.getElementById('scanning').innerText = "";
 
-                })
+                })            
+
         }
+
+        function Reboot() {
+
+            let url = base + '/reboot'
+
+            var xhr = new XMLHttpRequest();
+
+            xhr.open("GET", url, true);
+            xhr.setRequestHeader("Content-type", "text/plain");
+
+            xhr.send();
+
+            }
+
 
         function ResetWIFI() {
 
@@ -98,14 +127,6 @@
             xhr.setRequestHeader("Content-type", "text/plain");
 
             xhr.send();
-
-        }
-
-
-        function OTA_HTMLupdate() {
-            // get the server we are going to push to - actually, we tell it, 'ME' and it pulls
-
-
 
         }
 

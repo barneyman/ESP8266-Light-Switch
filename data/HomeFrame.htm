@@ -1,24 +1,38 @@
 <HTML>
 <HEAD>
-<META NAME="GENERATOR" Content="Microsoft Visual Studio">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <TITLE></TITLE>
     <link rel="stylesheet" type="text/css" href="switch.css">
 </HEAD>
 <BODY onload="OnLoad()">
+
+    <div id="statusbar" hidden>
+        <fieldset>
+            <div id="statustext"></div>
+        </fieldset>
+    </div>
+
+    <div class="verticalContainer">
+        <fieldset>
+            <legend>Switches</legend>
+            <div class="verticalContainer" id="switches"></div>
+        </fieldset>
+        <br>
+        <fieldset>
+            <legend>Sensors</legend>
+            <div class="verticalContainer" id="sensors"></div>
+        </fieldset>
+        <div class="horizontalContainerRight"><button id="refresh" onclick="PopulateList(true)">Refresh</button></div>
+    </div>
+
+
     <div>
-        <div id="loading">Loading</div>
-        <div id="error" hidden>problem loading content</div>
-        <div id="found" hidden>
 
-            <table id="states"></table>
+        <button id="allon" onclick="All('on')" hidden>All On</button>
+        <button id="alloff" onclick="All('off')" hidden>All Off</button>
+        
 
-            <hr />
-
-            <button id="allon" onclick="All('on')" hidden>All On</button>
-            <button id="alloff" onclick="All('off')" hidden>All Off</button>
-            <button id="refresh" onclick="PopulateList(true)">Refresh</button>
-
-        </div>
     </div>
         <script src="common.js"></script>
 
@@ -33,6 +47,8 @@
 
             function PopulateList(clearTheList) {
 
+                showStatus("Fetching ...")
+
                 let url = base + '/json/state'
 
                 fetch(url)
@@ -44,57 +60,75 @@
                     .then(function (data) {
 
                         // then work out the switch states
-                        var states = data['switchState']
+                        var switches = data['switchState']
+                        var sensors = data['sensorState']
 
-                        var table = document.getElementById('states')
+                        var tableSwitches = document.getElementById('switches')
+                        var tableSensors = document.getElementById('sensors')
 
                         if (clearTheList) {
-                            table.innerHTML = "<tr><th>Action</th><th>Switch Name</th></tr>";
+                            tableSensors.innerHTML = "";
+                            tableSwitches.innerHTML = "";
                         }
 
+                        // switches
+                        for (var eachState in switches) {
+                            if (switches.hasOwnProperty(eachState)) {
 
-                        for (var eachState in states) {
-                            if (states.hasOwnProperty(eachState)) {
-                                // tab
-                                var tr = document.createElement('tr')
-                                var tdAction = document.createElement('td')
-                                var tdName = document.createElement('td')
-                                tr.appendChild(tdAction)
-                                tr.appendChild(tdName)
+                                var switchNumber = switches[eachState]["switch"]
 
-                                var button = document.createElement('button');
-                                var switchNumber = states[eachState]["switch"]
-                                var switchName = states[eachState]["name"]
+                                // create a row
+                                var row=document.createElement("div")
+                                row.className="horizontalContainer"
 
-                                var buttonStateInverse = states[eachState]["state"] == 0 ? "on" : "off"
+                                var name=document.createElement("div")
+                                name.innerText=switches[eachState]["name"]
+                                row.appendChild(name)
 
-
-                                button.innerText = 'Turn ' + buttonStateInverse
+                                button=document.createElement('button')
+                                var buttonStateInverse = switches[eachState]["state"] == 0 ? "on" : "off"
+                                button.innerText="Turn "+buttonStateInverse
                                 button.setAttribute('onclick', 'Button("' + switchNumber + '","' + buttonStateInverse + '")')
+                                row.appendChild(button)
 
-                                tdAction.appendChild(button);
-                                tdName.innerText = switchName;
+                                tableSwitches.appendChild(row)
 
-                                table.appendChild(tr)
                             }
                         }
 
-                        // if there's more than one, unhide on/off all
-                        // the header row counts as 1 
-                        if (table.rows.length > 2)
-                        {
-                            document.getElementById('allon').hidden=false
-                            document.getElementById('alloff').hidden = false
+                        for (var eachState in sensors) {
+                            if (sensors.hasOwnProperty(eachState)) {
+
+                                var sensorNumber = sensors[eachState]["switch"]
+
+                                // create a row
+                                var row=document.createElement("div")
+                                row.className="horizontalContainer"
+
+                                var name=document.createElement("div")
+                                name.innerText=sensors[eachState]["name"]
+                                row.appendChild(name)
+
+                                var state=document.createElement("div")
+                                state.innerText=sensors[eachState]["state"]
+                                row.appendChild(state)
+
+                                tableSensors.appendChild(row)
+
+
+                            }
                         }
 
 
 
-                        document.getElementById('loading').hidden = true;
-                        document.getElementById('found').hidden = false;
+                        clearStatus()
 
 
                     }).catch(function (error) {
 
+                        alert(error.message)
+
+/*                        
                         document.getElementById('loading').hidden = true;
                         document.getElementById('error').hidden = false;
 
@@ -104,7 +138,7 @@
                         for (index = 0; index < buttons.length; index++) {
                             buttons[index].disabled = true;
                         }
-
+*/
 
                     })
 
