@@ -76,6 +76,11 @@ button {
     cursor: pointer;
   }
 
+  .button_red {
+      background-color: red;
+  }
+
+
 /* IDs */
 
 #header

@@ -719,7 +719,8 @@ public:
 
 	virtual void SetLEDstate(bool on)
 	{
-		digitalWrite(m_ioPinLED, on ? HIGH : LOW);
+		if(m_ioPinLED!=-1)
+			digitalWrite(m_ioPinLED, on ? HIGH : LOW);
 	}
 
 	virtual void SetRelay(bool on)
@@ -768,10 +769,21 @@ public:
 	virtual void SetLEDstate(bool on)
 	{
 		// LED is inverted on the sonoff
-		digitalWrite(m_ioPinLED, on ? LOW : HIGH);
+		if(m_ioPinLED!=-1)
+			digitalWrite(m_ioPinLED, on ? LOW : HIGH);
 	}
 
 
+};
+
+class SonoffBasicNoLED : public RelayLEDandSwitch
+{
+	public:
+	SonoffBasicNoLED(debugBaseClass *dblog,int digitalPinInput=0, int digitalPinOutput=12):
+		RelayLEDandSwitch(dblog,digitalPinInput,digitalPinOutput,-1)
+		{
+
+		}
 };
 
 

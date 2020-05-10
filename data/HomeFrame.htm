@@ -27,13 +27,6 @@
     </div>
 
 
-    <div>
-
-        <button id="allon" onclick="All('on')" hidden>All On</button>
-        <button id="alloff" onclick="All('off')" hidden>All Off</button>
-        
-
-    </div>
         <script src="common.js"></script>
 
 
@@ -87,6 +80,12 @@
 
                                 button=document.createElement('button')
                                 var buttonStateInverse = switches[eachState]["state"] == 0 ? "on" : "off"
+
+                                if(switches[eachState]["state"] == 1)
+                                {
+                                    button.className="button_red"
+                                }
+
                                 button.innerText="Turn "+buttonStateInverse
                                 button.setAttribute('onclick', 'Button("' + switchNumber + '","' + buttonStateInverse + '")')
                                 row.appendChild(button)
@@ -99,7 +98,10 @@
                         for (var eachState in sensors) {
                             if (sensors.hasOwnProperty(eachState)) {
 
-                                var sensorNumber = sensors[eachState]["switch"]
+                                // sensor, name are always present
+                                // anything else is the sensor
+
+                                //var sensorNumber = sensors[eachState]["sensor"]
 
                                 // create a row
                                 var row=document.createElement("div")
@@ -109,9 +111,17 @@
                                 name.innerText=sensors[eachState]["name"]
                                 row.appendChild(name)
 
-                                var state=document.createElement("div")
-                                state.innerText=sensors[eachState]["state"]
-                                row.appendChild(state)
+                                for (var key in sensors[eachState])
+                                {
+                                    if(key=="name" || key=="sensor")
+                                        continue
+                                    var state=document.createElement("div")
+                                    state.innerText=key+":"+sensors[eachState][key]
+                                    row.appendChild(state)
+
+
+                                }
+
 
                                 tableSensors.appendChild(row)
 
