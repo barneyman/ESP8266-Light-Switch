@@ -1,7 +1,7 @@
 // when testing these web pages from the PC ... base should point to the esp mule
 // chrome --disable-web-security --user-data-dir="[some directory here]"
-let base = "http://192.168.42.117"
-//let base = "."
+//let base = "http://192.168.42.117"
+let base = "."
 
 
 function headerLoaded() {
