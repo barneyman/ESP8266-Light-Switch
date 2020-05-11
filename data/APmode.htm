@@ -6,15 +6,21 @@
 </HEAD>
 <BODY onload="OnLoad()">
 
-    <iframe src="HeaderFrame.htm" id="header" name="header" onload="headerLoaded()"></iframe>
+    <script src="common.js"></script>    
 
-<div id="statusbar" hidden>
-    <fieldset>
-        <div id="statustext"></div>
-    </fieldset>
-</div>
+    <div id="statusbar" hidden>
+        <fieldset>
+            <div id="statustext"></div>
+        </fieldset>
+    </div>
+    
+<div class="verticalContainerFull">
 
+    <iframe src="HeaderFrame.htm" id="header" name="header" onload="headerLoaded()" ></iframe>
+
+<!--
 <div class="verticalContainer">
+    -->
     <fieldset>
         <legend>Name</legend>
         <fieldset>
@@ -40,10 +46,7 @@
         <fieldset>
             <div class="horizontalContainer">
                 <div>SSID</div>
-                <div  class="horizontalContainer">
-                    <button id="rescan" onclick="OnLoad()" disabled>Rescan</button>            
                     <div id="wifis"></div>
-                </div>
             </div>
         
 
@@ -66,16 +69,21 @@
                 <div class="horizontalContainer"><div>Netmask:</div><div><input type="text" id="netmask" value="255.255.255.0"></div></div>
             </fieldset>
         </fieldset>
+        <div class="horizontalContainerRight">
+            <button id="rescan" onclick="OnLoad()" disabled>Rescan</button>            
+        </div>
     </fieldset>
+
     <div class="horizontalContainerRight">
         <button id="join" onclick="JoinWifi()" disabled>Commit</button>
     </div>
 
 
-
+<!--
 </div>
-
-    <script src="common.js"></script>
+-->
+</div>
+    
 
     <script>
 

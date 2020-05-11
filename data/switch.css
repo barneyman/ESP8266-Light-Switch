@@ -132,5 +132,11 @@ button {
   flex-direction: column;
 }
 
-
-  
+.verticalContainerFull
+{
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    align-content: space-between;
+}
+    
