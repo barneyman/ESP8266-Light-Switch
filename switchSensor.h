@@ -744,6 +744,10 @@ public:
 		SendState(on);
 	}
 
+	virtual void HonourCurrentSwitch()
+	{
+		SetLEDstate(GetRelay());
+	}
 
 protected:
 
