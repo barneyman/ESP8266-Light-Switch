@@ -56,6 +56,10 @@
                     <div>Reset WIFI</div>
                     <div><button onclick="ResetWIFI()">Reset</button></div>
                 </div>
+                <div class="horizontalContainer">
+                    <div>Use Prereleases</div>
+                    <div><input type="checkbox" id="prerelease" onclick="changePrelease()"></div>
+                </div>
             </fieldset>
             <br hidden>
             <fieldset hidden>
@@ -105,8 +109,50 @@
             //showStatus("Fetching ...")
             PopulateSwitchSensorList(true)
             fetchPeers()
+            getConfig()
             //clearStatus();
+        }
 
+        function getConfig()
+        {
+            let url = base + '/json/config'
+            fetch(url)
+                .then(function (response) {
+                    if (response.ok)
+                        return response.json();
+                    throw new Error('network err')
+                })
+                .then(function (data) {
+
+                    var checkbox=document.getElementById("prerelease");
+                    if(data["prerelease"]==0)
+                    {
+                        checkbox.checked=false;
+                    }
+                    else
+                    {
+                        checkbox.checked=true;
+                    }
+
+                })
+        }
+
+        function changePrelease()
+        {
+            let url = base + '/json/config'
+
+            var xhr = new XMLHttpRequest();
+
+            xhr.open("POST", url, true);
+            xhr.setRequestHeader("Content-type", "text/plain");
+
+            var jsonData={}
+
+            var checkbox=document.getElementById("prerelease");
+
+            jsonData["prerelease"]=checkbox.checked?1:0;
+
+            xhr.send(JSON.stringify(jsonData));
 
         }
 
@@ -226,7 +272,7 @@
 
             var xhr = new XMLHttpRequest();
 
-            xhr.open("GET", url, true);
+            xhr.open("POST", url, true);
             xhr.setRequestHeader("Content-type", "text/plain");
 
             xhr.onloadend = function () { PopulateSwitchSensorList(true) }
@@ -300,7 +346,7 @@
 
             var xhr = new XMLHttpRequest();
 
-            xhr.open("GET", url, true);
+            xhr.open("POST", url, true);
             xhr.setRequestHeader("Content-type", "text/plain");
 
             xhr.send();
@@ -314,7 +360,7 @@
 
             var xhr = new XMLHttpRequest();
 
-            xhr.open("GET", url, true);
+            xhr.open("POST", url, true);
             xhr.setRequestHeader("Content-type", "text/plain");
 
             xhr.send();
