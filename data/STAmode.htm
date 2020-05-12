@@ -256,8 +256,19 @@
 
                     }
 
+        function populateSinglePeer(peer, divToUse)
+        {
+            // then get the ver of that peer
+            var peerUrl=peer+"json/config"
+            fetch(peerUrl)
+                .then(function(response){ return response.json(); })
+                .then(function(data){
+                    divToUse.innerText=data["version"]
+                })
 
-                    function fetchPeers()
+        }
+
+        function fetchPeers()
         {
 
             let url = base + '/json/peers'
@@ -281,21 +292,32 @@
                             row.className="horizontalContainer"
                             var opt1 = document.createElement("div")
                             var opt2 = document.createElement("div")
+                            opt2.className="verticalContainer"
+                            var opt2a = document.createElement("div")
+                            var opt2b = document.createElement("div")
+
+                            opt2.appendChild(opt2a)
+                            opt2.appendChild(opt2b)
+
                             //opt.setAttribute("value", peerArray[eachNode]["host"])
                             opt1.innerText = peerArray[eachNode]["name"];
                             var anchor=document.createElement("a")
                             anchor.innerText=peerArray[eachNode]["ip"];
                             anchor.href="http://"+peerArray[eachNode]["ip"];
                             anchor.target="_blank"
-                            opt2.appendChild(anchor)
+                            opt2a.appendChild(anchor)
+
+                            populateSinglePeer(anchor.href, opt2b)
+
                             row.appendChild(opt1)
                             row.appendChild(opt2)
+                            //row.appendChild(opt3)
                             peers.appendChild(row);
                         }
 
                     }
 
-                    clearStatus();
+                    //clearStatus();
                     //document.getElementById('rescanPeers').hidden = false;
                     //document.getElementById('scanning').innerText = "";
 
