@@ -1,9 +1,11 @@
 <HTML>
+
 <HEAD>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<TITLE>ESP8266</TITLE>
+    <TITLE>ESP8266</TITLE>
     <link rel="stylesheet" type="text/css" href="switch.css">
 </HEAD>
+
 <BODY onload="OnLoad()">
 
     <script src="common.js"></script>
@@ -17,34 +19,35 @@
 
     <div class="verticalContainerFull">
 
-    <iframe src="HeaderFrame.htm" id="header" name="header" onload="headerLoaded()"></iframe>
+        <iframe src="HeaderFrame.htm" id="header" name="header" onload="headerLoaded()"></iframe>
 
 
-    <ul id="menu" class="main">
-        <li><a href="#" onclick="onMenu('home')">Home</a></li>
-        <li><a href="#" onclick="onMenu('admin')">Admin</a></li>
-    </ul>
+        <ul id="menu" class="main">
+            <li><a href="#" onclick="onMenu('home')">Home</a></li>
+            <li><a href="#" onclick="onMenu('admin')">Admin</a></li>
+        </ul>
 
-    <div id="home">
+        <div id="home">
 
-        <fieldset id="switchSet" hidden>
-            <legend>Switches</legend>
-            <div class="verticalContainer" id="switches"></div>
-        </fieldset>
-        <br>
-        <fieldset id="sensorSet" hidden>
-            <legend>Sensors</legend>
-            <div class="verticalContainer" id="sensors"></div>
-        </fieldset>
-        <div class="horizontalContainerRight"><button id="refresh" onclick="PopulateSwitchSensorList(true)">Refresh</button></div>
+            <fieldset id="switchSet" hidden>
+                <legend>Switches</legend>
+                <div class="verticalContainer" id="switches"></div>
+            </fieldset>
+            <br>
+            <fieldset id="sensorSet" hidden>
+                <legend>Sensors</legend>
+                <div class="verticalContainer" id="sensors"></div>
+            </fieldset>
+            <div class="horizontalContainerRight"><button id="refresh"
+                    onclick="PopulateSwitchSensorList(true)">Refresh</button></div>
 
 
-    </div>
+        </div>
 
-    <div id="admin" hidden>
+        <div id="admin" hidden>
 
-        <fieldset>
-            <legend>Options</legend>
+            <fieldset>
+                <legend>Options</legend>
                 <div class="horizontalContainer">
                     <div>Reboot the device</div>
                     <div><button onclick="Reboot()">Reboot</button></div>
@@ -53,223 +56,197 @@
                     <div>Reset WIFI</div>
                     <div><button onclick="ResetWIFI()">Reset</button></div>
                 </div>
-        </fieldset>
-        <br hidden>
-        <fieldset hidden>
-            <legend>Upgrade</legend>
-            <div class="horizontalContainer">
-                <div>url</div>
-                <div><input type="text" id="host"></div>
-            </div>
-            <div>
-                <div class="horizontalContainerRight"><button onclick="OTAupdate()">Commit</button></div>
-            </div>
-        </fieldset>
-        <br>
-        <fieldset>
-            <legend>Peers</legend>
-            <div class="verticalContainer" id="peers"></div>
-            <div class="horizontalContainerRight"><button onclick="fetchPeers()">Rescan</button></div>
-        </fieldset>
+            </fieldset>
+            <br hidden>
+            <fieldset hidden>
+                <legend>Upgrade</legend>
+                <div class="horizontalContainer">
+                    <div>url</div>
+                    <div><input type="text" id="host"></div>
+                </div>
+                <div>
+                    <div class="horizontalContainerRight"><button onclick="OTAupdate()">Commit</button></div>
+                </div>
+            </fieldset>
+            <br>
+            <fieldset>
+                <legend>Peers</legend>
+                <div class="verticalContainer" id="peers"></div>
+                <div class="horizontalContainerRight"><button onclick="fetchPeers()">Rescan</button></div>
+            </fieldset>
 
 
-    </div>
+        </div>
 
     </div>
 
     <script>
 
-        const frames=["home", "admin"];
+        const frames = ["home", "admin"];
 
 
-        function onMenu(divNameShow)
-        {
+        function onMenu(divNameShow) {
             frames.forEach(function (item, index) {
 
-                if(item==divNameShow)
-                {
+                if (item == divNameShow) {
                     document.getElementById(item).hidden = false;
                 }
-                else
-                {
+                else {
                     document.getElementById(item).hidden = true;
                 }
 
 
-                });
+            });
 
         }
 
         function OnLoad() {
 
-                //showStatus("Fetching ...")
-                PopulateSwitchSensorList(true)
-                fetchPeers()
-                //clearStatus();
-              
-                
-            }
-
-            function PopulateSwitchSensorList(clearTheList) {
+            //showStatus("Fetching ...")
+            PopulateSwitchSensorList(true)
+            fetchPeers()
+            //clearStatus();
 
 
-                let url = base + '/json/state'
+        }
 
-                fetch(url)
-                    .then(function (response) {
-                        if (response.ok)
-                            return response.json();
-                        throw new Error('network err')
-                    })
-                    .then(function (data) {
-
-                        // then work out the switch states
-                        var switches = data['switchState']
-                        var sensors = data['sensorState']
-
-                        var tableSwitches = document.getElementById('switches')
-                        var tableSensors = document.getElementById('sensors')
-
-                        var tableSwitchSet = document.getElementById('switchSet')
-                        var tableSensorSet = document.getElementById('sensorSet')
-
-                        if (clearTheList) {
-                            tableSensors.innerHTML = "";
-                            tableSwitches.innerHTML = "";
-                        }
-
-                        // get counts
-                        if(data['switchCount']!="0")
-                        {
-                            tableSwitchSet.hidden=false
-                        }
-
-                        if(data['sensorCount']!="0")
-                        {
-                            tableSensorSet.hidden=false
-                        }
+        function PopulateSwitchSensorList(clearTheList) {
 
 
-                        // switches
-                        for (var eachState in switches) {
-                            if (switches.hasOwnProperty(eachState)) {
+            let url = base + '/json/state'
 
-                                var switchNumber = switches[eachState]["switch"]
+            fetch(url)
+                .then(function (response) {
+                    if (response.ok)
+                        return response.json();
+                    throw new Error('network err')
+                })
+                .then(function (data) {
 
-                                //for(var each=0;each<20;each++)
-                                {
+                    // then work out the switch states
+                    var switches = data['switchState']
+                    var sensors = data['sensorState']
 
-                                // create a row
-                                var row=document.createElement("div")
-                                row.className="horizontalContainer"
+                    var tableSwitches = document.getElementById('switches')
+                    var tableSensors = document.getElementById('sensors')
 
-                                var name=document.createElement("div")
-                                name.innerText=switches[eachState]["name"]
-                                row.appendChild(name)
+                    var tableSwitchSet = document.getElementById('switchSet')
+                    var tableSensorSet = document.getElementById('sensorSet')
 
-                                button=document.createElement('button')
-                                var buttonStateInverse = switches[eachState]["state"] == 0 ? "on" : "off"
-
-                                if(switches[eachState]["state"] == 1)
-                                {
-                                    button.className="button_red"
-                                }
-
-                                button.innerText="Turn "+buttonStateInverse
-                                button.setAttribute('onclick', 'Button("' + switchNumber + '","' + buttonStateInverse + '")')
-                                row.appendChild(button)
-
-                                tableSwitches.appendChild(row)
-                                }
-
-                            }
-                        }
-
-                        for (var eachState in sensors) {
-                            if (sensors.hasOwnProperty(eachState)) {
-
-                                // sensor, name are always present
-                                // anything else is the sensor
-
-                                //var sensorNumber = sensors[eachState]["sensor"]
-
-                                // create a row
-                                var row=document.createElement("div")
-                                row.className="horizontalContainer"
-
-                                var name=document.createElement("div")
-                                name.innerText=sensors[eachState]["name"]
-                                row.appendChild(name)
-
-                                for (var key in sensors[eachState])
-                                {
-                                    if(key=="name" || key=="sensor")
-                                        continue
-                                    var state=document.createElement("div")
-                                    state.innerText=key+":"+sensors[eachState][key]
-                                    row.appendChild(state)
-
-
-                                }
-
-
-                                tableSensors.appendChild(row)
-
-
-                            }
-                        }
-
-
-                    }).catch(function (error) {
-
-                        alert(error.message)
-
-                /*                        
-                        document.getElementById('loading').hidden = true;
-                        document.getElementById('error').hidden = false;
-
-                        //find all the buttons and turn them off
-                        var buttons = document.getElementsByTagName('button')
-
-                        for (index = 0; index < buttons.length; index++) {
-                            buttons[index].disabled = true;
-                        }
-                */
-
-                    })
-
-                }
-
-
-                function Button(number, state) {
-
-                    let url = base + '/button?port=' + number + '&action=' + state
-
-                    var xhr = new XMLHttpRequest();
-
-                    xhr.open("GET", url, true);
-                    xhr.setRequestHeader("Content-type", "text/plain");
-
-                    xhr.onloadend = function () { PopulateSwitchSensorList(true) }
-                    xhr.send();
-
-
+                    if (clearTheList) {
+                        tableSensors.innerHTML = "";
+                        tableSwitches.innerHTML = "";
                     }
 
-        function populateSinglePeer(peer, divToUse)
-        {
-            // then get the ver of that peer
-            var peerUrl=peer+"json/config"
-            fetch(peerUrl)
-                .then(function(response){ return response.json(); })
-                .then(function(data){
-                    divToUse.innerText=data["version"]
+                    // get counts
+                    if (data['switchCount'] != "0") {
+                        tableSwitchSet.hidden = false
+                    }
+
+                    if (data['sensorCount'] != "0") {
+                        tableSensorSet.hidden = false
+                    }
+
+
+                    // switches
+                    for (var eachState in switches) {
+                        if (switches.hasOwnProperty(eachState)) {
+
+                            var switchNumber = switches[eachState]["switch"]
+
+
+                            // create a row
+                            var row = document.createElement("div")
+                            row.className = "horizontalContainer"
+
+                            var name = document.createElement("div")
+                            name.innerText = switches[eachState]["name"]
+                            row.appendChild(name)
+
+                            button = document.createElement('button')
+                            var buttonStateInverse = switches[eachState]["state"] == 0 ? "on" : "off"
+
+                            if (switches[eachState]["state"] == 1) {
+                                button.className = "button_red"
+                            }
+
+                            button.innerText = "Turn " + buttonStateInverse
+                            button.setAttribute('onclick', 'Button("' + switchNumber + '","' + buttonStateInverse + '")')
+                            row.appendChild(button)
+
+                            tableSwitches.appendChild(row)
+
+                        }
+                    }
+
+                    for (var eachState in sensors) {
+                        if (sensors.hasOwnProperty(eachState)) {
+
+                            // sensor, name are always present
+                            // anything else is the sensor
+
+                            // create a row
+                            var row = document.createElement("div")
+                            row.className = "horizontalContainer"
+
+                            var name = document.createElement("div")
+                            name.innerText = sensors[eachState]["name"]
+                            row.appendChild(name)
+
+                            for (var key in sensors[eachState]) {
+                                if (key == "name" || key == "sensor")
+                                    continue
+                                var state = document.createElement("div")
+                                state.innerText = key + ":" + sensors[eachState][key]
+                                row.appendChild(state)
+
+
+                            }
+
+
+                            tableSensors.appendChild(row)
+
+
+                        }
+                    }
+
+
+                }).catch(function (error) {
+
+                    alert(error.message)
+
                 })
 
         }
 
-        function fetchPeers()
-        {
+
+        function Button(number, state) {
+
+            let url = base + '/button?port=' + number + '&action=' + state
+
+            var xhr = new XMLHttpRequest();
+
+            xhr.open("GET", url, true);
+            xhr.setRequestHeader("Content-type", "text/plain");
+
+            xhr.onloadend = function () { PopulateSwitchSensorList(true) }
+            xhr.send();
+
+
+        }
+
+        function populateSinglePeer(peer, divToUse) {
+            // then get the ver of that peer
+            var peerUrl = peer + "json/config"
+            fetch(peerUrl)
+                .then(function (response) { return response.json(); })
+                .then(function (data) {
+                    divToUse.innerText = data["version"]
+                })
+
+        }
+
+        function fetchPeers() {
 
             let url = base + '/json/peers'
             var numPages = 0;
@@ -280,48 +257,40 @@
                     var peers = document.getElementById('peers')
                     // clear the list
                     peers.innerHTML = ""
-                    if (data["peerCount"] > 0)
-                    {
+                    if (data["peerCount"] > 0) {
                         var peerArray = data["peers"]
 
-                        for (var eachNode in peerArray)
-                        {
+                        for (var eachNode in peerArray) {
                             // we should find out if it's html version beats ours
                             // todo
-                            var row=document.createElement("div")
-                            row.className="horizontalContainer"
+                            var row = document.createElement("div")
+                            row.className = "horizontalContainer"
                             var opt1 = document.createElement("div")
                             var opt2 = document.createElement("div")
-                            opt2.className="verticalContainer"
+                            opt2.className = "verticalContainer"
                             var opt2a = document.createElement("div")
                             var opt2b = document.createElement("div")
 
                             opt2.appendChild(opt2a)
                             opt2.appendChild(opt2b)
 
-                            //opt.setAttribute("value", peerArray[eachNode]["host"])
                             opt1.innerText = peerArray[eachNode]["name"];
-                            var anchor=document.createElement("a")
-                            anchor.innerText=peerArray[eachNode]["ip"];
-                            anchor.href="http://"+peerArray[eachNode]["ip"];
-                            anchor.target="_blank"
+                            var anchor = document.createElement("a")
+                            anchor.innerText = peerArray[eachNode]["ip"];
+                            anchor.href = "http://" + peerArray[eachNode]["ip"];
+                            anchor.target = "_blank"
                             opt2a.appendChild(anchor)
 
                             populateSinglePeer(anchor.href, opt2b)
 
                             row.appendChild(opt1)
                             row.appendChild(opt2)
-                            //row.appendChild(opt3)
                             peers.appendChild(row);
                         }
 
                     }
 
-                    //clearStatus();
-                    //document.getElementById('rescanPeers').hidden = false;
-                    //document.getElementById('scanning').innerText = "";
-
-                })            
+                })
 
         }
 
@@ -336,7 +305,7 @@
 
             xhr.send();
 
-            }
+        }
 
 
         function ResetWIFI() {
@@ -359,7 +328,7 @@
             // otaDetails
             document.getElementById('otaDetails').hidden = true;
             document.getElementById('otaUpdating').hidden = false;
-            document.getElementById('otaUpdating').innerText="Trying update ..."
+            document.getElementById('otaUpdating').innerText = "Trying update ..."
 
             var jsonData = {};
 
@@ -393,8 +362,7 @@
                     // parse it
                     var jsonResponse = JSON.parse(xhr.responseText);
                     // HTTP_UPDATE_OK
-                    if (jsonResponse['result'] != 2)
-                     {
+                    if (jsonResponse['result'] != 2) {
                         alert(jsonResponse['Details']['espNarrative'])
                     }
                     else {
@@ -414,4 +382,5 @@
     </script>
 
 </BODY>
+
 </HTML>
