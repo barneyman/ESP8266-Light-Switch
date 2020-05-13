@@ -47,6 +47,14 @@
         <div id="admin" hidden>
 
             <fieldset>
+                <legend>Name</legend>
+                <div class="horizontalContainer">
+                    <div><input type="text" id="friendlyname"></div>
+                    <div><button onclick="setName()">Set</button></div>
+                </div>
+            </fieldset>
+
+            <fieldset>
                 <legend>Options</legend>
                 <div class="horizontalContainer">
                     <div>Reboot the device</div>
@@ -134,10 +142,13 @@
                         checkbox.checked=true;
                     }
 
+                    var fname=document.getElementById("friendlyname");
+                    fname.value=data["friendlyName"]
+
                 })
         }
 
-        function changePrelease()
+        function setConfig(config)
         {
             let url = base + '/json/config'
 
@@ -146,13 +157,34 @@
             xhr.open("POST", url, true);
             xhr.setRequestHeader("Content-type", "text/plain");
 
+            xhr.send(JSON.stringify(config));
+
+        }
+
+        function setName()
+        {
             var jsonData={}
+            var fname=document.getElementById("friendlyname");
+            jsonData["friendlyName"]=fname.value;
 
+            //xhr.send(JSON.stringify(jsonData));
+            setConfig(jsonData)
+
+        }
+
+        function changePrelease()
+        {
+            // let url = base + '/json/config'
+            // var xhr = new XMLHttpRequest();
+            // xhr.open("POST", url, true);
+            // xhr.setRequestHeader("Content-type", "text/plain");
+
+            var jsonData={}
             var checkbox=document.getElementById("prerelease");
-
             jsonData["prerelease"]=checkbox.checked?1:0;
 
-            xhr.send(JSON.stringify(jsonData));
+            //xhr.send(JSON.stringify(jsonData));
+            setConfig(jsonData)
 
         }
 
