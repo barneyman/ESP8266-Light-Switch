@@ -115,12 +115,8 @@ volatile bool updateInProgress=false;
 	#define _VERSION_FRIENDLY	"sonoff_basic"
 	#elif defined(ARDUINO_ESP8266_WEMOS_D1MINI)
 	#define _VERSION_FRIENDLY	"wemosD1"
-	#elif defined (_SONOFF_BASIC_EXTRA_SWITCH)
-	#define _VERSION_FRIENDLY	"lightE_"
-	#elif defined(_AT_RGBSTRIP)
-	#define _VERSION_FRIENDLY	"lightRGB_"
 	#else
-	#define _VERSION_FRIENDLY	"wemosD1"
+	#define _VERSION_FRIENDLY	"unknown"
 	#endif
 
 #else
@@ -131,9 +127,8 @@ volatile bool updateInProgress=false;
 
 #ifndef _VERSION_NUM_CLI
 
-//	#define _VERSION_NUM "v99.99.99.pr"
-	#define _VERSION_NUM "v0.0.1.pr"
-
+	#define _VERSION_NUM "v99.99.99.pr"
+//	#define _VERSION_NUM "v0.0.1.pr"
 	#define _DEVELOPER_BUILD
 
 #else
@@ -392,6 +387,10 @@ struct
 	// TODO - change this to device friendly name
 	String friendlyName;
 
+	// do we want prereleases
+	bool prereleaseRequired;
+
+
 	// sensors
 	std::vector<baseSensor*>	sensors;
 
@@ -409,7 +408,9 @@ struct
 		"","",false, true
 	},
 
-	"Undefined"	// friendly name
+	"Undefined",	// friendly name
+
+	false
 
 
 };
@@ -688,10 +689,12 @@ void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState)
 // honour current switch state
 void RevertAllSwitch()
 {
+	dblog.println(debug::dbInfo, "RevertAllSwitch");
 
 	for(auto each=Details.switches.begin();each!=Details.switches.end();each++)
 	{
 		(*each)->HonourCurrentSwitch();
+		yield();
 	}
 
 }
@@ -806,6 +809,9 @@ void WriteJSONconfig()
 	root["schemaVersion"]=CURRENT_SCHEMA_VER;
 
 	root["friendlyName"] = Details.friendlyName;
+
+	root["prerelease"]=Details.prereleaseRequired;
+
 
 	wifiInstance.WriteDetailsToJSON(root, Details.wifi);
 
@@ -961,6 +967,16 @@ void ReadJSONconfig()
 			Details.friendlyName = interim;
 	}
 
+	if(root.containsKey("prerelease"))
+	{
+		Details.prereleaseRequired=root["prerelease"];
+	}
+	else
+	{
+		Details.prereleaseRequired=false;
+	}
+	
+
 	wifiInstance.ReadDetailsFromJSON(root, Details.wifi);
 
 #ifdef NUM_SOCKETS
@@ -1029,7 +1045,7 @@ void PreserveState()
 
 }
 
-void RestoreState()
+bool RestoreState()
 {
 	dblog.println(debug::dbVerbose, "RestoreState");
 
@@ -1067,7 +1083,12 @@ void RestoreState()
 		SPIFFS.remove(_JSON_PRESERVED_STATE_FILE);
 
 	}
-
+	else
+	{
+		return false;
+	}
+	
+	return true;
 }
 
 
@@ -1146,7 +1167,6 @@ void AddSwitch(baseSwitch *newSwitch)
 
 #endif		
 		dblog.println(debug::dbInfo, "Added switch");
-		newSwitch->HonourCurrentSwitch();
 	}
 }
 
@@ -1310,6 +1330,7 @@ void setup(void)
 #elif defined(ARDUINO_ESP8266_WEMOS_D1MINI)
 
 	Details.sensors.push_back(new PIRInstantSensor(&dblog, D7));
+	AddSwitch(new WemosRelayShield(&dblog));
 
 #endif
 
@@ -1348,10 +1369,11 @@ void setup(void)
 
 #endif // _WIP
 
-	RestoreState();
-
-	// default off, and don't force switches
-	// DoAllSwitch(false,false);
+	if(!RestoreState())
+	{
+		// wander thru all the switches, honouring
+		RevertAllSwitch();
+	}
 
 	// try to connect to the wifi
 	wifiInstance.ConnectWifi(intent, Details.wifi);
@@ -1487,19 +1509,24 @@ void InstallWebServerHandlers()
 		for(int updates=0;(updates<2) && (result==HTTP_UPDATE_OK);updates++)
 		{
 
+			// augment the url with a prerelease parameter
+			String urlArgs="?prerelease="+String((Details.prereleaseRequired?"true":"false"));
+			dblog.println(debug::dbInfo,urlArgs.c_str());
+
+
 			// lets check for SPIFFs update first
 			
 			if(!updates)
 			{
-				dblog.println(debug::dbImportant, "updating SPIFFS");
-				result=ESPhttpUpdate.updateSpiffs(wifiInstance.m_wificlient ,urlSpiffs,_MYVERSION);
+				dblog.println(debug::dbImportant, "updating SPIFFS ...");
+				result=ESPhttpUpdate.updateSpiffs(wifiInstance.m_wificlient ,urlSpiffs+urlArgs,_MYVERSION);
 			}
 			else
 			{
-				dblog.println(debug::dbImportant, "updating BIN");
+				dblog.println(debug::dbImportant, "updating BIN ...");
 				// we do some clean up so let me boot
 				ESPhttpUpdate.rebootOnUpdate(false);
-				result=ESPhttpUpdate.update(url, _MYVERSION);
+				result=ESPhttpUpdate.update(url+urlArgs, _MYVERSION);
 			}
 
 			switch (result)
@@ -1583,7 +1610,7 @@ void InstallWebServerHandlers()
 
 	});
 
-	wifiInstance.server.on("/button", []() {
+	wifiInstance.server.on("/button",HTTP_POST, []() {
 
 		dblog.println(debug::dbInfo, "/button");
 
@@ -1688,7 +1715,7 @@ void InstallWebServerHandlers()
 
 #ifdef _DEVELOPER_BUILD
 
-	wifiInstance.server.on("/reboot", []() {
+	wifiInstance.server.on("/reboot",HTTP_POST, []() {
 
 		dblog.println(debug::dbImportant, "/reboot");
 
@@ -1700,7 +1727,7 @@ void InstallWebServerHandlers()
 
 #ifdef _ALLOW_WIFI_RESET_OVER_WIFI
 
-	wifiInstance.server.on("/resetWIFI", []() {
+	wifiInstance.server.on("/resetWIFI",HTTP_POST, []() {
 
 		dblog.println(debug::dbImportant, "/resetWIFI");
 
@@ -1710,7 +1737,7 @@ void InstallWebServerHandlers()
 
 #endif
 
-	wifiInstance.server.on("/stopAP", []() {
+	wifiInstance.server.on("/stopAP",HTTP_POST, []() {
 
 		dblog.println(debug::dbImportant, "/stopAP");
 
@@ -1785,6 +1812,10 @@ void InstallWebServerHandlers()
 			Details.friendlyName = root["friendlyName"].as<char*>();
 		}
 
+		if (root.containsKey("prerelease"))
+		{
+			Details.prereleaseRequired = root["prerelease"]?true:false;
+		}
 
 #ifdef _AT_RGBSTRIP
 
@@ -1882,11 +1913,13 @@ void InstallWebServerHandlers()
 
 		String ssid = root["ssid"];
 		String pwd = root["pwd"];
+		String friendly = root["friendlyName"];
 
 		// sanity check these values
 
 		Details.wifi.ssid = ssid;
 		Details.wifi.password = pwd;
+		Details.friendlyName=friendly;
 
 		// dhcp or static?
 		if (root["dhcp"] == 1)
@@ -1923,7 +1956,6 @@ void InstallWebServerHandlers()
 	});
 
 	// GET
-
 	
 	wifiInstance.server.on("/json/state", HTTP_GET, []() {
 		// give them back the port / switch map
@@ -2026,6 +2058,7 @@ void InstallWebServerHandlers()
 #endif
 
 		root["friendlyName"] = Details.friendlyName;
+		root["prerelease"]=Details.prereleaseRequired?1:0;
 
 #ifdef _AT_RGBSTRIP
 		root["ledCount"] = Details.rgbLedCount;
@@ -2084,6 +2117,8 @@ void InstallWebServerHandlers()
 		root["ssid"] = wifiInstance.SSID();
 		if(wifiInstance.localIP().isSet())
 			root["ip"] = wifiInstance.localIP().toString();
+
+		root["friendlyName"]=Details.friendlyName;
 
 		String jsonText;
 		root.prettyPrintTo(jsonText);
@@ -2147,6 +2182,7 @@ void InstallWebServerHandlers()
 
 		JsonObject &root = jsonBuffer.createObject();
 		root["name"] = wifiInstance.m_hostName.c_str();
+		root["friendlyName"] = Details.friendlyName;
 
 		// let's get all wifis we can see
 		std::vector<std::pair<String, int>> allWifis;
