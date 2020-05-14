@@ -127,8 +127,8 @@ volatile bool updateInProgress=false;
 
 #ifndef _VERSION_NUM_CLI
 
-	#define _VERSION_NUM "v99.99.99.pr"
-//	#define _VERSION_NUM "v0.0.1.pr"
+//	#define _VERSION_NUM "v99.99.99.pr"
+	#define _VERSION_NUM "v0.0.1.pr"
 	#define _DEVELOPER_BUILD
 
 #else
@@ -389,6 +389,9 @@ struct
 
 	// do we want prereleases
 	bool prereleaseRequired;
+
+	// do we only upgrade when the relay is off?
+	bool upgradeOnlyWhenRelayOff;
 
 
 	// sensors
@@ -812,6 +815,8 @@ void WriteJSONconfig()
 
 	root["prerelease"]=Details.prereleaseRequired;
 
+	root["upgradeOnlyWhenRelayOff"]=Details.upgradeOnlyWhenRelayOff;
+
 
 	wifiInstance.WriteDetailsToJSON(root, Details.wifi);
 
@@ -975,6 +980,11 @@ void ReadJSONconfig()
 	{
 		Details.prereleaseRequired=false;
 	}
+
+	if(root.containsKey("upgradeOnlyWhenRelayOff"))
+		Details.upgradeOnlyWhenRelayOff=root["upgradeOnlyWhenRelayOff"];
+	else
+		Details.upgradeOnlyWhenRelayOff=true;
 	
 
 	wifiInstance.ReadDetailsFromJSON(root, Details.wifi);
@@ -1486,6 +1496,20 @@ void InstallWebServerHandlers()
 		// 'plain' is the secret source to get to the body
 		JsonObject& root = jsonBuffer.parseObject(wifiInstance.server.arg("plain"));
 
+		if(Details.upgradeOnlyWhenRelayOff)
+		{
+			for(auto each=Details.switches.begin();each!=Details.switches.end();each++)
+			{
+				if((*each)->GetRelay())
+				{
+					// it's on ... bounce
+					dblog.println(debug::dbImportant, "ignoring upgrade because the relay is ON");
+					wifiInstance.server.send(403, "application/json", "{ reason: 'not while turned on' }");
+					return;
+				}
+			}
+		}
+
 /*
 		// Legacy data was this
 
@@ -1581,7 +1605,7 @@ void InstallWebServerHandlers()
 		dblog.println(debug::dbImportant, "saving switch state\n\r");
 
 		// no point - core killed the IP stack during the update
-		//wifiInstance.server.send(200, "application/json", bodyText);
+		wifiInstance.server.send(200, "application/json", bodyText);
 
 		// preserve, reboot, if it worked
 		if(result==HTTP_UPDATE_OK)
@@ -1700,6 +1724,64 @@ void InstallWebServerHandlers()
 
 	});
 
+	// LEGACY - remove when the beach house is upgraded past 0.0.32 and home assistant does POSTS
+	wifiInstance.server.on("/button", []() {
+
+		dblog.println(debug::dbInfo, "/button");
+
+		for (int count = 0; count < wifiInstance.server.args(); count++)
+		{
+			dblog.printf(debug::dbInfo, "%d. %s = %s \n\r", 
+				count+1, 
+				wifiInstance.server.argName(count).c_str(), 
+				wifiInstance.server.arg(count).c_str()
+			);
+		}
+
+
+
+		if (wifiInstance.server.hasArg("action"))
+		{
+			bool action = wifiInstance.server.arg("action") == "on" ? true : false;
+			
+			if(wifiInstance.server.hasArg("port"))
+			{
+				int port=wifiInstance.server.arg("port").toInt();
+				if(port<Details.switches.size())
+				{
+					Details.switches[port]->DoRelay(action);
+				}
+				else
+				{
+					dblog.printf(debug::dbWarning, "asked to action %d - exceeds maximum %d\r\n", port,Details.switches.size()-1);
+				}
+			}
+			else
+			{
+				// just go thru them all
+				for(auto each=Details.switches.begin();each!=Details.switches.end();each++)
+					(*each)->DoRelay(action);
+			}
+			
+
+		}
+
+		delay(_WEB_TAR_PIT_DELAY);
+
+		SendServerPage();
+
+	});
+
+
+
+
+
+
+
+
+
+
+
 	wifiInstance.server.on("/resetCounts", []() {
 
 		dblog.println(debug::dbImportant, "/resetCounts");
@@ -1816,6 +1898,9 @@ void InstallWebServerHandlers()
 		{
 			Details.prereleaseRequired = root["prerelease"]?true:false;
 		}
+
+		if(root.containsKey("upgradeOnlyWhenRelayOff"))
+			Details.upgradeOnlyWhenRelayOff=root["upgradeOnlyWhenRelayOff"]?true:false;
 
 #ifdef _AT_RGBSTRIP
 
@@ -2059,6 +2144,7 @@ void InstallWebServerHandlers()
 
 		root["friendlyName"] = Details.friendlyName;
 		root["prerelease"]=Details.prereleaseRequired?1:0;
+		root["upgradeOnlyWhenRelayOff"]=Details.upgradeOnlyWhenRelayOff?1:0;
 
 #ifdef _AT_RGBSTRIP
 		root["ledCount"] = Details.rgbLedCount;

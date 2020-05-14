@@ -68,6 +68,10 @@
                     <div>Use Prereleases</div>
                     <div><input type="checkbox" id="prerelease" onclick="changePrelease()"></div>
                 </div>
+                <div class="horizontalContainer">
+                    <div>Upgrade When OFF</div>
+                    <div><input type="checkbox" id="upgradeOnlyWhenRelayOff" onclick="changeUpgradeOnlyWhenRelayOff()"></div>
+                </div>
             </fieldset>
             <br hidden>
             <fieldset hidden>
@@ -145,6 +149,12 @@
                     var fname=document.getElementById("friendlyname");
                     fname.value=data["friendlyName"]
 
+                    var upgradeOnlyWhenRelayOff=document.getElementById("upgradeOnlyWhenRelayOff")
+                    if(data["upgradeOnlyWhenRelayOff"]==0)
+                        upgradeOnlyWhenRelayOff.checked=false;
+                    else
+                        upgradeOnlyWhenRelayOff.checked=true;
+
                 })
         }
 
@@ -166,26 +176,26 @@
             var jsonData={}
             var fname=document.getElementById("friendlyname");
             jsonData["friendlyName"]=fname.value;
-
-            //xhr.send(JSON.stringify(jsonData));
             setConfig(jsonData)
 
         }
 
         function changePrelease()
         {
-            // let url = base + '/json/config'
-            // var xhr = new XMLHttpRequest();
-            // xhr.open("POST", url, true);
-            // xhr.setRequestHeader("Content-type", "text/plain");
-
             var jsonData={}
             var checkbox=document.getElementById("prerelease");
             jsonData["prerelease"]=checkbox.checked?1:0;
-
-            //xhr.send(JSON.stringify(jsonData));
             setConfig(jsonData)
 
+        }
+
+        function changeUpgradeOnlyWhenRelayOff()
+        {
+            
+            var jsonData={}
+            var checkbox=document.getElementById("upgradeOnlyWhenRelayOff");
+            jsonData["upgradeOnlyWhenRelayOff"]=checkbox.checked?1:0;
+            setConfig(jsonData)
         }
 
         function PopulateSwitchSensorList(clearTheList) {
