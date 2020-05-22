@@ -152,7 +152,7 @@ public:
 			JsonObject& restInfo = jsonRestInfoBuffer.parseObject(eachHA->m_extra);
 			String endPoint=restInfo["endpoint"];
 
-			dblog->printf(debug::dbImportant,"Posting %s:%u%s\n\r", eachHA->m_addr.toString().c_str(), eachHA->m_port, endPoint.c_str());
+			dblog->printf(debug::dbInfo,"Posting %s:%u%s\n\r", eachHA->m_addr.toString().c_str(), eachHA->m_port, endPoint.c_str());
 
 			if (thisClient.begin(eachHA->m_addr.toString(), eachHA->m_port, endPoint )) {  
 
@@ -164,7 +164,7 @@ public:
 				thisClient.addHeader("Authorization", bearerToken);
 
 				int postresult=thisClient.POST(bodyText);
-				dblog->printf(debug::dbImportant,"POST %s returned %d\r",bodyText.c_str(), postresult);
+				dblog->printf(debug::dbInfo,"POST %s returned %d\r",bodyText.c_str(), postresult);
 
 				thisClient.end();
 			}
