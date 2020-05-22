@@ -21,11 +21,17 @@
 
         <iframe src="HeaderFrame.htm" id="header" name="header" onload="headerLoaded()"></iframe>
 
+        <script>
+        const frames = ["home", "admin", "logging"];
+
+        </script>
 
         <ul id="menu" class="main">
             <li><a href="#" onclick="onMenu('home')">Home</a></li>
             <li><a href="#" onclick="onMenu('admin')">Admin</a></li>
+            <li><a href="#" onclick="onMenu('logging')">Logging</a></li>
         </ul>
+
 
         <div id="home">
 
@@ -53,10 +59,10 @@
                     <div><button onclick="setName()">Set</button></div>
                 </div>
             </fieldset>
-
+            <br>
             <fieldset>
                 <legend>Options</legend>
-                <div class="horizontalContainer">
+                <div class="horizontalContainer" id="rebootButton" hidden>
                     <div>Reboot the device</div>
                     <div><button onclick="Reboot()">Reboot</button></div>
                 </div>
@@ -94,11 +100,41 @@
 
         </div>
 
+        <div id="logging" hidden>
+            <fieldset>
+                <legend>Level</legend>
+                <div class="horizontalContainer">
+                    <div>
+                        <select id="loggingLevel"></select>
+                    </div>
+                    <div>
+                        <button onclick="setLogLevel()">Set</button>
+                    </div>
+                </div>
+                </select>
+            </fieldset>
+            <br>
+            <fieldset>
+                <legend>Implementation</legend>
+                <div class="horizontalContainer">
+                <select id="loggingType"></select>
+                <button onclick="setLogImpl()">Set</button>
+                </div>
+                </select>
+            </fieldset>
+            <fieldset hidden>
+                <legend>Serial</legend>
+            </fieldset>
+            <fieldset hidden>
+                <legend>SysLog</legend>
+            </fieldset>
+        </div>
+
+
     </div>
 
     <script>
 
-        const frames = ["home", "admin"];
 
 
         function onMenu(divNameShow) {
@@ -122,7 +158,97 @@
             PopulateSwitchSensorList(true)
             fetchPeers()
             getConfig()
+            getLogging()
             //clearStatus();
+        }
+
+        function postSetting(config, url)
+        {
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", url, true);
+            xhr.setRequestHeader("Content-type", "text/plain");
+            xhr.send(JSON.stringify(config));
+            
+        }
+
+        function setDebug(config)
+        {
+            let url = base + '/json/logging'
+            postSetting(config,url)
+        }
+
+
+        function setLogLevel()
+        {
+            var jsonData={}
+            var logLevel=document.getElementById("loggingLevel");
+            jsonData["level"]=logLevel.value;
+            setDebug(jsonData);
+
+        }
+
+        function setLogImpl()
+        {
+            var jsonData={}
+            var logType=document.getElementById("loggingType");
+            jsonData["impl"]=logType.value;
+            setDebug(jsonData);
+        }
+
+        function getLogging()
+        {
+            let url = base + '/json/logging'
+            fetch(url)
+                .then(function (response) {
+                    if (response.ok)
+                        return response.json();
+                    throw new Error('network err')
+                })
+                .then(function (data) {
+
+                    var logLevel=document.getElementById("loggingLevel");
+                    var logType=document.getElementById("loggingType");
+
+                    logLevel.innerHTML=''
+
+                    for (var eachLevel in data["levels"]) 
+                    {
+                        if (data["levels"].hasOwnProperty(eachLevel))
+                        {
+
+                            var opt=document.createElement("option")
+                            opt.value=data["levels"][eachLevel]["value"]
+                            opt.innerText=data["levels"][eachLevel]["name"]
+
+                            logLevel.appendChild(opt)
+
+                            if(opt.value==data["level"])
+                            {
+                                opt.setAttribute("selected","selected")
+                            }
+
+                        }
+                    }
+
+                    for (var eachImpl in data["impls"]) 
+                    {
+                        if (data["impls"].hasOwnProperty(eachImpl))
+                        {
+                            var opt=document.createElement("option")
+                            opt.value=data["impls"][eachImpl]["value"]
+                            opt.innerText=data["impls"][eachImpl]["name"]
+
+                            if(opt.value==data["impl"])
+                            {
+                                opt.setAttribute("selected","selected")
+                            }
+
+                            logType.appendChild(opt)
+                        }
+                    }
+
+
+                })            
         }
 
         function getConfig()
@@ -155,20 +281,18 @@
                     else
                         upgradeOnlyWhenRelayOff.checked=true;
 
+                    if("developer" in data)
+                    {
+                        document.getElementById("rebootButton").hidden=false   
+                    }
+
                 })
         }
 
         function setConfig(config)
         {
             let url = base + '/json/config'
-
-            var xhr = new XMLHttpRequest();
-
-            xhr.open("POST", url, true);
-            xhr.setRequestHeader("Content-type", "text/plain");
-
-            xhr.send(JSON.stringify(config));
-
+            postSetting(config,url)
         }
 
         function setName()
@@ -397,6 +521,9 @@
 
 
         function ResetWIFI() {
+
+            if(confirm("Are you sure you wish to reset wifi?")==false)
+                return
 
             let url = base + '/resetWIFI'
 
