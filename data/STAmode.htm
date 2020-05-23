@@ -117,16 +117,11 @@
             <fieldset>
                 <legend>Implementation</legend>
                 <div class="horizontalContainer">
-                <select id="loggingType"></select>
+                <select id="loggingType" onchange="showCorrectConfigTab()"></select>
                 <button onclick="setLogImpl()">Set</button>
                 </div>
+                <div class="verticalContainer" id="implConfig"></div>
                 </select>
-            </fieldset>
-            <fieldset hidden>
-                <legend>Serial</legend>
-            </fieldset>
-            <fieldset hidden>
-                <legend>SysLog</legend>
             </fieldset>
         </div>
 
@@ -192,7 +187,120 @@
             var jsonData={}
             var logType=document.getElementById("loggingType");
             jsonData["impl"]=logType.value;
+
+            // then get any config
+            var configs=getImplConfigs()
+            var selector=document.getElementById("loggingType");
+            var selected=selector.options[selector.selectedIndex].innerText
+
+            for(var loop=0;loop<configs.length;loop++)
+            {
+                item=configs.item(loop)
+
+                if(item.getElementsByTagName("legend")[0].innerText==selected)
+                {
+                    var inputs=item.getElementsByTagName("input")
+                    var jsonConfig={}
+
+                    for(var eachItem=0;eachItem<inputs.length;eachItem++)
+                    {
+                        jsonConfig[inputs[eachItem].name]=inputs[eachItem].value
+                    }
+                    
+                    jsonData["config"]=jsonConfig
+
+                    break
+                }
+            }
+
+
             setDebug(jsonData);
+        }
+
+        function addConfigItems(container, name, configItems)
+        {
+            var configFieldSet=document.createElement("fieldset")
+            var configLegend=document.createElement("legend")
+            configLegend.innerText=name;
+            configFieldSet.appendChild(configLegend)
+
+
+            configItems.forEach(function(item) {
+
+                var configDiv=document.createElement("div")
+                configDiv.className="horizontalContainer"
+
+                configFieldSet.appendChild(configDiv)
+
+                var configName=document.createElement("div")
+                configName.innerText=item["name"]
+
+                configDiv.appendChild(configName)
+
+                switch(item["type"])
+                {
+                    case "text":
+                        var input=document.createElement("input")
+                        input.type="text"
+                        input.name=item["name"]
+                        if(item.hasOwnProperty("default"))
+                        {
+                            input.value=item["default"]
+                        }
+                        configDiv.appendChild(input)
+                        break
+                    case "number":
+                        var input=document.createElement("input")
+                        input.type="number"
+                        input.name=item["name"]
+                        if(item.hasOwnProperty("default"))
+                            {
+                                input.value=item["default"]
+                            }
+                        configDiv.appendChild(input)
+                        break
+
+                }
+
+
+            });
+
+            configFieldSet.hidden=true
+
+            container.appendChild(configFieldSet)
+
+            
+        }
+
+        function getImplConfigs()
+        {
+            // get the impl that's selected, and unhide that tab
+
+            var configDiv=document.getElementById("implConfig")
+
+            var configs=configDiv.getElementsByTagName("fieldset")
+
+            return configs
+
+        }
+
+        function showCorrectConfigTab()
+        {
+            // get the impl that's selected, and unhide that tab
+            var configs=getImplConfigs()
+            var selector=document.getElementById("loggingType");
+            var selected=selector.options[selector.selectedIndex].innerText
+
+            for(var loop=0;loop<configs.length;loop++)
+            {
+                item=configs.item(loop)
+
+                if(item.getElementsByTagName("legend")[0].innerText==selected)
+                    item.hidden=false
+                else
+                    item.hidden=true
+            }
+
         }
 
         function getLogging()
@@ -209,6 +317,9 @@
                     var logLevel=document.getElementById("loggingLevel");
                     var logType=document.getElementById("loggingType");
 
+                    var configDiv=document.getElementById("implConfig")
+
+                    logLevel.innerHTML=''
                     logLevel.innerHTML=''
 
                     for (var eachLevel in data["levels"]) 
@@ -234,6 +345,14 @@
                     {
                         if (data["impls"].hasOwnProperty(eachImpl))
                         {
+
+                            // get the internal config items
+                            var configItems=data["impls"][eachImpl]["config"]
+                            if(configItems.length)
+                            {
+                                addConfigItems(configDiv,data["impls"][eachImpl]["name"],configItems)
+                            }
+
                             var opt=document.createElement("option")
                             opt.value=data["impls"][eachImpl]["value"]
                             opt.innerText=data["impls"][eachImpl]["name"]
@@ -246,6 +365,8 @@
                             logType.appendChild(opt)
                         }
                     }
+
+                    showCorrectConfigTab()
 
 
                 })            
