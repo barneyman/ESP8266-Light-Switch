@@ -28,9 +28,6 @@
 
 #if defined(_SONOFF_BASIC) || defined(_SONOFF_BASIC_EXTRA_SWITCH)
 
-// without this, we use a MUXer
-#define _PHYSICAL_SWITCH_EXISTS
-#define NUM_SOCKETS	1
 
 // 1mb 128k spiffs gives you ~ 500k for bin file
 #define _OTA_AVAILABLE
@@ -38,7 +35,6 @@
 #elif defined(_AT_RGBSTRIP)
 
 #define _OTA_AVAILABLE
-#define NUM_SOCKETS	1
 
 
 
@@ -127,8 +123,8 @@ volatile bool updateInProgress=false;
 
 #ifndef _VERSION_NUM_CLI
 
-	#define _VERSION_NUM "v99.99.99.pr"
-//	#define _VERSION_NUM "v0.0.1.pr"
+//	#define _VERSION_NUM "v99.99.99.pr"
+	#define _VERSION_NUM "v0.0.1.pr"
 	#define _DEVELOPER_BUILD
 
 #else
@@ -220,144 +216,6 @@ bool resetWIFI = false;
 
 
 
-#ifdef _OLD_WAY
-
-
-
-#ifdef _ALLOW_WIFI_RESET_VIA_QUICKSWITCH
-// how many transitions we have to see (on -> off and v-v) within Details.resetWindowms before we assume a resey has been asked for
-#define RESET_ARRAY_SIZE 12
-#endif
-
-
-
-
-// none, is nothing (sort of logic hole)
-// Momentary push switch
-// Toggle switch
-// Virtual means nothing, just code reflected
-
-struct 
-{
-	// does this need saving
-	bool configDirty;
-
-	// ignore ISRs
-	bool ignoreISRrequests;
-
-#ifdef _AT_RGBSTRIP
-
-	unsigned rgbLedCount;
-
-#endif
-
-	// wifi deets
-	myWifiClass::wifiDetails wifi;
-
-
-	// how long to wait for the light switch to settle
-	unsigned long debounceThresholdmsToggle, debounceThresholdmsMomentary;
-
-	// 6 switches in this time force an AP reset
-	unsigned long resetWindowms;
-
-	// persisted - *USER* supplied
-	String friendlyName;
-
-#ifdef NUM_SOCKETS
-	// the switches are named
-	struct {
-
-		// persisted - RO
-		String name;
-
-		unsigned relay;
-		enum switchState lastState;
-
-		// not persisted
-		enum switchState preferredDefault;
-		enum  typeOfSwitch switchType;
-#ifdef GPIO_SWITCH2
-		enum  typeOfSwitch altSwitchType;
-#endif
-		// when we saw this switch change state - used to debounce the switch
-		unsigned long last_seen_bounce;
-
-		// how many times we've see this PHYSICAL switch .. er ... switch
-		unsigned long switchCount;
-
-#ifdef _AT_RGBSTRIP
-		unsigned long lastRGB;
-#endif
-
-
-// this must be last in the array (it gets cleaned specifically)
-#ifdef _ALLOW_WIFI_RESET_VIA_QUICKSWITCH
-		unsigned long lastSwitchesSeen[RESET_ARRAY_SIZE];
-#endif
-
-
-
-
-	} switches[NUM_SOCKETS];
-#endif
-
-} Details = {
-
-	false, false,
-
-#ifdef _AT_RGBSTRIP
-
-	_NUM_LEDS,
-
-#endif
-
-	{
-		"","",false, true
-	},
-
-	BOUNCE_TIMEOUT_DEFAULT, BOUNCE_TIMEOUT_DEFAULT*3,
-
-	QUICK_SWITCH_TIMEOUT_DEFAULT,
-
-#ifdef _AT_RGBSTRIP
-	"Undefined RGB",
-#elif defined( _SONOFF_BASIC )
-	"Undefined SonoffS",
-#elif defined( _SONOFF_BASIC_EXTRA_SWITCH )
-	"Undefined SonoffE",
-#else
-	"Undefined",
-#endif
-
-#if defined(_SONOFF_BASIC) || defined(_SONOFF_BASIC_EXTRA_SWITCH)
-	{
-#ifdef _SONOFF_BASIC_EXTRA_SWITCH
-		{ "Sonoff",0,swUnknown, swOff, stMomentary,stToggle, 0, 0 }
-#else
-		{ "Sonoff",0, swUnknown, swOff, stMomentary, 0,0 }
-#endif
-	}
-#elif defined( _AT_RGBSTRIP )
-
-{
-	{ "RGB",0, swUnknown, swOff, stVirtual, 0,0, 0x7f7f7f }
-}
-
-#elif defined( _PHYSICAL_SWITCH_EXISTS )
-	{
-		{ "Device A",0, swUnknown,swOff, stMomentary, 0,0 }
-	}
-
-#endif
-};
-
-
-#else
-
-
-
-
 #define CURRENT_SCHEMA_VER	2
 
 // main config
@@ -398,9 +256,15 @@ struct
 	false,	// dirty
 
 	// wifi deets
+#ifdef _DEVELOPER_BUILD
 	{
 		"","",false, true
 	},
+#else	
+	{
+		"","",false, true
+	},
+#endif
 
 	"Undefined",	// friendly name
 
@@ -417,7 +281,7 @@ struct
 };
 
 
-#endif
+
 
 
 
@@ -436,32 +300,6 @@ std::vector<myWifiClass::mdnsService> services;
 
 
 
-#ifndef _PHYSICAL_SWITCH_EXISTS
-
-#ifdef NUM_SOCKETS
-
-unsigned MapSwitchToRelay(unsigned switchNumber)
-{
-	unsigned relayNumber = switchNumber;
-
-	if (relayNumber > NUM_SOCKETS || relayNumber < 0)
-	{
-		if(Details.dblog) Details.dblog->printf(debug::dbError, "MapSwitchToRelay called out of bounds %u\n\r", relayNumber);
-	}
-	else
-	{
-		relayNumber=Details.switches[switchNumber].relay;
-	}
-
-	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "	MapSwitchToRelay %u -> %u\r\n", switchNumber, relayNumber);
-
-	return relayNumber;
-
-}
-
-#endif
-
-#endif
 
 #ifdef GPIO_SWITCH2
 // ICACHE_RAM_ATTR  makes it ISR safe
@@ -494,54 +332,7 @@ void ICACHE_RAM_ATTR OnSwitchISR2()
 }
 #endif
 
-#ifdef _OLD_WAY
 
-#ifdef GPIO_SWITCH
-void ICACHE_RAM_ATTR OnSwitchISR()
-{
-	if (Details.ignoreISRrequests)
-		return;
-
-	// if we're up to our neck in something else (normally WIFI negotiation) ignore this
-	if (wifiInstance.busyDoingSomethingIgnoreSwitch)
-	{
-		if(Details.dblog) Details.dblog->isr_println(debug::dbInfo, "	OnSwitchISR redundant");
-
-#ifndef _PHYSICAL_SWITCH_EXISTS
-		// ask what changed, clear interrupt, so we don't leave the INTerrupt hanging
-		mcp.InterruptCauseAndCurrentState(true);
-#endif
-		return;
-	}
-
-	if(Details.dblog) Details.dblog->isr_println(debug::dbInfo,"	OnSwitchISR in");
-
-
-	// ask what changed, clear interrupt
-	int causeAndState =
-#ifdef _PHYSICAL_SWITCH_EXISTS
-		(Details.switches[0].switchType == stMomentary ?
-		// fake the cause and reflect INVERSE state of relay - because MOMENTARY
-#ifdef GPIO_RELAY
-		(1 << 8) | (digitalRead(GPIO_RELAY) == HIGH ? 0 : 1) :
-#else
-			0:
-#endif
-		// fake the cause and rstate of switch - because TOGGLE
-		(1 << 8) | (digitalRead(GPIO_SWITCH) == HIGH ? 1 : 0));
-
-#else
-		mcp.InterruptCauseAndCurrentState(false);
-#endif
-
-	HandleCauseAndState(causeAndState);
-
-	if(Details.dblog) Details.dblog->isr_println(debug::dbVerbose, "OnSwitchISR out");
-
-}
-#endif
-
-#endif
 
 
 #ifdef _AT_RGBSTRIP
@@ -602,90 +393,6 @@ void DoRGBPaletteSwitch(bool on, unsigned rgbPalette)
 
 #endif
 
-#ifdef NUM_SOCKETS
-#ifdef _OLD_WAY
-
-void DoSwitchAntiBounce(int port, bool on)
-{
-	int causeAndState =
-#ifdef _PHYSICAL_SWITCH_EXISTS
-	 (1 << 8) | (on ? 1 : 0) ;
-#else
-		// the switch numbers are 0 based, but needs to be 1 based to make the bit math work
-		((port+1) << 8) | (on ? 1 : 0);
-#endif
-		HandleCauseAndState(causeAndState);
-}
-
-void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState)
-{
-	for (unsigned switchPort = 0; switchPort < NUM_SOCKETS; switchPort++)
-	{
-		if(Details.dblog) Details.dblog->isr_printf(debug::dbVerbose, "Checking port %d [%04x]\r\n", switchPort, causeAndState);
-
-		// +8 to get HIBYTE to see if this port CAUSED the interrupt
-		if (causeAndState & (1 << (switchPort + 8)))
-		{
-
-#if defined(_ALLOW_WIFI_RESET_VIA_QUICKSWITCH) 
-			unsigned long now = micros(), interval = 0;
-#endif
-
-			// gate against messy tactile/physical switches
-			interval = now - Details.switches[switchPort].last_seen_bounce;
-
-			if(Details.dblog) Details.dblog->isr_printf(debug::dbVerbose, "%lu ms ", interval / 1000UL);
-
-			// if it's been longer than the bounce threshold since we saw this button, honour it
-			unsigned long bounceToHonour = Details.switches[switchPort].switchType == stMomentary ? Details.debounceThresholdmsMomentary : Details.debounceThresholdmsToggle;
-			if (interval >= (unsigned long)(bounceToHonour * 1000))
-			{
-#ifdef _ALLOW_WIFI_RESET_VIA_QUICKSWITCH
-				// move the last seens along
-				for (unsigned mover = 0; mover < RESET_ARRAY_SIZE - 1; mover++)
-					Details.switches[switchPort].lastSwitchesSeen[mover] = Details.switches[switchPort].lastSwitchesSeen[mover + 1];
-
-				Details.switches[switchPort].lastSwitchesSeen[RESET_ARRAY_SIZE - 1] = now / 1000;
-
-				if(Details.dblog) Details.dblog->isr_printf(debug::dbVerbose, "lastSwitchesSeen (ms) ");
-
-				for (int each = 0; each < RESET_ARRAY_SIZE; each++)
-				{
-					if(Details.dblog) Details.dblog->isr_printf(debug::dbVerbose, "%lu ", Details.switches[switchPort].lastSwitchesSeen[each]);
-				}
-
-				if(Details.dblog) Details.dblog->isr_printf(debug::dbVerbose, "\n\r");
-#endif
-
-				// having CAUSED the interrupt, reflect its STATE in the DoRelay call
-				DoSwitch(switchPort, (causeAndState & (1 << switchPort)) ? true : false, false);
-
-				Details.switches[switchPort].switchCount++;
-
-#ifdef _ALLOW_WIFI_RESET_VIA_QUICKSWITCH
-
-				// remember the last RESET_ARRAY_SIZE - i'm assuming we won't wrap
-				// only reset if we're currently STA
-				if (wifiInstance.currentMode == myWifiClass::wifiMode::modeSTA)
-				{
-					if (Details.switches[switchPort].lastSwitchesSeen[RESET_ARRAY_SIZE - 1] - Details.switches[switchPort].lastSwitchesSeen[0] < (Details.resetWindowms))
-					{
-						if(Details.dblog) Details.dblog->isr_printf(debug::dbImportant, "RESETTING WIFI!\n\r");
-						resetWIFI = true;
-					}
-				}
-#endif
-			}
-			else
-			{
-				if(Details.dblog) Details.dblog->isr_printf(debug::dbInfo, "bounce ignored\n\r");
-			}
-			Details.switches[switchPort].last_seen_bounce = now;
-		}
-	}
-}
-#endif
-#endif
 
 // honour current switch state
 void RevertAllSwitch()
@@ -719,59 +426,6 @@ void DoAllSwitch(bool state, bool force)
 }
 
 
-#ifdef NUM_SOCKETS
-
-#ifdef _OLD_WAY
-// if forceSwitchToReflect change polarity of input switch if necessary to reflect this request
-void DoSwitch(unsigned portNumber, bool on, bool forceSwitchToReflect)
-{
-	if (portNumber > 7 || portNumber < 0)
-	{
-		if(Details.dblog) Details.dblog->isr_printf(debug::dbError, "DoSwitch called out of bounds %u\n\r", portNumber);
-		return;
-	}
-
-	// saw the switching of the relay create enough microp noise for the toggle switch to be fired
-	Details.ignoreISRrequests = true;
-
-
-	if(Details.dblog) Details.dblog->isr_printf(debug::dbImportant, "DoSwitch: relay %d %s %s\r\n", portNumber, on ? "ON" : "off", forceSwitchToReflect ? "FORCE" : "");
-
-#ifdef _PHYSICAL_SWITCH_EXISTS
-
-#ifdef GPIO_RELAY
-	digitalWrite(GPIO_RELAY, on ? HIGH : LOW);
-#endif
-
-
-#ifdef _SONOFF_BASIC
-	// LED is inverted on the sonoff
-	digitalWrite(GPIO_LED, on ? LOW : HIGH);
-#else
-	digitalWrite(GPIO_LED, on ? HIGH : LOW);
-#endif
-
-
-#else
-
-	if(Details.dblog) Details.dblog->isr_printf(debug::dbError, "no impl for DoSwitch");
-
-
-#endif
-
-	enum switchState newState = on ? swOn : swOff;;
-	// reflect in state
-	if (newState != Details.switches[portNumber].lastState)
-	{
-		Details.switches[portNumber].lastState = newState;
-		Details.configDirty = true;
-	}
-
-	Details.ignoreISRrequests = false;
-
-}
-#endif
-#endif
 
 
 
@@ -800,12 +454,6 @@ void WriteJSONconfig()
 	root["rgbCount"] = Details.rgbLedCount;
 #endif
 
-#ifdef _OLD_WAY
-	root["debounceThresholdmsMomentary"] = Details.debounceThresholdmsMomentary;	
-	root["debounceThresholdmsToggle"] = Details.debounceThresholdmsToggle;
-
-	root["resetWindowms"] = Details.resetWindowms;
-#endif
 
 	root["schemaVersion"]=CURRENT_SCHEMA_VER;
 
@@ -822,11 +470,6 @@ void WriteJSONconfig()
 
 	wifiInstance.WriteDetailsToJSON(root, Details.wifi);
 
-#ifdef NUM_SOCKETS
-
-	AddMapToJSON(root, NUM_SOCKETS);
-
-#endif
 
 	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "jsonBuffer.size used : %d\n\r", jsonBuffer.size());
 
@@ -1009,36 +652,6 @@ void ReadJSONconfig()
 
 	wifiInstance.ReadDetailsFromJSON(root, Details.wifi);
 
-#ifdef NUM_SOCKETS
-
-#ifdef _OLD_WAY
-	// add the switch map
-	JsonArray &switchMap = root["switchMap"];
-	if (switchMap.success())
-	{
-		for (unsigned each = 0; each < NUM_SOCKETS; each++)
-		{
-			JsonObject &theSwitch= switchMap[each]["switch"];
-			if(theSwitch.success())
-			{
-				Details.switches[each].relay = theSwitch["relay"];
-				Details.switches[each].name = (const char*)theSwitch["name"];
-				Details.switches[each].lastState = (enum switchState)(int)theSwitch["lastState"];
-
-#ifdef _AT_RGBSTRIP
-				if(theSwitch.containsKey("lastRGB"))
-					Details.switches[each].lastRGB = theSwitch["lastRGB"];
-#endif
-			}
-			else
-			{
-				if(Details.dblog) Details.dblog->printf(debug::dbImportant, "switchMap switch %d not found\n\r", each);
-			}
-		}
-	}
-#endif
-
-#endif
 
 }
 
@@ -1241,110 +854,6 @@ void setup(void)
 
 
 
-
-#ifdef _OLD_WAY
-
-#ifdef NUM_SOCKETS
-
-	// reset the bounce thresh-holds
-	for (int eachSwitch = 0; eachSwitch < NUM_SOCKETS; eachSwitch++)
-	{
-#ifdef _ALLOW_WIFI_RESET_VIA_QUICKSWITCH
-		// clean up the switch times
-		memset(&Details.switches[eachSwitch].lastSwitchesSeen, 0, sizeof(Details.switches[eachSwitch].lastSwitchesSeen));
-#endif
-
-		Details.switches[eachSwitch].switchCount = 0;
-		Details.switches[eachSwitch].last_seen_bounce = 0;
-	}
-
-#endif
-
-	if(Details.dblog) Details.dblog->printf(debug::dbImportant, "\r\n\n\nRunning %s\n\r", _MYVERSION);
-	if(Details.dblog) Details.dblog->printf(debug::dbImportant, "Hostname %s\n\r", wifiInstance.m_hostName.c_str());
-
-
-
-	SPIFFS.begin();
-
-	ReadJSONconfig();
-
-
-	if(Details.dblog) Details.dblog->println(debug::dbImportant, wifiInstance.m_hostName.c_str());
-	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "bounceMomentary %lu\n\r", Details.debounceThresholdmsMomentary);
-	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "bounceToggle %lu\n\r", Details.debounceThresholdmsToggle);
-	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "reset %lu\n\r", Details.resetWindowms);
-
-	enum myWifiClass::wifiMode intent = myWifiClass::wifiMode::modeUnknown;
-
-	if (Details.wifi.configured)
-	{
-		if(Details.dblog) Details.dblog->println(debug::dbInfo, "wifi credentials found");
-		if(Details.dblog) Details.dblog->println(debug::dbVerbose, Details.wifi.ssid);
-		if(Details.dblog) Details.dblog->println(debug::dbVerbose, Details.wifi.password);
-		intent = myWifiClass::wifiMode::modeSTA;
-	}
-	else
-	{
-		if(Details.dblog) Details.dblog->println(debug::dbWarning, "WiFi not configured");
-		intent = myWifiClass::wifiMode::modeAP;
-
-	}
-
-#ifdef _AT_RGBSTRIP
-
-	rgbHandler.begin();
-
-#endif
-
-
-
-#ifdef _PHYSICAL_SWITCH_EXISTS
-
-	// set the relay pin to output
-#ifdef GPIO_RELAY
-	pinMode(GPIO_RELAY, OUTPUT);
-#endif
-
-
-#ifdef GPIO_SWITCH
-	// and the switch pin to input - pullup
-	pinMode(GPIO_SWITCH, INPUT_PULLUP);
-	// for momentary switches we just look for low
-	attachInterrupt(GPIO_SWITCH, OnSwitchISR, Details.switches[0].switchType == stMomentary ? FALLING : CHANGE);
-#endif
-
-#ifdef GPIO_SWITCH2
-	// and the switch pin to input - pullup
-	pinMode(GPIO_SWITCH2, INPUT_PULLUP);
-	// for toggle switches we just look for change
-//	attachInterrupt(GPIO_SWITCH2, OnSwitchISR2, Details.switches[0].altSwitchType == stMomentary ? ONLOW : CHANGE);
-	attachInterrupt(GPIO_SWITCH2, OnSwitchISR2, Details.switches[0].altSwitchType == stMomentary ? FALLING : CHANGE);
-#endif
-
-#endif
-
-#ifdef GPIO_LED
-	pinMode(GPIO_LED, OUTPUT);
-#endif
-
-
-	// default off, and don't force switches
-	DoAllSwitch(false,false);
-
-	// try to connect to the wifi
-	wifiInstance.ConnectWifi(intent, Details.wifi);
-
-
-	// honour current switch state
-	RevertAllSwitch();
-
-	// set up the callback handlers for the webserver
-	InstallWebServerHandlers();
-
-
-#else
-
 #ifdef _DEVELOPER_BUILD
 	// just sleep (to let the serial monitor attach)
 	delay(10000);
@@ -1442,7 +951,7 @@ void setup(void)
 	InstallWebServerHandlers();
 
 
-#endif
+
 
 }
 
@@ -1697,49 +1206,6 @@ void InstallWebServerHandlers()
 		}
 
 
-#ifdef _OLD_WAY
-
-
-		// one trick pony
-		if (wifiInstance.server.hasArg("action"))
-		{
-
-#if defined( _AT_RGBSTRIP )
-			bool action = wifiInstance.server.arg("action") == "on" ? true : false;
-
-			if (wifiInstance.server.hasArg("rgb") || wifiInstance.server.hasArg("r") || wifiInstance.server.hasArg("g") || wifiInstance.server.hasArg("b"))
-			{
-				unsigned rgb = 0;
-				if (wifiInstance.server.hasArg("rgb"))
-				{
-					rgb = wifiInstance.server.arg("rgb").toInt();
-				}
-				else
-				{
-					rgb = ((wifiInstance.server.arg("r").toInt()&0xff) << 16) |
-							((wifiInstance.server.arg("g").toInt() & 0xff) << 8) |
-							(wifiInstance.server.arg("b").toInt() & 0xff) ;
-				}
-
-				if(Details.dblog) Details.dblog->printf(debug::dbInfo, "DoRGBSwitch 0x%06x\n\r", rgb);
-
-
-				// squirt that down as user palette
-				DoRGBSwitch(action, rgb);
-			}
-			else
-			{ 
-				// what it last was
-				DoRGBSwitch(action, Details.switches[0].lastRGB);
-			}
-#elif defined(NUM_SOCKETS)
-			bool action = wifiInstance.server.arg("action") == "on" ? true : false;
-			DoSwitchAntiBounce(0, action);
-#endif		
-		}
-
-
-#endif
 
 		if (wifiInstance.server.hasArg("action"))
 		{
@@ -1956,26 +1422,6 @@ void InstallWebServerHandlers()
 		// 'plain' is the secret source to get to the body
 		JsonObject& root = jsonBuffer.parseObject(wifiInstance.server.arg("plain"));
 
-#ifdef _OLD_WAY
-		if (root.containsKey("bouncemsMomentary"))
-		{
-			Details.debounceThresholdmsMomentary = root["bouncemsMomentary"];
-		}
-		if (root.containsKey("bouncemsToggle"))
-		{
-			Details.debounceThresholdmsToggle = root["bouncemsToggle"];
-		}
-		if (root.containsKey("resetms"))
-		{
-			Details.resetWindowms = root["resetms"];
-		}
-		if (root.containsKey("debugLevel"))
-		{
-			int debugLevel = root["debugLevel"];
-			if(Details.dblog) Details.dblog->printf(debug::dbAlways, "Debug logging changed to %d (was %d)\n\r", if(Details.dblog) Details.dblog->m_currentLevel, (int)debugLevel);
-			if(Details.dblog) Details.dblog->m_currentLevel = (debug::dbLevel) debugLevel;
-		}
-#endif
 
 		if (root.containsKey("friendlyName"))
 		{
@@ -2315,13 +1761,6 @@ void InstallWebServerHandlers()
 #endif
 
 
-#ifdef _OLD_WAY		
-		root["bouncemsMomentary"] = Details.debounceThresholdmsMomentary;
-		root["bouncemsToggle"] = Details.debounceThresholdmsToggle;
-		root["resetms"] = Details.resetWindowms;
-		root["debugLevel"] = (int)if(Details.dblog) Details.dblog->m_currentLevel;
-#endif
-
 		root["friendlyName"] = Details.friendlyName;
 		root["prerelease"]=Details.prereleaseRequired?1:0;
 		root["upgradeOnlyWhenRelayOff"]=Details.upgradeOnlyWhenRelayOff?1:0;
@@ -2551,34 +1990,6 @@ void SendServerPage()
 
 }
 
-#ifdef NUM_SOCKETS
-
-void AddMapToJSON(JsonObject &root, unsigned numSockets)
-{
-#ifdef _OLD_WAY
-	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "AddMapToJSON %d\n\r", numSockets);
-
-	root["switchCount"] = numSockets;
-
-	JsonArray &switchMap = root.createNestedArray("switchMap");
-
-	for (unsigned each = 0; each < numSockets; each++)
-	{
-		JsonObject &theSwitch = switchMap.createNestedObject();
-		theSwitch["switch"] = each;
-		theSwitch["name"] = Details.switches[each].name.c_str();
-		theSwitch["relay"] = Details.switches[each].relay;
-		theSwitch["lastState"] = (int)Details.switches[each].lastState;
-
-#ifdef _AT_RGBSTRIP
-		theSwitch["lastRGB"]=Details.switches[each].lastRGB;
-#endif
-
-	}
-#endif
-}
-
-#endif
 
 #ifdef _TEST_WFI_STATE
 unsigned long lastTested = 0;
@@ -2617,10 +2028,6 @@ void loop(void)
 	if (Details.configDirty)
 		WriteJSONconfig();
 
-#ifdef _OLD_WAY
-	// just in case we get into a bool corner
-	Details.ignoreISRrequests = false;
-#endif
 
 	wifiInstance.server.handleClient();
 	wifiInstance.mdns.update();
