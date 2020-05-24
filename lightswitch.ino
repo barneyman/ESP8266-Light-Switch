@@ -127,8 +127,8 @@ volatile bool updateInProgress=false;
 
 #ifndef _VERSION_NUM_CLI
 
-//	#define _VERSION_NUM "v99.99.99.pr"
-	#define _VERSION_NUM "v0.0.1.pr"
+	#define _VERSION_NUM "v99.99.99.pr"
+//	#define _VERSION_NUM "v0.0.1.pr"
 	#define _DEVELOPER_BUILD
 
 #else
@@ -165,21 +165,6 @@ void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState);
 // my libs
 #include <myWifi.h>
 
-//#define _USE_SYSLOG
-// for syslog
-#ifdef _USE_SYSLOG
-syslogDebug dblog(debug::dbWarning, "192.168.51.1", 514, "temp", "lights");
-#else
-// try to avoid verbose - it causes heisenbugs because all HTTP interactions are artificially slowed down
-//SerialDebug dblog(debug::dbInfo);
-
-#ifdef _DEVELOPER_BUILD
-SerialDebug dblog(debug::dbVerbose);
-#else
-SerialDebug dblog(debug::dbWarning);
-#endif
-
-#endif
 
 //#define _OLD_WAY
 #ifdef _OLD_WAY
@@ -208,7 +193,7 @@ ATleds rgbHandler(_AT85_ADDR,&dblog);
 #else
 
 #define mdsnNAME	"barneyman"
-myWifiClass wifiInstance("esp_", &dblog, mdsnNAME);
+myWifiClass wifiInstance("esp_", NULL, mdsnNAME);
 
 #endif
 
@@ -393,6 +378,12 @@ struct
 	// do we only upgrade when the relay is off?
 	bool upgradeOnlyWhenRelayOff;
 
+	
+	debug::dbLevel loggingLevel;
+	debug::dbImpl loggingImpl;
+	debugBaseClass *dblog;
+	String loggingImplConfig;
+
 
 	// sensors
 	std::vector<baseSensor*>	sensors;
@@ -413,7 +404,14 @@ struct
 
 	"Undefined",	// friendly name
 
-	false
+	// prerel, upgradeWhileOff
+	false, true,
+
+	// logging
+	debug::dbLevel::dbInfo,
+	debug::dbImpl::dbNone,
+	NULL,
+	""
 
 
 };
@@ -448,14 +446,14 @@ unsigned MapSwitchToRelay(unsigned switchNumber)
 
 	if (relayNumber > NUM_SOCKETS || relayNumber < 0)
 	{
-		dblog.printf(debug::dbError, "MapSwitchToRelay called out of bounds %u\n\r", relayNumber);
+		if(Details.dblog) Details.dblog->printf(debug::dbError, "MapSwitchToRelay called out of bounds %u\n\r", relayNumber);
 	}
 	else
 	{
 		relayNumber=Details.switches[switchNumber].relay;
 	}
 
-	dblog.printf(debug::dbVerbose, "	MapSwitchToRelay %u -> %u\r\n", switchNumber, relayNumber);
+	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "	MapSwitchToRelay %u -> %u\r\n", switchNumber, relayNumber);
 
 	return relayNumber;
 
@@ -475,11 +473,11 @@ void ICACHE_RAM_ATTR OnSwitchISR2()
 	// if we're up to our neck in something else (normally WIFI negotiation) ignore this
 	if (wifiInstance.busyDoingSomethingIgnoreSwitch)
 	{
-		dblog.isr_printf(debug::dbInfo, "	OnSwitchISR_2 redundant\n\r");
+		if(Details.dblog) Details.dblog->isr_printf(debug::dbInfo, "	OnSwitchISR_2 redundant\n\r");
 		return;
 	}
 
-	dblog.isr_println(debug::dbInfo, "	OnSwitchISR_2 in");
+	if(Details.dblog) Details.dblog->isr_println(debug::dbInfo, "	OnSwitchISR_2 in");
 
 
 	// ask what changed, clear interrupt
@@ -492,7 +490,7 @@ void ICACHE_RAM_ATTR OnSwitchISR2()
 
 	HandleCauseAndState(causeAndState);
 
-	dblog.isr_printf(debug::dbVerbose, "OnSwitchISR2 out\n\r");
+	if(Details.dblog) Details.dblog->isr_printf(debug::dbVerbose, "OnSwitchISR2 out\n\r");
 }
 #endif
 
@@ -507,7 +505,7 @@ void ICACHE_RAM_ATTR OnSwitchISR()
 	// if we're up to our neck in something else (normally WIFI negotiation) ignore this
 	if (wifiInstance.busyDoingSomethingIgnoreSwitch)
 	{
-		dblog.isr_println(debug::dbInfo, "	OnSwitchISR redundant");
+		if(Details.dblog) Details.dblog->isr_println(debug::dbInfo, "	OnSwitchISR redundant");
 
 #ifndef _PHYSICAL_SWITCH_EXISTS
 		// ask what changed, clear interrupt, so we don't leave the INTerrupt hanging
@@ -516,7 +514,7 @@ void ICACHE_RAM_ATTR OnSwitchISR()
 		return;
 	}
 
-	dblog.isr_println(debug::dbInfo,"	OnSwitchISR in");
+	if(Details.dblog) Details.dblog->isr_println(debug::dbInfo,"	OnSwitchISR in");
 
 
 	// ask what changed, clear interrupt
@@ -538,7 +536,7 @@ void ICACHE_RAM_ATTR OnSwitchISR()
 
 	HandleCauseAndState(causeAndState);
 
-	dblog.isr_println(debug::dbVerbose, "OnSwitchISR out");
+	if(Details.dblog) Details.dblog->isr_println(debug::dbVerbose, "OnSwitchISR out");
 
 }
 #endif
@@ -623,7 +621,7 @@ void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState)
 {
 	for (unsigned switchPort = 0; switchPort < NUM_SOCKETS; switchPort++)
 	{
-		dblog.isr_printf(debug::dbVerbose, "Checking port %d [%04x]\r\n", switchPort, causeAndState);
+		if(Details.dblog) Details.dblog->isr_printf(debug::dbVerbose, "Checking port %d [%04x]\r\n", switchPort, causeAndState);
 
 		// +8 to get HIBYTE to see if this port CAUSED the interrupt
 		if (causeAndState & (1 << (switchPort + 8)))
@@ -636,7 +634,7 @@ void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState)
 			// gate against messy tactile/physical switches
 			interval = now - Details.switches[switchPort].last_seen_bounce;
 
-			dblog.isr_printf(debug::dbVerbose, "%lu ms ", interval / 1000UL);
+			if(Details.dblog) Details.dblog->isr_printf(debug::dbVerbose, "%lu ms ", interval / 1000UL);
 
 			// if it's been longer than the bounce threshold since we saw this button, honour it
 			unsigned long bounceToHonour = Details.switches[switchPort].switchType == stMomentary ? Details.debounceThresholdmsMomentary : Details.debounceThresholdmsToggle;
@@ -649,14 +647,14 @@ void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState)
 
 				Details.switches[switchPort].lastSwitchesSeen[RESET_ARRAY_SIZE - 1] = now / 1000;
 
-				dblog.isr_printf(debug::dbVerbose, "lastSwitchesSeen (ms) ");
+				if(Details.dblog) Details.dblog->isr_printf(debug::dbVerbose, "lastSwitchesSeen (ms) ");
 
 				for (int each = 0; each < RESET_ARRAY_SIZE; each++)
 				{
-					dblog.isr_printf(debug::dbVerbose, "%lu ", Details.switches[switchPort].lastSwitchesSeen[each]);
+					if(Details.dblog) Details.dblog->isr_printf(debug::dbVerbose, "%lu ", Details.switches[switchPort].lastSwitchesSeen[each]);
 				}
 
-				dblog.isr_printf(debug::dbVerbose, "\n\r");
+				if(Details.dblog) Details.dblog->isr_printf(debug::dbVerbose, "\n\r");
 #endif
 
 				// having CAUSED the interrupt, reflect its STATE in the DoRelay call
@@ -672,7 +670,7 @@ void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState)
 				{
 					if (Details.switches[switchPort].lastSwitchesSeen[RESET_ARRAY_SIZE - 1] - Details.switches[switchPort].lastSwitchesSeen[0] < (Details.resetWindowms))
 					{
-						dblog.isr_printf(debug::dbImportant, "RESETTING WIFI!\n\r");
+						if(Details.dblog) Details.dblog->isr_printf(debug::dbImportant, "RESETTING WIFI!\n\r");
 						resetWIFI = true;
 					}
 				}
@@ -680,7 +678,7 @@ void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState)
 			}
 			else
 			{
-				dblog.isr_printf(debug::dbInfo, "bounce ignored\n\r");
+				if(Details.dblog) Details.dblog->isr_printf(debug::dbInfo, "bounce ignored\n\r");
 			}
 			Details.switches[switchPort].last_seen_bounce = now;
 		}
@@ -692,7 +690,7 @@ void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState)
 // honour current switch state
 void RevertAllSwitch()
 {
-	dblog.println(debug::dbInfo, "RevertAllSwitch");
+	if(Details.dblog) Details.dblog->println(debug::dbInfo, "RevertAllSwitch");
 
 	for(auto each=Details.switches.begin();each!=Details.switches.end();each++)
 	{
@@ -707,16 +705,16 @@ void RevertAllSwitch()
 void DoAllSwitch(bool state, bool force)
 {
 
-	dblog.printf(debug::dbInfo, "DoAllSwitch: %s %s\r\n", state ? "ON" : "off", force ? "FORCE" : "");
+	if(Details.dblog) Details.dblog->printf(debug::dbInfo, "DoAllSwitch: %s %s\r\n", state ? "ON" : "off", force ? "FORCE" : "");
 
 	for(auto each=Details.switches.begin();each!=Details.switches.end();each++)
 	{
-		dblog.printf(debug::dbInfo, "Switch: %x\r\n", *each);
+		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Switch: %x\r\n", *each);
 		(*each)->DoRelay(state, force);
 		yield();
 	}
 
-	dblog.println(debug::dbInfo, "DoAllSwitch: Out");
+	if(Details.dblog) Details.dblog->println(debug::dbInfo, "DoAllSwitch: Out");
 
 }
 
@@ -729,7 +727,7 @@ void DoSwitch(unsigned portNumber, bool on, bool forceSwitchToReflect)
 {
 	if (portNumber > 7 || portNumber < 0)
 	{
-		dblog.isr_printf(debug::dbError, "DoSwitch called out of bounds %u\n\r", portNumber);
+		if(Details.dblog) Details.dblog->isr_printf(debug::dbError, "DoSwitch called out of bounds %u\n\r", portNumber);
 		return;
 	}
 
@@ -737,7 +735,7 @@ void DoSwitch(unsigned portNumber, bool on, bool forceSwitchToReflect)
 	Details.ignoreISRrequests = true;
 
 
-	dblog.isr_printf(debug::dbImportant, "DoSwitch: relay %d %s %s\r\n", portNumber, on ? "ON" : "off", forceSwitchToReflect ? "FORCE" : "");
+	if(Details.dblog) Details.dblog->isr_printf(debug::dbImportant, "DoSwitch: relay %d %s %s\r\n", portNumber, on ? "ON" : "off", forceSwitchToReflect ? "FORCE" : "");
 
 #ifdef _PHYSICAL_SWITCH_EXISTS
 
@@ -756,7 +754,7 @@ void DoSwitch(unsigned portNumber, bool on, bool forceSwitchToReflect)
 
 #else
 
-	dblog.isr_printf(debug::dbError, "no impl for DoSwitch");
+	if(Details.dblog) Details.dblog->isr_printf(debug::dbError, "no impl for DoSwitch");
 
 
 #endif
@@ -782,14 +780,14 @@ void DoSwitch(unsigned portNumber, bool on, bool forceSwitchToReflect)
 
 void WriteJSONconfig()
 {
-	dblog.printf(debug::dbInfo, "WriteJSONconfig\n\r");
+	if(Details.dblog) Details.dblog->printf(debug::dbInfo, "WriteJSONconfig\n\r");
 
 	// try to create it
 	fs::File json = SPIFFS.open(_JSON_CONFIG_FILE, "w");
 
 	if (!json)
 	{
-		dblog.printf(debug::dbError, "failed to create json\n\r");
+		if(Details.dblog) Details.dblog->printf(debug::dbError, "failed to create json\n\r");
 		return;
 	}
 
@@ -817,6 +815,10 @@ void WriteJSONconfig()
 
 	root["upgradeOnlyWhenRelayOff"]=Details.upgradeOnlyWhenRelayOff;
 
+	root["loggingLevel"]=(int)Details.loggingLevel;
+	root["loggingImpl"]=(int)Details.loggingImpl;
+	root["loggingImplConfig"]=Details.loggingImplConfig;
+
 
 	wifiInstance.WriteDetailsToJSON(root, Details.wifi);
 
@@ -826,22 +828,22 @@ void WriteJSONconfig()
 
 #endif
 
-	dblog.printf(debug::dbVerbose, "jsonBuffer.size used : %d\n\r", jsonBuffer.size());
+	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "jsonBuffer.size used : %d\n\r", jsonBuffer.size());
 
 	///////////////////// written here
 
 	String jsonText;
-	root.prettyPrintTo(jsonText);
+	root.printTo(jsonText);
 
-	dblog.printf(debug::dbVerbose, "JSON : -- %s --\n\r", jsonText.c_str());
+	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "JSON : -- %s --\n\r", jsonText.c_str());
 
 	json.write((byte*)jsonText.c_str(), jsonText.length());
 
-	dblog.printf(debug::dbVerbose, "JSON : written\n\r");
+	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "JSON : written\n\r");
 
 	json.close();
 
-	dblog.printf(debug::dbVerbose, "JSON : closed\n\r");
+	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "JSON : closed\n\r");
 
 	Details.configDirty = false;
 }
@@ -849,35 +851,35 @@ void WriteJSONconfig()
 
 void ReadJSONconfig()
 {
-	dblog.printf(debug::dbInfo, "ReadJSONconfig\n\r");
+	if(Details.dblog) Details.dblog->printf(debug::dbInfo, "ReadJSONconfig\n\r");
 
 #ifdef _ERASE_JSON_CONFIG
-	dblog.printf(debug::dbImportant, "erasing JSON file\n\r");
+	if(Details.dblog) Details.dblog->printf(debug::dbImportant, "erasing JSON file\n\r");
 	SPIFFS.remove(_JSON_CONFIG_FILE);
 #endif
 
 	// check for legacy!
 	if (SPIFFS.exists(_LEGACY_JSON_CONFIG_FILE))
 	{
-		dblog.println(debug::dbImportant, "Legacy config file found ... ");
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, "Legacy config file found ... ");
 
 		// check for co-existence!
 		if (SPIFFS.exists(_JSON_CONFIG_FILE))
 		{
-			dblog.println(debug::dbImportant, "coexist ... deleting legacy");
+			if(Details.dblog) Details.dblog->println(debug::dbImportant, "coexist ... deleting legacy");
 			if (!SPIFFS.remove(_LEGACY_JSON_CONFIG_FILE))
 			{
-				dblog.println(debug::dbError, "delete failed ... bad");
+				if(Details.dblog) Details.dblog->println(debug::dbError, "delete failed ... bad");
 				return;
 			}
 		}
 		else
 		{
-			dblog.println(debug::dbImportant, "migration ... renaming");
+			if(Details.dblog) Details.dblog->println(debug::dbImportant, "migration ... renaming");
 
 			if (!SPIFFS.rename(_LEGACY_JSON_CONFIG_FILE, _JSON_CONFIG_FILE))
 			{
-				dblog.println(debug::dbError, "Rename failed ... bad");
+				if(Details.dblog) Details.dblog->println(debug::dbError, "Rename failed ... bad");
 				return;
 			}
 		}
@@ -886,13 +888,13 @@ void ReadJSONconfig()
 
 	if (SPIFFS.exists(_LEGACY_JSON_CONFIG_FILE))
 	{
-		dblog.println(debug::dbError, "Legacy File still exists ... bad");
+		if(Details.dblog) Details.dblog->println(debug::dbError, "Legacy File still exists ... bad");
 	}
 
 
 	if (!SPIFFS.exists(_JSON_CONFIG_FILE))
 	{
-		dblog.printf(debug::dbImportant, "'%s' does not exist\n\r", _JSON_CONFIG_FILE);
+		if(Details.dblog) Details.dblog->printf(debug::dbImportant, "'%s' does not exist\n\r", _JSON_CONFIG_FILE);
 		// file does not exist
 		WriteJSONconfig();
 
@@ -906,7 +908,7 @@ void ReadJSONconfig()
 
 	json.close();
 
-	dblog.printf(debug::dbInfo, "JSON: (%d) -- %s --\n\r", jsonString.length(), jsonString.c_str());
+	if(Details.dblog) Details.dblog->printf(debug::dbInfo, "JSON: (%d) -- %s --\n\r", jsonString.length(), jsonString.c_str());
 
 	//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 	jsonBuffer.clear();
@@ -914,12 +916,12 @@ void ReadJSONconfig()
 
 	if (!root.success())
 	{
-		dblog.printf(debug::dbError, "JSON parse failed\n\r");
+		if(Details.dblog) Details.dblog->printf(debug::dbError, "JSON parse failed\n\r");
 
 		// kill it - and write it again
 		SPIFFS.remove(_JSON_CONFIG_FILE);
 
-		dblog.printf(debug::dbInfo, "JSON file deleted\n\r");
+		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "JSON file deleted\n\r");
 
 		WriteJSONconfig();
 
@@ -928,7 +930,7 @@ void ReadJSONconfig()
 	}
 	else
 	{
-		dblog.printf(debug::dbVerbose, "JSON parsed\n\r");
+		if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "JSON parsed\n\r");
 	}
 
 	Details.configDirty = false;
@@ -937,7 +939,7 @@ void ReadJSONconfig()
 	if(root.containsKey("rgbCount"))
 		Details.rgbLedCount=root["rgbCount"];
 
-	dblog.printf(debug::dbInfo,"Changing LED count to %d\n\r", Details.rgbLedCount);
+	if(Details.dblog) Details.dblog->printf(debug::dbInfo,"Changing LED count to %d\n\r", Details.rgbLedCount);
 
 	// tell the handler how big it is
 	rgbHandler.Clear();
@@ -949,12 +951,12 @@ void ReadJSONconfig()
 	// check for schemaVersion
 	if(!root.containsKey("schemaVersion") || root["schemaVersion"]<CURRENT_SCHEMA_VER)
 	{
-		dblog.printf(debug::dbError, "JSON parsed OLD file\n\r");
+		if(Details.dblog) Details.dblog->printf(debug::dbError, "JSON parsed OLD file\n\r");
 
 		// kill it - and write it again
 		SPIFFS.remove(_JSON_CONFIG_FILE);
 
-		dblog.printf(debug::dbInfo, "JSON file deleted\n\r");
+		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "JSON file deleted\n\r");
 
 		WriteJSONconfig();
 
@@ -986,6 +988,24 @@ void ReadJSONconfig()
 	else
 		Details.upgradeOnlyWhenRelayOff=true;
 	
+	if(root.containsKey("loggingLevel"))
+		Details.loggingLevel=(debug::dbLevel)root["loggingLevel"].as<int>();
+	else
+		Details.loggingLevel=debug::dbLevel::dbImportant;
+
+	if(root.containsKey("loggingImpl"))
+		Details.loggingImpl=(debug::dbImpl)root["loggingImpl"].as<int>();
+	else
+		Details.loggingImpl=debug::dbImpl::dbNone;
+
+	if(root.containsKey("loggingImplConfig"))
+		Details.loggingImplConfig=root["loggingImplConfig"].as<char*>();
+	else 
+		Details.loggingImplConfig="";
+
+	
+	Details.dblog=NULL;
+
 
 	wifiInstance.ReadDetailsFromJSON(root, Details.wifi);
 
@@ -1012,7 +1032,7 @@ void ReadJSONconfig()
 			}
 			else
 			{
-				dblog.printf(debug::dbImportant, "switchMap switch %d not found\n\r", each);
+				if(Details.dblog) Details.dblog->printf(debug::dbImportant, "switchMap switch %d not found\n\r", each);
 			}
 		}
 	}
@@ -1025,7 +1045,7 @@ void ReadJSONconfig()
 
 void PreserveState()
 {
-	dblog.println(debug::dbImportant, "PreserveState");
+	if(Details.dblog) Details.dblog->println(debug::dbImportant, "PreserveState");
 
 	jsonBuffer.clear();
 	JsonObject &root = jsonBuffer.createObject();
@@ -1045,9 +1065,9 @@ void PreserveState()
 	fs::File json = SPIFFS.open(_JSON_PRESERVED_STATE_FILE, "w");
 
 	String jsonText;
-	root.prettyPrintTo(jsonText);
+	root.printTo(jsonText);
 
-	dblog.printf(debug::dbVerbose, "JSON : -- %s --\n\r", jsonText.c_str());
+	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "JSON : -- %s --\n\r", jsonText.c_str());
 
 	json.write((byte*)jsonText.c_str(), jsonText.length());
 
@@ -1057,13 +1077,13 @@ void PreserveState()
 
 bool RestoreState()
 {
-	dblog.println(debug::dbVerbose, "RestoreState");
+	if(Details.dblog) Details.dblog->println(debug::dbVerbose, "RestoreState");
 
 	// see if there is a preserved state
 	if (SPIFFS.exists(_JSON_PRESERVED_STATE_FILE))
 	{
 
-		dblog.println(debug::dbImportant, "PreserveState file exists");
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, "PreserveState file exists");
 
 		fs::File json = SPIFFS.open(_JSON_PRESERVED_STATE_FILE, "r");
 
@@ -1081,7 +1101,7 @@ bool RestoreState()
 			int state=root["states"][count]["state"];
 			int switchNum=root["states"][count]["switch"];
 
-			dblog.printf(debug::dbVerbose, "switch %d state %d\n\r",switchNum,state);
+			if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "switch %d state %d\n\r",switchNum,state);
 
 			if(switchNum<Details.switches.size())
 			{
@@ -1089,7 +1109,7 @@ bool RestoreState()
 			}
 		}
 
-		dblog.println(debug::dbImportant, "remote PreserveState file");
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, "remove PreserveState file");
 		SPIFFS.remove(_JSON_PRESERVED_STATE_FILE);
 
 	}
@@ -1116,7 +1136,8 @@ bool RestoreState()
 
 void RebootMe(bool preserve)
 {
-	dblog.printf(debug::dbImportant, "RebootMe\n\r");
+	if(Details.dblog) Details.dblog->printf(debug::dbImportant, "REBOOTING\n\r");
+	delay(1000);
 	if(preserve)
 	{
 		PreserveState();
@@ -1131,7 +1152,7 @@ void RebootMe(bool preserve)
 
 void ResetToAP()
 {
-	dblog.printf(debug::dbImportant, "Resetting\n\r");
+	if(Details.dblog) Details.dblog->printf(debug::dbImportant, "Resetting\n\r");
 
 	resetWIFI = false;
 	// clear the credentials
@@ -1148,7 +1169,7 @@ void ResetToAP()
 // sideload an AP so i can be configured
 void AddAP()
 {
-	dblog.printf(debug::dbImportant, "AddAP\n\r");
+	if(Details.dblog) Details.dblog->printf(debug::dbImportant, "AddAP\n\r");
 
 	wifiInstance.ConnectWifi(myWifiClass::wifiMode::modeSTAandAP,Details.wifi);
 
@@ -1164,7 +1185,7 @@ void AddSwitch(baseSwitch *newSwitch)
 {
 	if(newSwitch)
 	{
-		dblog.println(debug::dbInfo, "Adding switch");
+		if(Details.dblog) Details.dblog->println(debug::dbInfo, "Adding switch");
 		Details.switches.push_back(newSwitch);
 
 #ifndef ARDUINO_ESP8266_GENERIC
@@ -1176,11 +1197,40 @@ void AddSwitch(baseSwitch *newSwitch)
 		}
 
 #endif		
-		dblog.println(debug::dbInfo, "Added switch");
+		if(Details.dblog) Details.dblog->println(debug::dbInfo, "Added switch");
 	}
 }
 
+void createLogger()
+{
+	// sort out the debugger
+	switch(Details.loggingImpl)
+	{
+		case debug::dbImpl::dbNone:
+			break;
+		case debug::dbImpl::dbSerial:
+			{
+				SerialDebug*newOne=new SerialDebug(Details.loggingLevel);
+				// Sonoff doesn't APPEAR to handle any faster
+				newOne->begin(9600);
+				Details.dblog=newOne;
+			}
+			break;
+		case debug::dbImpl::dbSysLog:
+			{
+				//syslogDebug *newOne=new syslogDebug(debug::dbVerbose, "192.168.42.112", 514, "temp", _MYVERSION);
+				syslogDebug *newOne=new syslogDebug(Details.loggingLevel,wifiInstance.m_hostName.c_str(),Details.loggingImplConfig);
+				//syslogDebug *newOne=new syslogDebug(Details.loggingLevel,"wibble",Details.loggingImplConfig);
+				newOne->SetAppName(_MYVERSION);
+				Details.dblog=newOne;
+			}
+			break;
+	}
 
+	// tell wifi
+	wifiInstance.SetDebug(Details.dblog);
+
+}
 
 
 void setup(void) 
@@ -1190,13 +1240,6 @@ void setup(void)
 #endif
 
 
-	// tell the debugger its name
-#if defined(_USE_SYSLOG)
-	dblog.SetHostname(wifiInstance.m_hostName.c_str());
-#else
-// Sonoff doesn't APPEAR to handle any faster
-	dblog.begin(9600);
-#endif
 
 
 #ifdef _OLD_WAY
@@ -1217,8 +1260,8 @@ void setup(void)
 
 #endif
 
-	dblog.printf(debug::dbImportant, "\r\n\n\nRunning %s\n\r", _MYVERSION);
-	dblog.printf(debug::dbImportant, "Hostname %s\n\r", wifiInstance.m_hostName.c_str());
+	if(Details.dblog) Details.dblog->printf(debug::dbImportant, "\r\n\n\nRunning %s\n\r", _MYVERSION);
+	if(Details.dblog) Details.dblog->printf(debug::dbImportant, "Hostname %s\n\r", wifiInstance.m_hostName.c_str());
 
 
 
@@ -1227,23 +1270,23 @@ void setup(void)
 	ReadJSONconfig();
 
 
-	dblog.println(debug::dbImportant, wifiInstance.m_hostName.c_str());
-	dblog.printf(debug::dbVerbose, "bounceMomentary %lu\n\r", Details.debounceThresholdmsMomentary);
-	dblog.printf(debug::dbVerbose, "bounceToggle %lu\n\r", Details.debounceThresholdmsToggle);
-	dblog.printf(debug::dbVerbose, "reset %lu\n\r", Details.resetWindowms);
+	if(Details.dblog) Details.dblog->println(debug::dbImportant, wifiInstance.m_hostName.c_str());
+	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "bounceMomentary %lu\n\r", Details.debounceThresholdmsMomentary);
+	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "bounceToggle %lu\n\r", Details.debounceThresholdmsToggle);
+	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "reset %lu\n\r", Details.resetWindowms);
 
 	enum myWifiClass::wifiMode intent = myWifiClass::wifiMode::modeUnknown;
 
 	if (Details.wifi.configured)
 	{
-		dblog.println(debug::dbInfo, "wifi credentials found");
-		dblog.println(debug::dbVerbose, Details.wifi.ssid);
-		dblog.println(debug::dbVerbose, Details.wifi.password);
+		if(Details.dblog) Details.dblog->println(debug::dbInfo, "wifi credentials found");
+		if(Details.dblog) Details.dblog->println(debug::dbVerbose, Details.wifi.ssid);
+		if(Details.dblog) Details.dblog->println(debug::dbVerbose, Details.wifi.password);
 		intent = myWifiClass::wifiMode::modeSTA;
 	}
 	else
 	{
-		dblog.println(debug::dbWarning, "WiFi not configured");
+		if(Details.dblog) Details.dblog->println(debug::dbWarning, "WiFi not configured");
 		intent = myWifiClass::wifiMode::modeAP;
 
 	}
@@ -1307,40 +1350,46 @@ void setup(void)
 	delay(10000);
 #endif	
 
-	dblog.printf(debug::dbInfo, "\r\n\n\n===========================================");
-	dblog.printf(debug::dbImportant, "Running %s\n\r", _MYVERSION);
-	dblog.printf(debug::dbImportant, "Hostname %s\n\r", wifiInstance.m_hostName.c_str());
-
 	SPIFFS.begin();
-
 	ReadJSONconfig();
 
-	dblog.println(debug::dbImportant, wifiInstance.m_hostName.c_str());
+	createLogger();
+
+
+	if(Details.dblog) Details.dblog->printf(debug::dbInfo, "\r\n\n\n===========================================");
+
+
+
+	if(Details.dblog) Details.dblog->printf(debug::dbImportant, "Running %s\n\r", _MYVERSION);
+	if(Details.dblog) Details.dblog->printf(debug::dbImportant, "Hostname %s\n\r", wifiInstance.m_hostName.c_str());
+
+
+	if(Details.dblog) Details.dblog->println(debug::dbImportant, wifiInstance.m_hostName.c_str());
 
 	enum myWifiClass::wifiMode intent = myWifiClass::wifiMode::modeUnknown;
 
 	if (Details.wifi.configured)
 	{
-		dblog.println(debug::dbInfo, "wifi credentials found");
-		dblog.println(debug::dbVerbose, Details.wifi.ssid);
-		dblog.println(debug::dbVerbose, Details.wifi.password);
+		if(Details.dblog) Details.dblog->println(debug::dbInfo, "wifi credentials found");
+		if(Details.dblog) Details.dblog->println(debug::dbVerbose, Details.wifi.ssid);
+		if(Details.dblog) Details.dblog->println(debug::dbVerbose, Details.wifi.password);
 		intent = myWifiClass::wifiMode::modeSTA;
 	}
 	else
 	{
-		dblog.println(debug::dbWarning, "WiFi not configured");
+		if(Details.dblog) Details.dblog->println(debug::dbWarning, "WiFi not configured");
 		intent = myWifiClass::wifiMode::modeAP;
 
 	}
 
 #ifdef ARDUINO_ESP8266_GENERIC
 
-	AddSwitch(new SonoffBasic(&dblog));
+	AddSwitch(new SonoffBasic(Details.dblog));
 
 #elif defined(ARDUINO_ESP8266_WEMOS_D1MINI)
 
-	Details.sensors.push_back(new PIRInstantSensor(&dblog, D7));
-	AddSwitch(new WemosRelayShield(&dblog));
+	Details.sensors.push_back(new PIRInstantSensor(Details.dblog, D7));
+	AddSwitch(new WemosRelayShield(Details.dblog));
 
 #endif
 
@@ -1355,24 +1404,24 @@ void setup(void)
 
 #ifdef WEMOS_COM3
 	// load up the sensors and switches
-	AddSwitch(new SonoffBasicNoLED(&dblog));
+	AddSwitch(new SonoffBasicNoLED(Details.dblog));
 
 
 	// OF COURSE i reused D7 which is used by Sonoff! duh!
-	Details.sensors.push_back(new DallasSingleSensor(D7, &dblog));
-	Details.sensors.push_back(new BME280Sensor(&dblog));
-	Details.sensors.push_back(new MAX44009Sensor(&dblog));
+	Details.sensors.push_back(new DallasSingleSensor(D7, Details.dblog));
+	Details.sensors.push_back(new BME280Sensor(Details.dblog));
+	Details.sensors.push_back(new MAX44009Sensor(Details.dblog));
 
-	Details.sensors.push_back(new testInstantSensor(&dblog));
+	Details.sensors.push_back(new testInstantSensor(Details.dblog));
 
 #elif defined(WEMOS_COM4) 
 
-	Details.sensors.push_back(new PIRInstantSensor(&dblog, D7));
+	Details.sensors.push_back(new PIRInstantSensor(Details.dblog, D7));
 
 #elif defined(WEMOS_COM5) 
 
-	Details.sensors.push_back(new testInstantSensor(&dblog, 10*60*1000));
-	AddSwitch(new MCP23017MultiSwitch(&dblog, 6, SDA, SCL, D5));
+	Details.sensors.push_back(new testInstantSensor(Details.dblog, 10*60*1000));
+	AddSwitch(new MCP23017MultiSwitch(Details.dblog, 6, SDA, SCL, D5));
 
 
 #endif
@@ -1409,7 +1458,7 @@ void FindPeers()
 		case myWifiClass::modeSTA_unjoined:
 		case myWifiClass::modeCold:
 		case myWifiClass::modeUnknown:
-			dblog.println(debug::dbInfo, "No WIFI not doing FindPeers");
+			if(Details.dblog) Details.dblog->println(debug::dbInfo, "No WIFI not doing FindPeers");
 			// very bad form
 			return;
 		case myWifiClass::modeAP:
@@ -1420,23 +1469,23 @@ void FindPeers()
 			break;
 	}
 
-	dblog.printf(debug::dbInfo, "Looking for '%s' siblings ...\n\r", mdsnNAME);
+	if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Looking for '%s' siblings ...\n\r", mdsnNAME);
 	
 	// get a list of what's out there
 	services.clear();
 	if (wifiInstance.QueryServices(mdsnNAME, services))
 	{
 		int found=(int)services.size();
-		dblog.printf(debug::dbInfo, "Found %d sibling%c!!\n\r", found, found==1?' ':'s');
+		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Found %d sibling%c!!\n\r", found, found==1?' ':'s');
 		for (auto iterator = services.begin(); iterator != services.end(); iterator++)
 		{
-			dblog.printf(debug::dbInfo, "\t%s @ %s\n\r", iterator->hostName.c_str(), iterator->IP.toString().c_str());
+			if(Details.dblog) Details.dblog->printf(debug::dbInfo, "\t%s @ %s\n\r", iterator->hostName.c_str(), iterator->IP.toString().c_str());
 		}
 		
 	}
 	else
 	{
-		dblog.println(debug::dbInfo, "No others services found");
+		if(Details.dblog) Details.dblog->println(debug::dbInfo, "No others services found");
 	}
 
 }
@@ -1444,7 +1493,7 @@ void FindPeers()
 // set up all the handlers for the web server
 void InstallWebServerHandlers()
 {
-	dblog.println(debug::dbVerbose, "InstallWebServerHandlers IN");
+	if(Details.dblog) Details.dblog->println(debug::dbVerbose, "InstallWebServerHandlers IN");
 
 	// set up the json handlers
 	// POST
@@ -1453,21 +1502,21 @@ void InstallWebServerHandlers()
 	// revert
 
 	// make all the relays reflect their switches
-	wifiInstance.server.on("/revert", []() {
+	wifiInstance.server.on("/revert", HTTP_POST, []() {
 
-		dblog.println(debug::dbImportant, "/revert");
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, "/revert");
 
 		RevertAllSwitch();
 
-		delay(_WEB_TAR_PIT_DELAY);
+		//delay(_WEB_TAR_PIT_DELAY);
 
 		SendServerPage();
 	});
 
 	// do something to all of them
-	wifiInstance.server.on("/all", []() {
+	wifiInstance.server.on("/all",HTTP_POST, []() {
 
-		dblog.println(debug::dbImportant, "/all");
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, "/all");
 
 		for (uint8_t i = 0; i < wifiInstance.server.args(); i++)
 		{
@@ -1477,7 +1526,7 @@ void InstallWebServerHandlers()
 			}
 		}
 
-		delay(_WEB_TAR_PIT_DELAY);
+		//delay(_WEB_TAR_PIT_DELAY);
 
 		SendServerPage();
 	});
@@ -1488,8 +1537,8 @@ void InstallWebServerHandlers()
 	// do an OTA update from a provided URL
 	wifiInstance.server.on("/json/upgrade", HTTP_POST, []() {
 
-		dblog.println(debug::dbImportant, "json upgrade posted");
-		dblog.println(debug::dbImportant, wifiInstance.server.arg("plain"));
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, "json upgrade posted");
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, wifiInstance.server.arg("plain"));
 
 		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 		jsonBuffer.clear();
@@ -1503,7 +1552,7 @@ void InstallWebServerHandlers()
 				if((*each)->GetRelay())
 				{
 					// it's on ... bounce
-					dblog.println(debug::dbImportant, "ignoring upgrade because the relay is ON");
+					if(Details.dblog) Details.dblog->println(debug::dbImportant, "ignoring upgrade because the relay is ON");
 					wifiInstance.server.send(403, "application/json", "{ reason: 'not while turned on' }");
 					return;
 				}
@@ -1523,7 +1572,7 @@ void InstallWebServerHandlers()
 		String url= root["url"];
 		String urlSpiffs= root["urlSpiffs"];
 
-		delay(_WEB_TAR_PIT_DELAY);
+		//delay(_WEB_TAR_PIT_DELAY);
 
 		StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer2;
 		JsonObject&replyroot = jsonBuffer2.createObject();
@@ -1535,19 +1584,19 @@ void InstallWebServerHandlers()
 
 			// augment the url with a prerelease parameter
 			String urlArgs="?prerelease="+String((Details.prereleaseRequired?"true":"false"));
-			dblog.println(debug::dbInfo,urlArgs.c_str());
+			if(Details.dblog) Details.dblog->println(debug::dbInfo,urlArgs.c_str());
 
 
 			// lets check for SPIFFs update first
 			
 			if(!updates)
 			{
-				dblog.println(debug::dbImportant, "updating SPIFFS ...");
+				if(Details.dblog) Details.dblog->println(debug::dbImportant, "updating SPIFFS ...");
 				result=ESPhttpUpdate.updateSpiffs(wifiInstance.m_wificlient ,urlSpiffs+urlArgs,_MYVERSION);
 			}
 			else
 			{
-				dblog.println(debug::dbImportant, "updating BIN ...");
+				if(Details.dblog) Details.dblog->println(debug::dbImportant, "updating BIN ...");
 				// we do some clean up so let me boot
 				ESPhttpUpdate.rebootOnUpdate(false);
 				result=ESPhttpUpdate.update(url+urlArgs, _MYVERSION);
@@ -1556,13 +1605,13 @@ void InstallWebServerHandlers()
 			switch (result)
 			{
 			case HTTP_UPDATE_FAILED:
-				dblog.printf(debug::dbError, "HTTP_UPDATE_FAILED Error (%d): %s", ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
+				if(Details.dblog) Details.dblog->printf(debug::dbError, "HTTP_UPDATE_FAILED Error (%d): %s", ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
 				break;
 			case HTTP_UPDATE_NO_UPDATES:
-				dblog.println(debug::dbImportant, "no updates");
+				if(Details.dblog) Details.dblog->println(debug::dbImportant, "no updates");
 				break;
 			case HTTP_UPDATE_OK:
-				dblog.println(debug::dbImportant, "update succeeded");
+				if(Details.dblog) Details.dblog->println(debug::dbImportant, "update succeeded");
 				break;
 			}
 
@@ -1579,22 +1628,22 @@ void InstallWebServerHandlers()
 			}
 
 			bodyText=String();
-			replyroot.prettyPrintTo(bodyText);
+			replyroot.printTo(bodyText);
 
 			if (result != HTTP_UPDATE_OK)
 			{
-				dblog.println(debug::dbError, bodyText);
+				if(Details.dblog) Details.dblog->println(debug::dbError, bodyText);
 				break;
 			}
 			else
 			{
-				dblog.println(debug::dbImportant, bodyText);
+				if(Details.dblog) Details.dblog->println(debug::dbImportant, bodyText);
 			}
 
 			// first time round, save our config
 			if(!updates && (result==HTTP_UPDATE_OK))
 			{
-				dblog.println(debug::dbImportant, "rewriting config");
+				if(Details.dblog) Details.dblog->println(debug::dbImportant, "preserving config");
 				WriteJSONconfig();
 			}
 
@@ -1602,7 +1651,7 @@ void InstallWebServerHandlers()
 
 		updateInProgress=false;
 
-		dblog.println(debug::dbImportant, "saving switch state\n\r");
+		if(Details.dblog) Details.dblog->println(debug::dbInfo, "saving switch state\n\r");
 
 		// no point - core killed the IP stack during the update
 		wifiInstance.server.send(200, "application/json", bodyText);
@@ -1618,11 +1667,11 @@ void InstallWebServerHandlers()
 #endif
 
 	// inverse of whatever it's currently doing
-	wifiInstance.server.on("/toggle", []() {
+	wifiInstance.server.on("/toggle",HTTP_POST, []() {
 
-		dblog.println(debug::dbImportant, "/toggle");
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, "/toggle");
 
-		delay(_WEB_TAR_PIT_DELAY);
+		//delay(_WEB_TAR_PIT_DELAY);
 
 
 		// TODO pick the right one
@@ -1636,11 +1685,11 @@ void InstallWebServerHandlers()
 
 	wifiInstance.server.on("/button",HTTP_POST, []() {
 
-		dblog.println(debug::dbInfo, "/button");
+		if(Details.dblog) Details.dblog->println(debug::dbInfo, "/button");
 
 		for (int count = 0; count < wifiInstance.server.args(); count++)
 		{
-			dblog.printf(debug::dbInfo, "%d. %s = %s \n\r", 
+			if(Details.dblog) Details.dblog->printf(debug::dbInfo, "%d. %s = %s \n\r", 
 				count+1, 
 				wifiInstance.server.argName(count).c_str(), 
 				wifiInstance.server.arg(count).c_str()
@@ -1672,7 +1721,7 @@ void InstallWebServerHandlers()
 							(wifiInstance.server.arg("b").toInt() & 0xff) ;
 				}
 
-				dblog.printf(debug::dbInfo, "DoRGBSwitch 0x%06x\n\r", rgb);
+				if(Details.dblog) Details.dblog->printf(debug::dbInfo, "DoRGBSwitch 0x%06x\n\r", rgb);
 
 
 				// squirt that down as user palette
@@ -1705,7 +1754,7 @@ void InstallWebServerHandlers()
 				}
 				else
 				{
-					dblog.printf(debug::dbWarning, "asked to action %d - exceeds maximum %d\r\n", port,Details.switches.size()-1);
+					if(Details.dblog) Details.dblog->printf(debug::dbWarning, "asked to action %d - exceeds maximum %d\r\n", port,Details.switches.size()-1);
 				}
 			}
 			else
@@ -1718,7 +1767,7 @@ void InstallWebServerHandlers()
 
 		}
 
-		delay(_WEB_TAR_PIT_DELAY);
+		//delay(_WEB_TAR_PIT_DELAY);
 
 		SendServerPage();
 
@@ -1727,11 +1776,11 @@ void InstallWebServerHandlers()
 	// LEGACY - remove when the beach house is upgraded past 0.0.32 and home assistant does POSTS
 	wifiInstance.server.on("/button", []() {
 
-		dblog.println(debug::dbInfo, "/button");
+		if(Details.dblog) Details.dblog->println(debug::dbInfo, "/button");
 
 		for (int count = 0; count < wifiInstance.server.args(); count++)
 		{
-			dblog.printf(debug::dbInfo, "%d. %s = %s \n\r", 
+			if(Details.dblog) Details.dblog->printf(debug::dbInfo, "%d. %s = %s \n\r", 
 				count+1, 
 				wifiInstance.server.argName(count).c_str(), 
 				wifiInstance.server.arg(count).c_str()
@@ -1753,7 +1802,7 @@ void InstallWebServerHandlers()
 				}
 				else
 				{
-					dblog.printf(debug::dbWarning, "asked to action %d - exceeds maximum %d\r\n", port,Details.switches.size()-1);
+					if(Details.dblog) Details.dblog->printf(debug::dbWarning, "asked to action %d - exceeds maximum %d\r\n", port,Details.switches.size()-1);
 				}
 			}
 			else
@@ -1766,9 +1815,52 @@ void InstallWebServerHandlers()
 
 		}
 
-		delay(_WEB_TAR_PIT_DELAY);
+		//delay(_WEB_TAR_PIT_DELAY);
 
 		SendServerPage();
+
+	});
+
+
+
+
+	wifiInstance.server.on("/json/logging",HTTP_POST, []() {
+
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, "/json/logging");
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, wifiInstance.server.arg("plain"));
+
+		jsonBuffer.clear();
+		// 'plain' is the secret source to get to the body
+		JsonObject& root = jsonBuffer.parseObject(wifiInstance.server.arg("plain"));
+
+		bool reboot=false;
+
+		if(root.containsKey("level"))
+		{
+			Details.loggingLevel=(debug::dbLevel)root["level"].as<int>();
+			if(Details.dblog)
+				Details.dblog->m_currentLevel=Details.loggingLevel;
+		}
+
+		if(root.containsKey("impl"))
+		{
+			Details.loggingImpl=(debug::dbImpl)root["impl"].as<int>();
+			reboot=true;
+		}
+
+		if(root.containsKey("config"))
+		{
+			Details.loggingImplConfig.clear();
+			root["config"].printTo(Details.loggingImplConfig);
+		}
+
+		WriteJSONconfig();
+
+		wifiInstance.server.send(200,"text/html","<html/>");
+
+		// minimise heap fracture
+		if(reboot)
+			RebootMe(true);
 
 	});
 
@@ -1778,15 +1870,11 @@ void InstallWebServerHandlers()
 
 
 
+	wifiInstance.server.on("/resetCounts",HTTP_POST, []() {
 
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, "/resetCounts");
 
-
-
-	wifiInstance.server.on("/resetCounts", []() {
-
-		dblog.println(debug::dbImportant, "/resetCounts");
-
-		delay(_WEB_TAR_PIT_DELAY);
+		//delay(_WEB_TAR_PIT_DELAY);
 
 		for(auto each=Details.switches.begin();each!=Details.switches.end();each++)
 			(*each)->ResetTransitionCount();
@@ -1799,7 +1887,7 @@ void InstallWebServerHandlers()
 
 	wifiInstance.server.on("/reboot",HTTP_POST, []() {
 
-		dblog.println(debug::dbImportant, "/reboot");
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, "/reboot");
 
 		RebootMe(true);
 
@@ -1811,7 +1899,7 @@ void InstallWebServerHandlers()
 
 	wifiInstance.server.on("/resetWIFI",HTTP_POST, []() {
 
-		dblog.println(debug::dbImportant, "/resetWIFI");
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, "/resetWIFI");
 
 		ResetToAP();
 
@@ -1821,7 +1909,7 @@ void InstallWebServerHandlers()
 
 	wifiInstance.server.on("/stopAP",HTTP_POST, []() {
 
-		dblog.println(debug::dbImportant, "/stopAP");
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, "/stopAP");
 
 		if (wifiInstance.currentMode == myWifiClass::wifiMode::modeSTAandAP)
 		{
@@ -1839,9 +1927,9 @@ void InstallWebServerHandlers()
 
 	wifiInstance.server.on("/", []() {
 
-		dblog.println(debug::dbImportant, "/ requested");
+		if(Details.dblog) Details.dblog->println(debug::dbInfo, "/ requested");
 
-		delay(_WEB_TAR_PIT_DELAY);
+		//delay(_WEB_TAR_PIT_DELAY);
 
 		SendServerPage();
 
@@ -1849,9 +1937,9 @@ void InstallWebServerHandlers()
 
 	wifiInstance.server.on("/default.htm", []() {
 
-		dblog.println(debug::dbImportant, "/default.htm");
+		if(Details.dblog) Details.dblog->println(debug::dbInfo, "/default.htm");
 
-		delay(_WEB_TAR_PIT_DELAY);
+		//delay(_WEB_TAR_PIT_DELAY);
 
 		SendServerPage();
 
@@ -1860,8 +1948,8 @@ void InstallWebServerHandlers()
 	// posted config
 	wifiInstance.server.on("/json/config", HTTP_POST, []() {
 
-		dblog.println(debug::dbImportant, "json config posted");
-		dblog.println(debug::dbImportant, wifiInstance.server.arg("plain"));
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, "json config posted");
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, wifiInstance.server.arg("plain"));
 
 		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 		jsonBuffer.clear();
@@ -1884,8 +1972,8 @@ void InstallWebServerHandlers()
 		if (root.containsKey("debugLevel"))
 		{
 			int debugLevel = root["debugLevel"];
-			dblog.printf(debug::dbAlways, "Debug logging changed to %d (was %d)\n\r", dblog.m_currentLevel, (int)debugLevel);
-			dblog.m_currentLevel = (debug::dbLevel) debugLevel;
+			if(Details.dblog) Details.dblog->printf(debug::dbAlways, "Debug logging changed to %d (was %d)\n\r", if(Details.dblog) Details.dblog->m_currentLevel, (int)debugLevel);
+			if(Details.dblog) Details.dblog->m_currentLevel = (debug::dbLevel) debugLevel;
 		}
 #endif
 
@@ -1902,12 +1990,13 @@ void InstallWebServerHandlers()
 		if(root.containsKey("upgradeOnlyWhenRelayOff"))
 			Details.upgradeOnlyWhenRelayOff=root["upgradeOnlyWhenRelayOff"]?true:false;
 
+
 #ifdef _AT_RGBSTRIP
 
 		if (root.containsKey("ledCount"))
 		{
 			Details.rgbLedCount = root["ledCount"];
-			dblog.printf(debug::dbImportant, "Changing LED count to %d\n\r", Details.rgbLedCount);
+			if(Details.dblog) Details.dblog->printf(debug::dbImportant, "Changing LED count to %d\n\r", Details.rgbLedCount);
 			rgbHandler.Clear();
 			rgbHandler.SetSize(Details.rgbLedCount);
 			rgbHandler.DisplayAndWait(true);
@@ -1920,7 +2009,7 @@ void InstallWebServerHandlers()
 
 		// extract the details
 		WriteJSONconfig();
-		delay(_WEB_TAR_PIT_DELAY);
+		//delay(_WEB_TAR_PIT_DELAY);
 
 		wifiInstance.server.send(200, "text/html", "<html></html>");
 
@@ -1931,8 +2020,8 @@ void InstallWebServerHandlers()
 
 		IPAddress recipientAddr = wifiInstance.server.client().remoteIP();
 
-		dblog.printf(debug::dbImportant, "json listen posted from %s\n\r",recipientAddr.toString().c_str());
-		dblog.println(debug::dbImportant, wifiInstance.server.arg("plain"));
+		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "json listen posted from %s\n\r",recipientAddr.toString().c_str());
+		if(Details.dblog) Details.dblog->println(debug::dbInfo, wifiInstance.server.arg("plain"));
 
 		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 		jsonBuffer.clear();
@@ -1949,12 +2038,12 @@ void InstallWebServerHandlers()
 
 			if(recipientSensor<Details.sensors.size())
 			{
-				dblog.printf(debug::dbInfo, "Adding recipient %s:%d Sensor %d\n\r", recipientAddr.toString().c_str(), recipientPort, recipientSensor);
+				if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Adding recipient %s:%d Sensor %d\n\r", recipientAddr.toString().c_str(), recipientPort, recipientSensor);
 				Details.sensors[recipientSensor]->AddAnnounceRecipient(recipientAddr,recipientPort,wifiInstance.server.arg("plain"));
 			}
 			else
 			{
-				dblog.println(debug::dbError, "Sensor exceeded bounds");
+				if(Details.dblog) Details.dblog->println(debug::dbError, "Sensor exceeded bounds");
 			}
 
 		}
@@ -1964,14 +2053,14 @@ void InstallWebServerHandlers()
 
 			if(recipientSwitch<Details.switches.size())
 			{
-				dblog.printf(debug::dbInfo, "Adding recipient %s:%d Switch %d\n\r", recipientAddr.toString().c_str(), recipientPort, recipientSwitch);
+				if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Adding recipient %s:%d Switch %d\n\r", recipientAddr.toString().c_str(), recipientPort, recipientSwitch);
 				Details.switches[recipientSwitch]->AddAnnounceRecipient(recipientAddr,recipientPort,wifiInstance.server.arg("plain"));
 
 
 			}
 			else
 			{
-				dblog.println(debug::dbError, "Switch exceeded bounds");
+				if(Details.dblog) Details.dblog->println(debug::dbError, "Switch exceeded bounds");
 			}
 
 		}
@@ -1988,8 +2077,8 @@ void InstallWebServerHandlers()
 
 	wifiInstance.server.on("/json/wifi", HTTP_POST, []() {
 
-		dblog.println(debug::dbImportant, "json wifi posted");
-		dblog.println(debug::dbImportant, wifiInstance.server.arg("plain"));
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, "json wifi posted");
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, wifiInstance.server.arg("plain"));
 
 		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 		jsonBuffer.clear();
@@ -2045,7 +2134,7 @@ void InstallWebServerHandlers()
 	wifiInstance.server.on("/json/state", HTTP_GET, []() {
 		// give them back the port / switch map
 
-		dblog.println(debug::dbInfo, "json state called");
+		if(Details.dblog) Details.dblog->println(debug::dbInfo, "json state called");
 
 		jsonBuffer.clear();
 
@@ -2110,19 +2199,105 @@ void InstallWebServerHandlers()
 
 
 		String jsonText;
-		root.prettyPrintTo(jsonText);
+		root.printTo(jsonText);
 
-		dblog.println(debug::dbVerbose, jsonText);
+		if(Details.dblog) Details.dblog->println(debug::dbVerbose, jsonText);
 
 		wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
 		wifiInstance.server.send(200, "application/json", jsonText);
 	});
 
 
+
+	wifiInstance.server.on("/json/logging", HTTP_GET, []() {
+
+		if(Details.dblog) Details.dblog->println(debug::dbInfo, "json config called");
+
+		StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBufferConfig;
+		jsonBuffer.clear();
+
+		JsonObject &root = jsonBuffer.createObject();
+
+		root["impl"]=(int)Details.loggingImpl;
+		root["level"]=(int)Details.loggingLevel;
+
+		JsonArray &impls=root.createNestedArray("impls");
+		for(int eachLevel=(int)debug::dbNone;eachLevel<(int)debug::dbUnknown;eachLevel++)
+		{
+			JsonObject &thisOne=impls.createNestedObject();
+			thisOne["value"]=eachLevel;
+			
+			JsonVariant configJSON;
+
+			switch(eachLevel)
+			{
+				case debug::dbNone:
+					thisOne["name"]="None";
+					configJSON=jsonBufferConfig.parse(NullDebug::getConfigOptionsJSON());
+					thisOne["config"]=configJSON;
+					break;
+				case debug::dbSerial:
+					thisOne["name"]="Serial";
+					configJSON=jsonBufferConfig.parse(SerialDebug::getConfigOptionsJSON());
+					thisOne["config"]=configJSON;
+					break;
+				case debug::dbSysLog:
+					thisOne["name"]="SysLog";
+					configJSON=jsonBufferConfig.parse(syslogDebug::getConfigOptionsJSON());
+					thisOne["config"]=configJSON;
+					break;
+				default:
+					break;
+			}
+
+		}
+
+		JsonArray &levels=root.createNestedArray("levels");
+		for(int eachLevel=(int)debug::dbVerbose;eachLevel<(int)debug::dbAlways;eachLevel++)
+		{
+			JsonObject &thisOne=levels.createNestedObject();
+			thisOne["value"]=eachLevel;
+			switch(eachLevel)
+			{
+				case debug::dbVerbose:
+					thisOne["name"]="Verbose";
+					break;
+				case debug::dbInfo:
+					thisOne["name"]="Info";
+					break;
+				case debug::dbImportant:
+					thisOne["name"]="Important";
+					break;
+				case debug::dbWarning:
+					thisOne["name"]="Warning";
+					break;
+				case debug::dbError:
+					thisOne["name"]="Error";
+					break;
+				default:
+					break;
+			}
+		}
+
+		String jsonText;
+		root.printTo(jsonText);
+
+		if(Details.dblog) Details.dblog->println(debug::dbVerbose, jsonText);
+
+		wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+		wifiInstance.server.send(200, "application/json", jsonText);
+
+
+
+
+	});
+
+
+
 	wifiInstance.server.on("/json/config", HTTP_GET, []() {
 		// give them back the port / switch map
 
-		dblog.println(debug::dbImportant, "json config called");
+		if(Details.dblog) Details.dblog->println(debug::dbInfo, "json config called");
 
 		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 		jsonBuffer.clear();
@@ -2135,11 +2310,16 @@ void InstallWebServerHandlers()
 			root["ip"] = wifiInstance.localIP().toString();
 		root["mac"] = wifiInstance.macAddress();
 
+#ifdef _DEVELOPER_BUILD
+		root["developer"] = 1;
+#endif
+
+
 #ifdef _OLD_WAY		
 		root["bouncemsMomentary"] = Details.debounceThresholdmsMomentary;
 		root["bouncemsToggle"] = Details.debounceThresholdmsToggle;
 		root["resetms"] = Details.resetWindowms;
-		root["debugLevel"] = (int)dblog.m_currentLevel;
+		root["debugLevel"] = (int)if(Details.dblog) Details.dblog->m_currentLevel;
 #endif
 
 		root["friendlyName"] = Details.friendlyName;
@@ -2181,9 +2361,9 @@ void InstallWebServerHandlers()
 		}
 
 		String jsonText;
-		root.prettyPrintTo(jsonText);
+		root.printTo(jsonText);
 
-		dblog.println(debug::dbVerbose, jsonText);
+		if(Details.dblog) Details.dblog->println(debug::dbVerbose, jsonText);
 
 		wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
 		wifiInstance.server.send(200, "application/json", jsonText);
@@ -2192,7 +2372,7 @@ void InstallWebServerHandlers()
 	wifiInstance.server.on("/json/wificonfig", HTTP_GET, []() {
 		// give them back the port / switch map
 
-		dblog.println(debug::dbImportant, "json wificonfig called");
+		if(Details.dblog) Details.dblog->println(debug::dbInfo, "json wificonfig called");
 
 		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 		jsonBuffer.clear();
@@ -2207,9 +2387,9 @@ void InstallWebServerHandlers()
 		root["friendlyName"]=Details.friendlyName;
 
 		String jsonText;
-		root.prettyPrintTo(jsonText);
+		root.printTo(jsonText);
 
-		dblog.println(debug::dbVerbose, jsonText);
+		if(Details.dblog) Details.dblog->println(debug::dbVerbose, jsonText);
 
 		wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
 		wifiInstance.server.send(200, "application/json", jsonText);
@@ -2219,7 +2399,7 @@ void InstallWebServerHandlers()
 	wifiInstance.server.on("/json/peers", HTTP_GET, []() {
 		// give them back the port / switch map
 
-		dblog.println(debug::dbImportant, "json peers called");
+		if(Details.dblog) Details.dblog->println(debug::dbInfo, "json peers called");
 
 		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 		jsonBuffer.clear();
@@ -2239,16 +2419,16 @@ void InstallWebServerHandlers()
 		{
 			JsonObject &peer = peers.createNestedObject();
 
-			dblog.printf(debug::dbInfo, "%d '%s' %s\n\r", each + 1, services[each].hostName.c_str(), services[each].IP.toString().c_str());
+			if(Details.dblog) Details.dblog->printf(debug::dbInfo, "%d '%s' %s\n\r", each + 1, services[each].hostName.c_str(), services[each].IP.toString().c_str());
 			peer["name"]=services[each].hostName;
 			peer["ip"]=services[each].IP.toString();
 		}
 
 
 		String jsonText;
-		root.prettyPrintTo(jsonText);
+		root.printTo(jsonText);
 
-		dblog.println(debug::dbVerbose, jsonText);
+		if(Details.dblog) Details.dblog->println(debug::dbVerbose, jsonText);
 
 		// do not cache
 		wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
@@ -2261,7 +2441,7 @@ void InstallWebServerHandlers()
 	wifiInstance.server.on("/json/wifi", HTTP_GET, []() {
 		// give them back the port / switch map
 
-		dblog.println(debug::dbImportant, "json wifi called");
+		if(Details.dblog) Details.dblog->println(debug::dbInfo, "json wifi called");
 
 		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 		jsonBuffer.clear();
@@ -2284,15 +2464,15 @@ void InstallWebServerHandlers()
 			wifi["ssid"] = allWifis[each].first;
 			wifi["sig"] = allWifis[each].second;
 
-			dblog.printf(debug::dbInfo, "%d '%s' %d \n\r", each + 1, allWifis[each].first.c_str(), allWifis[each].second);
+			if(Details.dblog) Details.dblog->printf(debug::dbInfo, "%d '%s' %d \n\r", each + 1, allWifis[each].first.c_str(), allWifis[each].second);
 
 		}
 		
 
 		String jsonText;
-		root.prettyPrintTo(jsonText);
+		root.printTo(jsonText);
 
-		dblog.println(debug::dbVerbose, jsonText);
+		if(Details.dblog) Details.dblog->println(debug::dbVerbose, jsonText);
 
 		// do not cache
 		wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
@@ -2307,24 +2487,26 @@ void InstallWebServerHandlers()
 	while (dir.next()) {
 		String file = dir.fileName();
 
+#ifndef _DEVELOPER_BUILD
 		// ensure it doesn't have a leading underscore - hidden flag for me
 		if (file.length() > 1 && file[1] == '_')
 		{
-			dblog.printf(debug::dbInfo, "Skipping %s\n\r", file.c_str());
+			if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Skipping %s\n\r", file.c_str());
 			continue;
 		}
+#endif
 
 		// cache it for an hour
 		wifiInstance.server.serveStatic(file.c_str(), SPIFFS, file.c_str(),"Cache-Control: public, max-age=60");
 
-		dblog.printf(debug::dbInfo, "Serving %s\r\n", file.c_str());
+		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Serving %s\r\n", file.c_str());
 
 		// remove the slash
 		// file.remove(0,1);
 		servedFiles.push_back(std::pair<String,size_t>(file, dir.fileSize()));
 	}
 
-	dblog.printf(debug::dbVerbose, "InstallWebServerHandlers OUT\n\r");
+	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "InstallWebServerHandlers OUT\n\r");
 
 }
 
@@ -2364,7 +2546,7 @@ void SendServerPage()
 	}
 	else
 	{
-		dblog.printf(debug::dbError,"SPIFFS error - %s does not exist\n\r", toOpen.c_str());
+		if(Details.dblog) Details.dblog->printf(debug::dbError,"SPIFFS error - %s does not exist\n\r", toOpen.c_str());
 	}
 
 }
@@ -2374,7 +2556,7 @@ void SendServerPage()
 void AddMapToJSON(JsonObject &root, unsigned numSockets)
 {
 #ifdef _OLD_WAY
-	dblog.printf(debug::dbVerbose, "AddMapToJSON %d\n\r", numSockets);
+	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "AddMapToJSON %d\n\r", numSockets);
 
 	root["switchCount"] = numSockets;
 
@@ -2455,7 +2637,7 @@ void loop(void)
 	}
 
 	// sump any debug from isr
-	dblog.isr_pump();
+	if(Details.dblog) Details.dblog->isr_pump();
 
 	unsigned long now = micros() / 1000;
 
@@ -2473,7 +2655,7 @@ void loop(void)
 	{
 		WiFiMode_t currentState = WiFi.getMode();
 
-		dblog.printf(debug::dbVerbose, "================ WIFI %d\n\r", currentState);
+		if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "================ WIFI %d\n\r", currentState);
 
 		WiFi.printDiag(Serial);
 
