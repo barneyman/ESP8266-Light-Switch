@@ -47,35 +47,39 @@ protected:
 
 	//unsigned m_port;
 
-	debugBaseClass*dblog;
+	debugBaseClass*m_dblog;
 
 public:
 
-	StateAnnouncer(debugBaseClass*dbg):dblog(dbg)
+	StateAnnouncer(debugBaseClass*dbg):m_dblog(dbg)
 	{}
 
 
 	// TODO - handle string extra implications
 	virtual void AddAnnounceRecipient(IPAddress addr, unsigned port, String extra=String()) 
 	{
-		dblog->printf(debug::dbVerbose,"Adding recipient %s\r",addr.toString().c_str());
+		if(m_dblog)
+			m_dblog->printf(debug::dbVerbose,"Adding recipient %s\r",addr.toString().c_str());
 		recipient potential(addr,port,extra);
 		auto finder=std::find(m_HAhosts.begin(),m_HAhosts.end(),potential);
 		if(finder==m_HAhosts.end())
 		{
 			m_HAhosts.push_back(potential);
-			dblog->println(debug::dbInfo,"ADDED");
+			if(m_dblog)
+				m_dblog->println(debug::dbInfo,"ADDED");
 		}
 		else
 		{
 			// cater for port change
 			if(finder->m_port==port)
 			{
-				dblog->println(debug::dbVerbose,"already exists");
+				if(m_dblog)
+					m_dblog->println(debug::dbVerbose,"already exists");
 			}
 			else
 			{
-				dblog->println(debug::dbInfo,"port/extra has changed, re-mapping");
+				if(m_dblog)
+					m_dblog->println(debug::dbInfo,"port/extra has changed, re-mapping");
 				finder->m_port=port;
 				finder->m_extra=extra;
 			}
@@ -116,8 +120,8 @@ public:
 
 #else		
 #endif		
-
-		dblog->println(debug::dbInfo,"Starting IP yell");
+		if(m_dblog)
+			m_dblog->println(debug::dbInfo,"Starting IP yell");
 
 		for(auto eachHA=m_HAhosts.begin();eachHA!=m_HAhosts.end();eachHA++)
 		{
@@ -126,7 +130,8 @@ public:
 
 			sender.beginPacket(eachHA->m_addr, eachHA->m_port);
 
-			dblog->printf(debug::dbInfo,"udp %s to %s:%u\r",bodyText.c_str(), eachHA->m_addr.toString().c_str(),eachHA->m_port);
+			if(m_dblog)
+				m_dblog->printf(debug::dbInfo,"udp %s to %s:%u\r",bodyText.c_str(), eachHA->m_addr.toString().c_str(),eachHA->m_port);
 			sender.write(bodyText.c_str(),bodyText.length());
 
 			sender.endPacket();
@@ -135,14 +140,16 @@ public:
 
 			if(sender.connect(eachHA->m_addr, eachHA->m_port)==1)
 			{
-				dblog->printf(debug::dbInfo,"tcp %s;%u to %s\r",bodyText.c_str(),eachHA->m_port, eachHA->m_addr.toString().c_str());
+				if(m_dblog)
+					m_dblog->printf(debug::dbInfo,"tcp %s;%u to %s\r",bodyText.c_str(),eachHA->m_port, eachHA->m_addr.toString().c_str());
 				sender.write(bodyText.c_str(),bodyText.length());
 				sender.flush();
 				sender.stop();
 			}
 			else
 			{
-				dblog->printf(debug::dbError,"tcpconnect failed %s:%u\r", eachHA->m_addr.toString().c_str(),eachHA->m_port);
+				if(m_dblog)
+					m_dblog->printf(debug::dbError,"tcpconnect failed %s:%u\r", eachHA->m_addr.toString().c_str(),eachHA->m_port);
 			}
 #elif defined(_USE_REST)
 
@@ -152,7 +159,8 @@ public:
 			JsonObject& restInfo = jsonRestInfoBuffer.parseObject(eachHA->m_extra);
 			String endPoint=restInfo["endpoint"];
 
-			dblog->printf(debug::dbInfo,"Posting %s:%u%s\n\r", eachHA->m_addr.toString().c_str(), eachHA->m_port, endPoint.c_str());
+			if(m_dblog)
+				m_dblog->printf(debug::dbInfo,"Posting %s:%u%s\n\r", eachHA->m_addr.toString().c_str(), eachHA->m_port, endPoint.c_str());
 
 			if (thisClient.begin(eachHA->m_addr.toString(), eachHA->m_port, endPoint )) {  
 
@@ -164,14 +172,16 @@ public:
 				thisClient.addHeader("Authorization", bearerToken);
 
 				int postresult=thisClient.POST(bodyText);
-				dblog->printf(debug::dbInfo,"POST %s returned %d\r",bodyText.c_str(), postresult);
+				if(m_dblog)
+					m_dblog->printf(debug::dbInfo,"POST %s returned %d\r",bodyText.c_str(), postresult);
 
 				thisClient.end();
 			}
 			else
 			{
 				/* code */
-				dblog->printf(debug::dbError,"httpbegin failed %s:%u:%s\r", eachHA->m_addr.toString().c_str(), eachHA->m_port,restInfo["endpoint"]);
+				if(m_dblog)
+					m_dblog->printf(debug::dbError,"httpbegin failed %s:%u:%s\r", eachHA->m_addr.toString().c_str(), eachHA->m_port,restInfo["endpoint"]);
 			}
 			
 

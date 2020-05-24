@@ -13,7 +13,8 @@ byte mcp23017::readOneRegister(byte command)
 
 	if(res)
 	{
-		m_dblog->printf(debug::dbError,"readOneRegister endTransmission returned %d\n\r", res);
+		if(m_dblog)
+			m_dblog->printf(debug::dbError,"readOneRegister endTransmission returned %d\n\r", res);
 		return 0;
 	}
 
@@ -21,7 +22,8 @@ byte mcp23017::readOneRegister(byte command)
 	res=m_wire.requestFrom(MCPADDR, 1);
 	if(1!=res)
 	{
-		m_dblog->printf(debug::dbError,"readOneRegister requestFrom returned %d\n\r", res);	
+		if(m_dblog)
+			m_dblog->printf(debug::dbError,"readOneRegister requestFrom returned %d\n\r", res);	
 		return 0;
 	}
 	byte state = m_wire.read();
@@ -39,7 +41,8 @@ void mcp23017::writeOneRegister(byte command, byte theByte)
 
 	if(res)
 	{
-		m_dblog->printf(debug::dbError,"writeOneRegister endTransmission returned %d\n\r", res);
+		if(m_dblog)
+			m_dblog->printf(debug::dbError,"writeOneRegister endTransmission returned %d\n\r", res);
 		return;
 	}
 
@@ -101,20 +104,24 @@ void mcp23017::flipPolarityPort(unsigned port)
 {
 	if (port > 7 || port < 0)
 	{
-		m_dblog->printf(debug::dbError,"flipPolarityPort called out of bounds %u\n\r", port);
+		if(m_dblog)
+			m_dblog->printf(debug::dbError,"flipPolarityPort called out of bounds %u\n\r", port);
 		return;
 	}
 
 
 #ifdef _IPOL_IN_SOFTWARE
-	m_dblog->printf(debug::dbVerbose,"%02x -> ", m_polarity);
+	if(m_dblog)
+		m_dblog->printf(debug::dbVerbose,"%02x -> ", m_polarity);
 	m_polarity ^= ((1 << port));
-	m_dblog->printf(debug::dbVerbose,"%02x ", m_polarity);
+	if(m_dblog)
+		m_dblog->printf(debug::dbVerbose,"%02x ", m_polarity);
 #else
 	// get polarity of A
 	byte polarity = readOneRegister(MCP_IPOL_A);
 
-	m_dblog->printf(debug::dbInfo, "%02x -> ", polarity);
+	if(m_dblog)
+		m_dblog->printf(debug::dbInfo, "%02x -> ", polarity);
 
 	// flip the polarity bit for that switch
 	polarity ^= (1 << port);
@@ -122,17 +129,20 @@ void mcp23017::flipPolarityPort(unsigned port)
 	// enabling this line causes an ISR storm
 	writeOneRegister(MCP_IPOL_A, polarity);
 
-	m_dblog->printf(debug::dbInfo, "%02x ", polarity);
+	if(m_dblog)
+		m_dblog->printf(debug::dbInfo, "%02x ", polarity);
 
 #endif
-	m_dblog->printf(debug::dbVerbose,"written");
+	if(m_dblog)
+		m_dblog->printf(debug::dbVerbose,"written");
 
 }
 
 
 byte mcp23017::readAllSwitches(bool readInterrupt)
 {
-	m_dblog->println(debug::dbVerbose,"readAllSwitches");
+	if(m_dblog)
+		m_dblog->println(debug::dbVerbose,"readAllSwitches");
 
 	byte state = readInterrupt ? readOneRegister(MCP_INTCAP_A) : readOneRegister(MCP_GPIO_A);
 
@@ -155,7 +165,8 @@ bool mcp23017::readSwitch(unsigned switchNumber)
 {
 	if (switchNumber > 7 || switchNumber < 0)
 	{
-		m_dblog->printf(debug::dbError,"readSwitch called out of bounds %u\n\r", switchNumber);
+		if(m_dblog)
+			m_dblog->printf(debug::dbError,"readSwitch called out of bounds %u\n\r", switchNumber);
 		return false;
 	}
 
@@ -170,7 +181,8 @@ void mcp23017::SetSwitch(unsigned switchNumber, bool relayState)
 	// get the switch state for this port
 	bool switchState = readSwitch(switchNumber);
 
-	m_dblog->printf(debug::dbVerbose,"port %d switchState = %02x\n\r", switchNumber, switchState);
+	if(m_dblog)
+		m_dblog->printf(debug::dbVerbose,"port %d switchState = %02x\n\r", switchNumber, switchState);
 
 	// thw switch does NOT mirror the request state
 	if (switchState != relayState)
@@ -185,7 +197,8 @@ bool mcp23017::ToggleRelay(unsigned relayNumber)
 	bool currentState = false;
 	if (GetRelay(relayNumber, currentState))
 	{
-		m_dblog->printf(debug::dbImportant,"ToggleRelay %u %s -> %s\n\r", relayNumber,currentState?"ON":"off", !currentState ? "ON" : "off");
+		if(m_dblog)
+			m_dblog->printf(debug::dbImportant,"ToggleRelay %u %s -> %s\n\r", relayNumber,currentState?"ON":"off", !currentState ? "ON" : "off");
 		return SetRelay(relayNumber, !currentState);
 	}
 
@@ -197,13 +210,15 @@ bool mcp23017::GetRelay(unsigned relayNumber, bool &relayState)
 	
 	if (relayNumber > 7)
 	{
-		m_dblog->printf(debug::dbError,"GetRelay called out of bounds %u\n\r", relayNumber);
+		if(m_dblog)
+			m_dblog->printf(debug::dbError,"GetRelay called out of bounds %u\n\r", relayNumber);
 		return false;
 	}
 
 	byte state = readOneRegister(MCP_GPIO_B);
 
-	m_dblog->printf(debug::dbInfo,"GetRelay state %02x\n\r", (int)state);
+	if(m_dblog)
+		m_dblog->printf(debug::dbInfo,"GetRelay state %02x\n\r", (int)state);
 
 	// get the existing state *of the relay* HI is OFF
 	relayState = ((state & (1 << relayNumber))&0xff) ? false : true;
@@ -218,7 +233,8 @@ bool mcp23017::SetRelay(unsigned relayNumber, bool relayState)
 {
 	if (relayNumber > 7)
 	{
-		m_dblog->printf(debug::dbError,"SetRelay called out of bounds %u\n\r", relayNumber);
+		if(m_dblog)
+			m_dblog->printf(debug::dbError,"SetRelay called out of bounds %u\n\r", relayNumber);
 		return false;
 	}
 
@@ -227,7 +243,8 @@ bool mcp23017::SetRelay(unsigned relayNumber, bool relayState)
 	unsigned long timediff = now-m_lastRelayMicros[relayNumber];
 	if (timediff < _MIN_TIME_BETWEEN_SWITCHES)
 	{
-		m_dblog->printf(debug::dbError,"SetRelay called too soon for relay %u (%lums)\n\r", relayNumber, timediff/1000);
+		if(m_dblog)
+			m_dblog->printf(debug::dbError,"SetRelay called too soon for relay %u (%lums)\n\r", relayNumber, timediff/1000);
 		return false;
 	}
 
@@ -235,7 +252,8 @@ bool mcp23017::SetRelay(unsigned relayNumber, bool relayState)
 
 	byte state = readOneRegister(MCP_GPIO_B);
 
-	m_dblog->printf(debug::dbInfo,"SetRelay - current state %02x\n\r", (int)state);
+	if(m_dblog)
+		m_dblog->printf(debug::dbInfo,"SetRelay - current state %02x\n\r", (int)state);
 
 	// get the existing state *of the relay*, mask out the bit we want
 	state = ((state& (~(1 << relayNumber)))) & 0xff;
@@ -245,14 +263,16 @@ bool mcp23017::SetRelay(unsigned relayNumber, bool relayState)
 	if (!relayState)
 		state = state | (1 << relayNumber);
 
-	m_dblog->printf(debug::dbImportant,"SetRelay - new state %02x\n\r", (int)state);
+	if(m_dblog)
+		m_dblog->printf(debug::dbImportant,"SetRelay - new state %02x\n\r", (int)state);
 
 	writeOneRegister(MCP_GPIO_B, state);
 
 	// then confirm
 	if(state!=readOneRegister(MCP_GPIO_B))
 	{
-		m_dblog->println(debug::dbError,"State did not stick!");	
+		if(m_dblog)
+			m_dblog->println(debug::dbError,"State did not stick!");	
 	}
 
 
@@ -278,7 +298,8 @@ unsigned mcp23017::QueryInterruptCauseAndCurrentState(bool justClearInterrupt)
 
 	unsigned retval=((cause) << 8) | (state);
 
-	m_dblog->printf(debug::dbInfo,"MCPInt cause %02x state %02x [%04x]\n\r", cause, state, retval);
+	if(m_dblog)
+		m_dblog->printf(debug::dbInfo,"MCPInt cause %02x state %02x [%04x]\n\r", cause, state, retval);
 
 	// then send that back
 	return retval;

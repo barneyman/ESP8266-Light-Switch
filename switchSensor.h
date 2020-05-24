@@ -97,14 +97,16 @@ public:
 
 	bool AddressExists(int addr)
 	{
-		dblog->printf(debug::dbInfo, "I2C checking for 0x%x ", addr);
+		if(m_dblog)
+			m_dblog->printf(debug::dbInfo, "I2C checking for 0x%x ", addr);
 
 		TwoWire localWire;
 		localWire.begin();
 		localWire.beginTransmission(addr);
 		bool retval= localWire.endTransmission()?false:true;
 
-		dblog->println(debug::dbInfo, retval?"EXISTS":"nexist");
+		if(m_dblog)
+			m_dblog->println(debug::dbInfo, retval?"EXISTS":"nexist");
 
 		return retval;
 	}
@@ -114,7 +116,8 @@ public:
 		TwoWire localWire;
 		localWire.begin();
 
-		dblog->println(debug::dbAlways, "I2C Scanning...");
+		if(m_dblog)
+			m_dblog->println(debug::dbAlways, "I2C Scanning...");
 	
 		unsigned nDevices = 0;
 		for(int address = 1; address < 127; address++ )
@@ -127,17 +130,22 @@ public:
 		
 			if (error == 0)
 			{
-				dblog->printf(debug::dbAlways,"I2C device found at address 0x%x\r", address);
+				if(m_dblog)
+					m_dblog->printf(debug::dbAlways,"I2C device found at address 0x%x\r", address);
 			
 				nDevices++;
 			}
 			else if (error==4)
 			{
-				dblog->printf(debug::dbAlways,"Unknown error at address 0x%x\r", address);
+				if(m_dblog)
+					m_dblog->printf(debug::dbAlways,"Unknown error at address 0x%x\r", address);
 			}    
 		}
 		if (nDevices == 0)
-			dblog->println(debug::dbAlways,"No I2C devices found\n");
+		{
+			if(m_dblog)
+				m_dblog->println(debug::dbAlways,"No I2C devices found\n");
+		}
 	}
 
 };
@@ -421,7 +429,8 @@ public:
 
 			m_currentState=(digitalRead(m_gpio)==(m_invertedInput?LOW:HIGH))?true:false;
 
-			dblog->printf(debug::dbInfo,"sensor changed %s\r",m_currentState?"HIGH":"LOW");
+			if(m_dblog)
+				m_dblog->printf(debug::dbInfo,"sensor changed %s\r",m_currentState?"HIGH":"LOW");
 
 			if(m_gpOut!=-1)
 			{
@@ -494,7 +503,6 @@ public:
 			SetRelay(on);
 		}
 		
-		//dblog->isr_printf(debug::dbImportant, "DoRelay: %s %s\r\n", on ? "ON" : "off", forceSwitchToReflect ? "FORCE" : "");		
 	}
 
 	// switch and relay do not relate to exactly the same thing
@@ -573,7 +581,7 @@ protected:
 class momentarySwitch : public baseSwitch
 {
 public:
-	momentarySwitch(debugBaseClass *dblog):baseSwitch(dblog,_DEBOUNCE_WINDOW_MOMENTARY)
+	momentarySwitch(debugBaseClass *m_dblog):baseSwitch(m_dblog,_DEBOUNCE_WINDOW_MOMENTARY)
 	{
 		m_type=stMomentary;
 	}
@@ -597,7 +605,7 @@ protected:
 	bool m_flipSwitchPolarity, m_currentSwitchState;
 
 public:
-	toggleSwitch(debugBaseClass *dblog):baseSwitch(dblog,_DEBOUNCE_WINDOW_TOGGLE),m_flipSwitchPolarity(false),m_currentSwitchState(false)
+	toggleSwitch(debugBaseClass *m_dblog):baseSwitch(m_dblog,_DEBOUNCE_WINDOW_TOGGLE),m_flipSwitchPolarity(false),m_currentSwitchState(false)
 	{
 		m_type=stToggle;
 	}
@@ -642,10 +650,10 @@ protected:
 
 public:
 
-	RelayLEDandSwitch(debugBaseClass *dblog,int digitalPinInput=0, int digitalPinOutput=12,int digitalPinLED=13, bool switchOnGND=true):
+	RelayLEDandSwitch(debugBaseClass *m_dblog,int digitalPinInput=0, int digitalPinOutput=12,int digitalPinLED=13, bool switchOnGND=true):
 		m_ioPinIn(digitalPinInput), m_ioPinOut(digitalPinOutput), m_ioPinLED(digitalPinLED),
 		ignoreISRrequests(false),
-		momentarySwitch(dblog)
+		momentarySwitch(m_dblog)
 	{
 		// and remember shit
 		m_singleton=this;
@@ -683,7 +691,8 @@ public:
 		if(ignoreISRrequests)
 			return;
 
-		dblog->isr_println(debug::dbInfo,"RelayLEDandSwitch::OnSwitchISR in");			
+		if(m_dblog)
+			m_dblog->isr_println(debug::dbInfo,"RelayLEDandSwitch::OnSwitchISR in");			
 
 		if(IsSwitchBounce())
 			return;
@@ -763,8 +772,8 @@ public:
 class SonoffBasic : public RelayLEDandSwitch
 {
 public:
-	SonoffBasic(debugBaseClass *dblog,int digitalPinInput=0, int digitalPinOutput=12,int digitalPinLED=13):
-		RelayLEDandSwitch(dblog,digitalPinInput,digitalPinOutput,digitalPinLED, true)
+	SonoffBasic(debugBaseClass *m_dblog,int digitalPinInput=0, int digitalPinOutput=12,int digitalPinLED=13):
+		RelayLEDandSwitch(m_dblog,digitalPinInput,digitalPinOutput,digitalPinLED, true)
 		{
 			
 		}
@@ -783,8 +792,8 @@ public:
 class SonoffBasicNoLED : public RelayLEDandSwitch
 {
 	public:
-	SonoffBasicNoLED(debugBaseClass *dblog,int digitalPinInput=0, int digitalPinOutput=12):
-		RelayLEDandSwitch(dblog,digitalPinInput,digitalPinOutput,-1)
+	SonoffBasicNoLED(debugBaseClass *m_dblog,int digitalPinInput=0, int digitalPinOutput=12):
+		RelayLEDandSwitch(m_dblog,digitalPinInput,digitalPinOutput,-1)
 		{
 
 		}
@@ -797,7 +806,7 @@ class SonoffBasicNoLED : public RelayLEDandSwitch
 class WemosRelayShield : public RelayLEDandSwitch
 {
 public:
-	WemosRelayShield(debugBaseClass *dblog):RelayLEDandSwitch(dblog,D2,D1,LED_BUILTIN)
+	WemosRelayShield(debugBaseClass *m_dblog):RelayLEDandSwitch(m_dblog,D2,D1,LED_BUILTIN)
 	{}
 };
 
@@ -814,8 +823,8 @@ protected:
 	class childSwitch : public toggleSwitch
 	{
 	public:
-		childSwitch(debugBaseClass *dblog, MultiSwitch *parent, unsigned ordinal):
-			toggleSwitch(dblog),m_parent(parent),m_ordinal(ordinal)
+		childSwitch(debugBaseClass *m_dblog, MultiSwitch *parent, unsigned ordinal):
+			toggleSwitch(m_dblog),m_parent(parent),m_ordinal(ordinal)
 		{
 			thingName="ordinal "+String(ordinal);
 		}
@@ -842,8 +851,8 @@ protected:
 
 
 public:
-	MultiSwitch(debugBaseClass *dblog):
-		baseSwitch(dblog,_DEBOUNCE_WINDOW_LOGIC_TTL)
+	MultiSwitch(debugBaseClass *m_dblog):
+		baseSwitch(m_dblog,_DEBOUNCE_WINDOW_LOGIC_TTL)
 	{
 		m_type=stVirtual;
 		thingName="Gang";
@@ -878,10 +887,12 @@ public:
 	// turn all the children on or off
 	virtual void DoRelay(bool on, bool forceSwitchToReflect=false)
 	{
-		dblog->println(debug::dbVerbose,"DoRelay on Gang called");
+		if(m_dblog)
+			m_dblog->println(debug::dbVerbose,"DoRelay on Gang called");
 		for(auto each=0;each<m_children.size();each++)
 		{
-			dblog->printf(debug::dbVerbose,"DoChildRelay %d called\n\r",each);
+			if(m_dblog)
+				m_dblog->printf(debug::dbVerbose,"DoChildRelay %d called\n\r",each);
 			DoChildRelay(each,on,forceSwitchToReflect);
 		}
 	}
@@ -912,9 +923,9 @@ protected:
 	class MCP23071ChildSwitch : public MultiSwitch::childSwitch, public StateAnnouncer
 	{
 	public:
-		MCP23071ChildSwitch(debugBaseClass *dblog, MultiSwitch *parent, unsigned ordinal):
-			MultiSwitch::childSwitch(dblog,parent,ordinal),
-			StateAnnouncer(dblog)
+		MCP23071ChildSwitch(debugBaseClass *m_dblog, MultiSwitch *parent, unsigned ordinal):
+			MultiSwitch::childSwitch(m_dblog,parent,ordinal),
+			StateAnnouncer(m_dblog)
 		{
 
 		}
@@ -928,12 +939,12 @@ protected:
 
 public:
 
-	MCP23017MultiSwitch(debugBaseClass *dblog, unsigned numSwitches, int sdaPin, int sclPin, int intPin):
-		MultiSwitch(dblog),m_isrHits(0),
+	MCP23017MultiSwitch(debugBaseClass *m_dblog, unsigned numSwitches, int sdaPin, int sclPin, int intPin):
+		MultiSwitch(m_dblog),m_isrHits(0),
 #ifdef USE_MCP_RELAY		
-		m_iochip(dblog, sdaPin,sclPin, D0, D3)
+		m_iochip(m_dblog, sdaPin,sclPin, D0, D3)
 #else
-		m_iochip(dblog, sdaPin, sclPin)
+		m_iochip(m_dblog, sdaPin, sclPin)
 #endif		
 	{
 		pinMode(intPin, INPUT_PULLUP);
@@ -946,7 +957,7 @@ public:
 
 		for(unsigned each=0;each<numSwitches;each++)
 		{
-			m_children.push_back(new MCP23071ChildSwitch(dblog, this, each));
+			m_children.push_back(new MCP23071ChildSwitch(m_dblog, this, each));
 		}
 	}
 
@@ -978,14 +989,16 @@ public:
 
 	void ICACHE_RAM_ATTR OnSwitchISR()
 	{
-		dblog->isr_println(debug::dbInfo,"MCP23017MultiSwitch::OnSwitchISR in");			
+		if(m_dblog)
+			m_dblog->isr_println(debug::dbInfo,"MCP23017MultiSwitch::OnSwitchISR in");			
 
 		m_isrHits++;
 
 		if(m_workToDo==w2dQuery)
 		{
 			// this is an error condition - we've rentered
-			dblog->isr_println(debug::dbError,"MCP23017MultiSwitch::OnSwitchISR re-entered");			
+			if(m_dblog)
+				m_dblog->isr_println(debug::dbError,"MCP23017MultiSwitch::OnSwitchISR re-entered");			
 			return;
 		}
 
@@ -1009,10 +1022,10 @@ public:
 
 		}
 
-		if(m_isrHits)
-		{
-			//dblog->printf(debug::dbInfo,"isr hits = %lu\r",m_isrHits);
-		}	
+		// if(m_isrHits)
+		// {
+		// 	//m_dblog->printf(debug::dbInfo,"isr hits = %lu\r",m_isrHits);
+		// }	
 		
 
 		
@@ -1027,7 +1040,8 @@ public:
 
 		if(!(causeAndState&0xff00))
 		{
-			dblog->println(debug::dbWarning,"QueryStateAndAct called with no cause");
+			if(m_dblog)
+				m_dblog->println(debug::dbWarning,"QueryStateAndAct called with no cause");
 			return;
 		}
 
@@ -1036,17 +1050,20 @@ public:
 		{
 			if(causeAndState & (1<<(each+8)))
 			{
-				dblog->printf(debug::dbInfo,"Port %u triggered ... ", each);
+				if(m_dblog)
+					m_dblog->printf(debug::dbInfo,"Port %u triggered ... ", each);
 
 				if(m_children[each]->IsSwitchBounce())
 				{
-					dblog->println(debug::dbInfo,"bounce");
+					if(m_dblog)
+						m_dblog->println(debug::dbInfo,"bounce");
 					continue;
 				}
 
 				// get the state
 				bool state=(causeAndState&(1<<each))?true:false;
-				dblog->printf(debug::dbInfo,"%s\r\n", state?"ON":"off");
+				if(m_dblog)
+					m_dblog->printf(debug::dbInfo,"%s\r\n", state?"ON":"off");
 				SetChildRelay(each,state);
 			}
 		}
@@ -1057,7 +1074,8 @@ public:
 	{
 		// get the switch, set the relay, save the girl
 		byte allSwitchStates=m_iochip.readAllSwitches(false);
-		dblog->printf(debug::dbInfo,"readAllSwitches %x\n\r",allSwitchStates);
+		if(m_dblog)
+			m_dblog->printf(debug::dbInfo,"readAllSwitches %x\n\r",allSwitchStates);
 		// switches are the 'correct' way round, relays are inverted 
 		byte allRelayStates=~allSwitchStates;
 		// then set all relays
