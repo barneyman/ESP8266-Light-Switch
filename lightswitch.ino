@@ -4,43 +4,18 @@
 #include <debugLogger.h>
 #include "switchSensor.h"
 
-// define one of the following ... 
-// nothing defined == 6 switch nodemcu
-#define _SONOFF_BASIC					// the basic normal sonoff
-//#define _SONOFF_BASIC_EXTRA_SWITCH		// one with the extra GPIO pin wired as a switch
 //#define _AT_RGBSTRIP					// a strip of RGBs
 
 
-// turn these OFF for the 6 switch one
-// the sonoff units
-// normal
-// #define _SONOFF_BASIC
-// the one in LS with an extra switch wire
-// #define _SONOFF_BASIC_EXTRA_SWITCH
-// the wemso D1 relay shield
 
-
-
-
-#if !defined(_SONOFF_BASIC) && !defined(_SONOFF_BASIC_EXTRA_SWITCH) && !defined(_AT_RGBSTRIP)
-#error "Something MUST be defined!"
-#endif
-
-#if defined(_SONOFF_BASIC) || defined(_SONOFF_BASIC_EXTRA_SWITCH)
-
-
-// 1mb 128k spiffs gives you ~ 500k for bin file
-#define _OTA_AVAILABLE
-
-#elif defined(_AT_RGBSTRIP)
-
+// 1mb 128k spiffs gives you ~ 500k for bin file for a sonoff
 #define _OTA_AVAILABLE
 
 
 
-#endif
 
-#if defined(_SONOFF_BASIC) || defined(_SONOFF_BASIC_EXTRA_SWITCH)
+
+
 
 
 // IMPORTANT - for programming SONOFF Basics
@@ -55,33 +30,6 @@
 // a number of exceptions in 2.4.0 & LWIP2 - currently only works reliably with 2.3.0 and LWIP1.4
 
 // do not exceed 1Mb of spiffs in wemos (and maybe others) - you get assertions in DataSource.h
-
-
-#define GPIO_RELAY		12	// GPIO12
-#define GPIO_LED		13
-#define GPIO_SWITCH		0	// GPIO0 is existing button, GPIO14/D5 for the one on the header
-
-#ifdef _SONOFF_BASIC_EXTRA_SWITCH
-
-#define GPIO_SWITCH2		14
-
-#endif
-
-#elif defined(_AT_RGBSTRIP)
-
-#ifdef _DEBUG
-#define _NUM_LEDS	15
-#else
-#define _NUM_LEDS	135
-#endif
-	
-#define GPIO_LED		LED_BUILTIN
-// whatever you want it to be!
-//#define GPIO_SWITCH		D2
-
-
-#endif
-
 
 
 
@@ -123,8 +71,8 @@ volatile bool updateInProgress=false;
 
 #ifndef _VERSION_NUM_CLI
 
-//	#define _VERSION_NUM "v99.99.99.pr"
-	#define _VERSION_NUM "v0.0.1.pr"
+	#define _VERSION_NUM "v99.99.99.pr"
+//	#define _VERSION_NUM "v0.0.1.pr"
 	#define _DEVELOPER_BUILD
 
 #else
@@ -162,36 +110,11 @@ void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState);
 #include <myWifi.h>
 
 
-//#define _OLD_WAY
-#ifdef _OLD_WAY
-
-
-#ifdef _SENSOR_TYPE
-#define mdsnNAME	"bjfSensors"
-#else
-#define mdsnNAME	"bjfLights"
-#endif
-
-#if defined(_SONOFF_BASIC) || defined(_SONOFF_BASIC_EXTRA_SWITCH)
-myWifiClass wifiInstance("sonoff_", &dblog, mdsnNAME);
-#elif defined(_AT_RGBSTRIP)
-SerialDebug dblog(debug::dbVerbose);
-myWifiClass wifiInstance("rgb_", &dblog, mdsnNAME);
-
-// pull in the AT handler
-#include <wire.h>
-#include <atLEDS.h>
-#define _AT85_ADDR	0x10
-ATleds rgbHandler(_AT85_ADDR,&dblog);
-
-#endif
-
-#else
 
 #define mdsnNAME	"barneyman"
 myWifiClass wifiInstance("esp_", NULL, mdsnNAME);
 
-#endif
+
 
 
 // millis timeouts
@@ -201,9 +124,9 @@ myWifiClass wifiInstance("esp_", NULL, mdsnNAME);
 
 #define _ALLOW_WIFI_RESET_OVER_WIFI
 #define _ALLOW_WIFI_RESET_VIA_QUICKSWITCH
-#define _ALLOW_WIFI_RESET_AFTER_APIJOIN_TIMOUT (2*60*1000)
+#define _ALLOW_WIFI_RESET_AFTER_APIJOIN_TIMEOUT (2*60*1000)
 
-#ifdef _ALLOW_WIFI_RESET_AFTER_APIJOIN_TIMOUT
+#ifdef _ALLOW_WIFI_RESET_AFTER_APIJOIN_TIMEOUT
 unsigned long runtimeWhenLastJoined=0;
 #endif
 
@@ -272,8 +195,13 @@ struct
 	false, true,
 
 	// logging
+#ifdef _DEVELOPER_BUILD	
+	debug::dbLevel::dbVerbose,
+	debug::dbImpl::dbSerial,
+#else
 	debug::dbLevel::dbInfo,
 	debug::dbImpl::dbNone,
+#endif	
 	NULL,
 	""
 
@@ -301,36 +229,7 @@ std::vector<myWifiClass::mdnsService> services;
 
 
 
-#ifdef GPIO_SWITCH2
-// ICACHE_RAM_ATTR  makes it ISR safe
-void ICACHE_RAM_ATTR OnSwitchISR2()
-{
-	if (Details.ignoreISRrequests)
-		return;
 
-	// if we're up to our neck in something else (normally WIFI negotiation) ignore this
-	if (wifiInstance.busyDoingSomethingIgnoreSwitch)
-	{
-		if(Details.dblog) Details.dblog->isr_printf(debug::dbInfo, "	OnSwitchISR_2 redundant\n\r");
-		return;
-	}
-
-	if(Details.dblog) Details.dblog->isr_println(debug::dbInfo, "	OnSwitchISR_2 in");
-
-
-	// ask what changed, clear interrupt
-	int causeAndState =
-	(Details.switches[0].altSwitchType == stMomentary ?
-		// fake the cause and reflect INVERSE state of relay - because MOMENTARY
-		(1 << 8) | (digitalRead(GPIO_RELAY) == HIGH ? 0 : 1) :
-		// handle the toggle as a toggle
-		(1 << 8) | (digitalRead(GPIO_SWITCH2) == HIGH ? 0 : 1));
-
-	HandleCauseAndState(causeAndState);
-
-	if(Details.dblog) Details.dblog->isr_printf(debug::dbVerbose, "OnSwitchISR2 out\n\r");
-}
-#endif
 
 
 
@@ -633,13 +532,9 @@ void ReadJSONconfig()
 	
 	if(root.containsKey("loggingLevel"))
 		Details.loggingLevel=(debug::dbLevel)root["loggingLevel"].as<int>();
-	else
-		Details.loggingLevel=debug::dbLevel::dbImportant;
 
 	if(root.containsKey("loggingImpl"))
 		Details.loggingImpl=(debug::dbImpl)root["loggingImpl"].as<int>();
-	else
-		Details.loggingImpl=debug::dbImpl::dbNone;
 
 	if(root.containsKey("loggingImplConfig"))
 		Details.loggingImplConfig=root["loggingImplConfig"].as<char*>();
@@ -897,8 +792,19 @@ void setup(void)
 
 #elif defined(ARDUINO_ESP8266_WEMOS_D1MINI)
 
+#ifdef _PIR_VARIANT
+
 	Details.sensors.push_back(new PIRInstantSensor(Details.dblog, D7));
 	AddSwitch(new WemosRelayShield(Details.dblog));
+
+#else
+
+	Details.sensors.push_back(new BME280Sensor(Details.dblog));
+	Details.sensors.push_back(new MAX44009Sensor(Details.dblog));
+
+
+#endif // PIR
+
 
 #endif
 
@@ -2011,14 +1917,14 @@ void loop(void)
 		ResetToAP();
 #endif
 
-#ifdef _ALLOW_WIFI_RESET_AFTER_APIJOIN_TIMOUT
+#ifdef _ALLOW_WIFI_RESET_AFTER_APIJOIN_TIMEOUT
 
 	if(wifiInstance.currentMode!=myWifiClass::modeSTA_unjoined)
 	{
 		runtimeWhenLastJoined=millis();
 	}
 
-	if(millis()-runtimeWhenLastJoined > _ALLOW_WIFI_RESET_AFTER_APIJOIN_TIMOUT)
+	if(millis()-runtimeWhenLastJoined > _ALLOW_WIFI_RESET_AFTER_APIJOIN_TIMEOUT)
 	{
 		AddAP();
 		runtimeWhenLastJoined=millis();
