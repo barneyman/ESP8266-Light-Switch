@@ -21,7 +21,7 @@
 <!--
 <div class="verticalContainer">
     -->
-    <fieldset>
+    <fieldset id="deviceName">
         <legend>Name</legend>
         <fieldset>
             ID for the device; use something that expresses its function (ie Bedroom Lamp)
@@ -35,7 +35,7 @@
         </fieldset>
     </fieldset>
     <br>
-    <fieldset>
+    <fieldset id="deviceWifi" hidden>
         <legend>Wifi Details</legend>
             <fieldset>
                 <div>
@@ -69,13 +69,15 @@
                 <div class="horizontalContainer"><div>Netmask:</div><div><input type="text" id="netmask" value="255.255.255.0"></div></div>
             </fieldset>
         </fieldset>
-        <div class="horizontalContainerRight">
+        <div class="horizontalContainerleft">
             <button id="rescan" onclick="OnLoad()" disabled>Rescan</button>            
         </div>
     </fieldset>
 
     <div class="horizontalContainerRight">
-        <button id="join" onclick="JoinWifi()" disabled>Commit</button>
+        <button id="prevButton" onclick="previous()" disabled>Previous</button>
+        <button id="nextButton" onclick="next()">Next</button>
+        <!-- <button id="join" onclick="JoinWifi()" hidden>Finish</button> -->
     </div>
 
 
@@ -102,6 +104,57 @@
 
         }
 
+        function next()
+        {
+            nameFields=document.getElementById("deviceName")
+            wifiFields=document.getElementById("deviceWifi")
+            nextButton=document.getElementById("nextButton")
+            prevButton=document.getElementById("prevButton")
+
+            if(nameFields.hidden==false)
+            {
+                // there needs to be a name
+                if(document.getElementById("friendlyName").value.length==0)
+                {
+                    alert("need a name please")
+                    return
+                }
+
+                // it's next !
+                nameFields.hidden=true
+                wifiFields.hidden=false
+                nextButton.innerText="Finish"
+                prevButton.disabled=false
+            }
+            else
+            {
+                if(document.getElementById("pwd").value.length==0)
+                {
+                    alert("need a password please")
+                    return
+                }
+
+                JoinWifi()
+            }
+        }
+
+        function previous()
+        {
+            nameFields=document.getElementById("deviceName")
+            wifiFields=document.getElementById("deviceWifi")
+            nextButton=document.getElementById("nextButton")
+            prevButton=document.getElementById("prevButton")
+
+
+
+            // it's next !
+            nameFields.hidden=false
+            wifiFields.hidden=true
+            nextButton.innerText="Next"
+            prevButton.disabled=true
+        }
+
+
         function OnLoad()
         {
             let url = base+'/json/wifi'
@@ -109,9 +162,13 @@
 
             showStatus("Searching ....")
 
+            var previousNextState=document.getElementById("nextButton").disabled
+            var previousPrevState=document.getElementById("prevButton").disabled
+
             // disable scan
             document.getElementById("rescan").disabled = true;
-            document.getElementById("join").disabled = true;
+            document.getElementById("nextButton").disabled = true;
+            document.getElementById("prevButton").disabled = true;
 
 
 
@@ -143,7 +200,9 @@
                     clearStatus()
 
                     document.getElementById("rescan").disabled = false;
-                    document.getElementById("join").disabled = false;
+                    document.getElementById("nextButton").disabled = previousNextState;
+                    document.getElementById("prevButton").disabled = previousPrevState;
+                    
                     })
                     .catch(function (error) {
                         wifis.innerText = "Error"

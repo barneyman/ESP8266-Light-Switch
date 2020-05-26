@@ -41,6 +41,23 @@ button {
     margin: 4px 2px;
     cursor: pointer
 }
+
+
+button:disabled
+{
+    background-color: green;
+    border: none;
+    color: gray;
+    padding: 5px 15px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 16px;
+    margin: 4px 2px;
+    cursor: pointer
+}
+
+
 .button_red {
     background-color: red
 }
@@ -73,6 +90,12 @@ button {
     flex-direction: row;
     justify-content: flex-end
 }
+.horizontalContainerleft {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-start
+}
+
 .verticalContainer {
     display: flex;
     flex-direction: column
