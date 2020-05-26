@@ -189,7 +189,7 @@ struct
 	},
 #endif
 
-	"Undefined",	// friendly name
+	"",	// friendly name
 
 	// prerel, upgradeWhileOff
 	false, true,
@@ -1860,21 +1860,21 @@ void SendServerPage()
 {
 	// given the current state of the device, send the appropriate page back
 	
-	String toOpen("/Error.htm");
+	String toOpen("/_Error.htm");
 	switch (wifiInstance.currentMode)
 	{
 	case myWifiClass::wifiMode::modeSTAandAP:
-		toOpen="/STAAPmode.htm";
+		toOpen="/_STAAPmode.htm";
 		break;
 	case myWifiClass::wifiMode::modeAP:
-		toOpen = "/APmode.htm";
+		toOpen = "/_APmode.htm";
 		break;
 	case myWifiClass::wifiMode::modeSTA:
-		toOpen = "/STAmode.htm";
+		toOpen = "/_STAmode.htm";
 		break;
 	case myWifiClass::wifiMode::modeUnknown:
 	default:
-		toOpen = "/Error.htm";
+		toOpen = "/_Error.htm";
 		break;
 
 	}
