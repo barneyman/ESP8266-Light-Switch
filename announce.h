@@ -70,8 +70,9 @@ public:
 		}
 		else
 		{
+			// cater for auth change
 			// cater for port change
-			if(finder->m_port==port)
+			if(finder->m_port==port && finder->m_extra==extra)
 			{
 				if(m_dblog)
 					m_dblog->println(debug::dbVerbose,"already exists");
