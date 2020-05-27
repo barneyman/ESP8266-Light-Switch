@@ -43,7 +43,6 @@
 #ifdef _OTA_AVAILABLE
 // 
 #include <ESP8266httpUpdate.h>
-volatile bool updateInProgress=false;
 #endif
 
 // passing strings from command line as defines, don't come thru as strings
@@ -159,6 +158,10 @@ struct
 	debugBaseClass *dblog;
 	String loggingImplConfig;
 
+	// update stuff
+	bool updateAvailable;
+	String url, urlSpiffs;
+
 
 	// sensors
 	std::vector<baseSensor*>	sensors;
@@ -197,8 +200,10 @@ struct
 	debug::dbImpl::dbNone,
 #endif	
 	NULL,
-	""
+	"",
 
+	// update
+	false,"",""
 
 };
 
@@ -899,6 +904,94 @@ void FindPeers()
 
 }
 
+void performUpdate(String url, String urlSpiffs)
+{
+	if(Details.dblog) Details.dblog->println(debug::dbImportant,"performing update");
+
+	StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer2;
+	JsonObject&replyroot = jsonBuffer2.createObject();
+	String bodyText;
+	enum HTTPUpdateResult result=HTTP_UPDATE_OK;
+
+	for(int updates=0;(updates<2) && (result==HTTP_UPDATE_OK);updates++)
+	{
+
+		// augment the url with a prerelease parameter
+		String urlArgs="?prerelease="+String((Details.prereleaseRequired?"true":"false"));
+		if(Details.dblog) Details.dblog->println(debug::dbInfo,urlArgs.c_str());
+
+
+		// lets check for SPIFFs update first
+		
+		if(!updates)
+		{
+			if(Details.dblog) Details.dblog->println(debug::dbImportant, "updating SPIFFS ...");
+			result=ESPhttpUpdate.updateSpiffs(wifiInstance.m_wificlient ,urlSpiffs+urlArgs,_MYVERSION);
+		}
+		else
+		{
+			if(Details.dblog) Details.dblog->println(debug::dbImportant, "updating BIN ...");
+			// we do some clean up so let me boot
+			ESPhttpUpdate.rebootOnUpdate(false);
+			result=ESPhttpUpdate.update(url+urlArgs, _MYVERSION);
+		}
+
+		switch (result)
+		{
+		case HTTP_UPDATE_FAILED:
+			if(Details.dblog) Details.dblog->printf(debug::dbError, "HTTP_UPDATE_FAILED Error (%d): %s", ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
+			break;
+		case HTTP_UPDATE_NO_UPDATES:
+			if(Details.dblog) Details.dblog->println(debug::dbImportant, "no updates");
+			break;
+		case HTTP_UPDATE_OK:
+			if(Details.dblog) Details.dblog->println(debug::dbImportant, "update succeeded");
+			break;
+		}
+
+		JsonObject &thisLoop=replyroot.createNestedObject((!updates)?"SPIFFS":"BIN");
+
+		thisLoop["result"]=result;
+
+		if (result != HTTP_UPDATE_OK)
+		{
+			JsonObject &details = thisLoop.createNestedObject("Details");
+			details["espNarrative"] = ESPhttpUpdate.getLastErrorString();
+			details["espResult"] = ESPhttpUpdate.getLastError();
+
+		}
+
+		bodyText=String();
+		replyroot.printTo(bodyText);
+
+		if (result != HTTP_UPDATE_OK)
+		{
+			if(Details.dblog) Details.dblog->println(debug::dbError, bodyText);
+			break;
+		}
+		else
+		{
+			if(Details.dblog) Details.dblog->println(debug::dbImportant, bodyText);
+		}
+
+		// first time round, save our config, always, even if it fails
+		if(!updates) // && (result==HTTP_UPDATE_OK))
+		{
+			if(Details.dblog) Details.dblog->println(debug::dbImportant, "preserving config");
+			WriteJSONconfig();
+		}
+
+	}
+
+	// preserve, reboot, if it worked
+	if(result==HTTP_UPDATE_OK)
+	{
+		RebootMe(true);
+	}
+
+}
+
+
 // set up all the handlers for the web server
 void InstallWebServerHandlers()
 {
@@ -976,100 +1069,14 @@ void InstallWebServerHandlers()
 		String url= root["url"];		
 
 */
-		updateInProgress=true;
+		Details.updateAvailable=true;
+		Details.url=root["url"].as<char*>();
+		Details.urlSpiffs=root["urlSpiffs"].as<char*>();
 
-		String url= root["url"];
-		String urlSpiffs= root["urlSpiffs"];
-
-		//delay(_WEB_TAR_PIT_DELAY);
-
-		StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer2;
-		JsonObject&replyroot = jsonBuffer2.createObject();
-		String bodyText;
-		enum HTTPUpdateResult result=HTTP_UPDATE_OK;
-
-		for(int updates=0;(updates<2) && (result==HTTP_UPDATE_OK);updates++)
-		{
-
-			// augment the url with a prerelease parameter
-			String urlArgs="?prerelease="+String((Details.prereleaseRequired?"true":"false"));
-			if(Details.dblog) Details.dblog->println(debug::dbInfo,urlArgs.c_str());
-
-
-			// lets check for SPIFFs update first
-			
-			if(!updates)
-			{
-				if(Details.dblog) Details.dblog->println(debug::dbImportant, "updating SPIFFS ...");
-				result=ESPhttpUpdate.updateSpiffs(wifiInstance.m_wificlient ,urlSpiffs+urlArgs,_MYVERSION);
-			}
-			else
-			{
-				if(Details.dblog) Details.dblog->println(debug::dbImportant, "updating BIN ...");
-				// we do some clean up so let me boot
-				ESPhttpUpdate.rebootOnUpdate(false);
-				result=ESPhttpUpdate.update(url+urlArgs, _MYVERSION);
-			}
-
-			switch (result)
-			{
-			case HTTP_UPDATE_FAILED:
-				if(Details.dblog) Details.dblog->printf(debug::dbError, "HTTP_UPDATE_FAILED Error (%d): %s", ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
-				break;
-			case HTTP_UPDATE_NO_UPDATES:
-				if(Details.dblog) Details.dblog->println(debug::dbImportant, "no updates");
-				break;
-			case HTTP_UPDATE_OK:
-				if(Details.dblog) Details.dblog->println(debug::dbImportant, "update succeeded");
-				break;
-			}
-
-			JsonObject &thisLoop=replyroot.createNestedObject((!updates)?"SPIFFS":"BIN");
-
-			thisLoop["result"]=result;
-
-			if (result != HTTP_UPDATE_OK)
-			{
-				JsonObject &details = thisLoop.createNestedObject("Details");
-				details["espNarrative"] = ESPhttpUpdate.getLastErrorString();
-				details["espResult"] = ESPhttpUpdate.getLastError();
-
-			}
-
-			bodyText=String();
-			replyroot.printTo(bodyText);
-
-			if (result != HTTP_UPDATE_OK)
-			{
-				if(Details.dblog) Details.dblog->println(debug::dbError, bodyText);
-				break;
-			}
-			else
-			{
-				if(Details.dblog) Details.dblog->println(debug::dbImportant, bodyText);
-			}
-
-			// first time round, save our config
-			if(!updates && (result==HTTP_UPDATE_OK))
-			{
-				if(Details.dblog) Details.dblog->println(debug::dbImportant, "preserving config");
-				WriteJSONconfig();
-			}
-
-		}
-
-		updateInProgress=false;
-
-		if(Details.dblog) Details.dblog->println(debug::dbInfo, "saving switch state\n\r");
 
 		// no point - core killed the IP stack during the update
-		wifiInstance.server.send(200, "application/json", bodyText);
+		wifiInstance.server.send(200, "application/json", "<html/>");
 
-		// preserve, reboot, if it worked
-		if(result==HTTP_UPDATE_OK)
-		{
-			RebootMe(true);
-		}
 
 	});
 
@@ -1903,8 +1910,15 @@ unsigned long lastCheckedForPeers = 0;
 void loop(void) 
 {
 
-	if(updateInProgress)
-		return;
+	if(Details.updateAvailable)
+	{
+		performUpdate(Details.url,Details.urlSpiffs);
+		// shouldn't get here, unless the update fails or there's nothing to do
+		Details.updateAvailable=false;
+		Details.url.clear();
+		Details.urlSpiffs.clear();
+	}
+
 
 #ifdef _ALLOW_WIFI_RESET
 	if (resetWIFI)
