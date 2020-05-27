@@ -6,10 +6,15 @@
     <link rel="stylesheet" type="text/css" href="switch.css">
 </HEAD>
 <BODY>
-        <iframe src="HeaderFrame.htm" id="header" name="header" style="width:100%"></iframe>
+    <script src="common.js"></script>
 
-    <span>BOOM!</span>
-	<div>Really not sure how you got here .... this means the device does now know what state the WiFi is in, so ho you got this page displayed is open to question</div>
+    <div class="verticalContainerFull">
+        <iframe src="HeaderFrame.htm" id="header" name="header" onload="headerLoaded()"></iframe>
+
+    <div>BOOM!</div>
+    <br>
+    <div>Really not sure how you got here .... this means the device does now know what state the WiFi is in, so how you got this page displayed is open to question</div>
+</div>
 
 </BODY>
 </HTML>
