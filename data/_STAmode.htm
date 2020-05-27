@@ -526,18 +526,22 @@
                             name.innerText = sensors[eachState]["name"]
                             row.appendChild(name)
 
+                            var sensorList= document.createElement("div")
+                            sensorList.classList="verticalContainer"
+                            row.appendChild(sensorList)
+
                             for (var key in sensors[eachState]) {
                                 if (key == "name" || key == "sensor")
                                     continue
                                 var state = document.createElement("div")
                                 state.innerText = key + ":" + sensors[eachState][key]
-                                row.appendChild(state)
+                                sensorList.appendChild(state)
 
 
                             }
 
-
                             tableSensors.appendChild(row)
+                            tableSensors.appendChild(document.createElement("br"))
 
 
                         }
