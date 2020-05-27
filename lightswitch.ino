@@ -99,12 +99,6 @@ StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 #include <GDBStub.h>
 #endif
 
-// forward
-void ICACHE_RAM_ATTR HandleCauseAndState(int causeAndState);
-
-// first board that worked, although the pins were swapped around on the output
-#define _BOARD_VER_1_1
-
 
 // my libs
 #include <myWifi.h>
