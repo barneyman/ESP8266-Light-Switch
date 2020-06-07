@@ -42,7 +42,12 @@
 
 #ifdef _OTA_AVAILABLE
 // 
-#include <ESP8266httpUpdate.h>
+#ifdef ARDUINO_ARCH_ESP32
+	#include <HTTPUpdate.h>
+	#include <SPIFFS.h>
+#else
+	#include <ESP8266httpUpdate.h>
+#endif	
 #endif
 
 // passing strings from command line as defines, don't come thru as strings
@@ -58,6 +63,8 @@
 	#define _VERSION_FRIENDLY	"sonoff_basic"
 	#elif defined(ARDUINO_ESP8266_WEMOS_D1MINI)
 	#define _VERSION_FRIENDLY	"wemosD1"
+	#elif defined(ESP32)
+	#define _VERSION_FRIENDLY	"esp32dev"
 	#else
 	#define _VERSION_FRIENDLY	"unknown"
 	#endif
@@ -103,8 +110,11 @@ StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 #include <myWifi.h>
 
 
-
+#ifdef ESP32
+#define mdsnNAME	"barneyman32"
+#else
 #define mdsnNAME	"barneyman"
+#endif
 myWifiClass wifiInstance("esp_", NULL, mdsnNAME);
 
 
@@ -387,6 +397,8 @@ void WriteJSONconfig()
 	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "JSON : closed\n\r");
 
 	Details.configDirty = false;
+
+	yield();
 }
 
 
@@ -546,7 +558,7 @@ void ReadJSONconfig()
 
 	wifiInstance.ReadDetailsFromJSON(root, Details.wifi);
 
-
+	yield();
 }
 
 
@@ -785,6 +797,8 @@ void setup(void)
 
 	}
 
+#define _LOCH_SPORT_VARIANT
+
 #ifdef ARDUINO_ESP8266_GENERIC
 
 	AddSwitch(new SonoffBasic(Details.dblog));
@@ -793,8 +807,14 @@ void setup(void)
 
 #ifdef _PIR_VARIANT
 
-	Details.sensors.push_back(new PIRInstantSensor(Details.dblog, D7));
+	Details.sensors.push_back(new PIRInstantSensor(Details.dblog, D7, LED_BUILTIN));
 	AddSwitch(new WemosRelayShield(Details.dblog));
+
+#elif defined (_LOCH_SPORT_VARIANT)	
+
+	Details.sensors.push_back(new DallasSingleSensor(D7, Details.dblog));
+	Details.sensors.push_back(new BME280Sensor(Details.dblog));
+	Details.sensors.push_back(new MAX44009Sensor(Details.dblog));
 
 #else
 
@@ -830,7 +850,7 @@ void setup(void)
 
 #elif defined(WEMOS_COM4) 
 
-	Details.sensors.push_back(new PIRInstantSensor(Details.dblog, D7));
+	Details.sensors.push_back(new PIRInstantSensor(Details.dblog, D7, LED_BUILTIN));
 
 #elif defined(WEMOS_COM5) 
 
@@ -926,20 +946,33 @@ void performUpdate(String url, String urlSpiffs)
 		if(!updates)
 		{
 			if(Details.dblog) Details.dblog->println(debug::dbImportant, "updating SPIFFS ...");
+#ifdef ESP32
+			result=httpUpdate.updateSpiffs(wifiInstance.m_wificlient ,urlSpiffs+urlArgs,_MYVERSION);
+#else			
 			result=ESPhttpUpdate.updateSpiffs(wifiInstance.m_wificlient ,urlSpiffs+urlArgs,_MYVERSION);
+#endif			
 		}
 		else
 		{
 			if(Details.dblog) Details.dblog->println(debug::dbImportant, "updating BIN ...");
 			// we do some clean up so let me boot
+#ifdef ESP32
+			httpUpdate.rebootOnUpdate(false);
+			result=httpUpdate.update(wifiInstance.m_wificlient, url+urlArgs, _MYVERSION);
+#else
 			ESPhttpUpdate.rebootOnUpdate(false);
 			result=ESPhttpUpdate.update(url+urlArgs, _MYVERSION);
+#endif			
 		}
 
 		switch (result)
 		{
 		case HTTP_UPDATE_FAILED:
+#ifdef ESP32
+			if(Details.dblog) Details.dblog->printf(debug::dbError, "HTTP_UPDATE_FAILED Error (%d): %s", httpUpdate.getLastError(), httpUpdate.getLastErrorString().c_str());
+#else
 			if(Details.dblog) Details.dblog->printf(debug::dbError, "HTTP_UPDATE_FAILED Error (%d): %s", ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
+#endif			
 			break;
 		case HTTP_UPDATE_NO_UPDATES:
 			if(Details.dblog) Details.dblog->println(debug::dbImportant, "no updates");
@@ -956,8 +989,13 @@ void performUpdate(String url, String urlSpiffs)
 		if (result != HTTP_UPDATE_OK)
 		{
 			JsonObject &details = thisLoop.createNestedObject("Details");
+#ifdef ESP32			
+			details["espNarrative"] = httpUpdate.getLastErrorString();
+			details["espResult"] = httpUpdate.getLastError();
+#else
 			details["espNarrative"] = ESPhttpUpdate.getLastErrorString();
 			details["espResult"] = ESPhttpUpdate.getLastError();
+#endif			
 
 		}
 
@@ -992,6 +1030,23 @@ void performUpdate(String url, String urlSpiffs)
 }
 
 
+#ifdef _ESP_USE_ASYNC_WEB
+void onPostBodyHandler(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
+{
+
+		if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "onPostBodyHandler %d\n\r", len);
+
+		request->_tempObject=malloc(len+1);
+		memcpy(request->_tempObject,data,len);
+		char *dest=(char*)(request->_tempObject);
+		dest[len]=0;
+
+
+
+}
+#endif
+
+
 // set up all the handlers for the web server
 void InstallWebServerHandlers()
 {
@@ -1003,49 +1058,90 @@ void InstallWebServerHandlers()
 	// switch ON/OFF
 	// revert
 
+
+
 	// make all the relays reflect their switches
+#ifdef _ESP_USE_ASYNC_WEB
+	wifiInstance.server.on("/revert", HTTP_POST, [](AsyncWebServerRequest *request) {
+#else	
 	wifiInstance.server.on("/revert", HTTP_POST, []() {
+#endif		
 
 		if(Details.dblog) Details.dblog->println(debug::dbImportant, "/revert");
 
 		RevertAllSwitch();
 
-		//delay(_WEB_TAR_PIT_DELAY);
-
+#ifdef _ESP_USE_ASYNC_WEB
+		SendServerPage(request);
+#else
 		SendServerPage();
+#endif		
 	});
 
 	// do something to all of them
+#ifdef _ESP_USE_ASYNC_WEB
+	wifiInstance.server.on("/all", HTTP_POST, [](AsyncWebServerRequest *request) {
+#else	
 	wifiInstance.server.on("/all",HTTP_POST, []() {
+#endif		
 
 		if(Details.dblog) Details.dblog->println(debug::dbImportant, "/all");
 
+#ifdef _ESP_USE_ASYNC_WEB
+		for (uint8_t i = 0; i < request->params(); i++)
+#else
 		for (uint8_t i = 0; i < wifiInstance.server.args(); i++)
+#endif		
 		{
+#ifdef _ESP_USE_ASYNC_WEB
+			AsyncWebParameter* p = request->getParam(i);
+			if(p->name()=="action")
+			{
+				DoAllSwitch(p->value() == "on" ? true : false, true);
+			}
+#else
 			if (wifiInstance.server.argName(i) == "action")
 			{
 				DoAllSwitch(wifiInstance.server.arg(i) == "on" ? true : false, true);
 			}
+#endif			
 		}
 
-		//delay(_WEB_TAR_PIT_DELAY);
-
+#ifdef _ESP_USE_ASYNC_WEB
+		SendServerPage(request);
+#else
 		SendServerPage();
+#endif		
 	});
 
 
 #ifdef _OTA_AVAILABLE
 
 	// do an OTA update from a provided URL
+#ifdef _ESP_USE_ASYNC_WEB
+	wifiInstance.server.on("/json/upgrade", HTTP_POST, [](AsyncWebServerRequest *request) {
+#else	
 	wifiInstance.server.on("/json/upgrade", HTTP_POST, []() {
-
+#endif
 		if(Details.dblog) Details.dblog->println(debug::dbImportant, "json upgrade posted");
-		if(Details.dblog) Details.dblog->println(debug::dbImportant, wifiInstance.server.arg("plain"));
 
-		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
+
+
+#ifdef _ESP_USE_ASYNC_WEB
+		String body((char*)request->_tempObject);
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, body.c_str());
+#else
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, wifiInstance.server.arg("plain"));
+#endif		
+
 		jsonBuffer.clear();
 		// 'plain' is the secret source to get to the body
-		JsonObject& root = jsonBuffer.parseObject(wifiInstance.server.arg("plain"));
+		JsonObject& root = 
+#ifdef _ESP_USE_ASYNC_WEB
+			jsonBuffer.parseObject(body.c_str());
+#else		
+			jsonBuffer.parseObject(wifiInstance.server.arg("plain"));
+#endif		
 
 		if(Details.upgradeOnlyWhenRelayOff)
 		{
@@ -1055,7 +1151,11 @@ void InstallWebServerHandlers()
 				{
 					// it's on ... bounce
 					if(Details.dblog) Details.dblog->println(debug::dbImportant, "ignoring upgrade because the relay is ON");
+#ifdef _ESP_USE_ASYNC_WEB
+					request->send(403, "application/json", "{ reason: 'not while turned on' }");
+#else
 					wifiInstance.server.send(403, "application/json", "{ reason: 'not while turned on' }");
+#endif					
 					return;
 				}
 			}
@@ -1075,15 +1175,27 @@ void InstallWebServerHandlers()
 
 
 		// no point - core killed the IP stack during the update
-		wifiInstance.server.send(200, "application/json", "<html/>");
+#ifdef _ESP_USE_ASYNC_WEB
+		request->send(200, "text/html", "<html/>");
+#else
+		wifiInstance.server.send(200, "text/html", "<html/>");
+#endif		
 
 
+#ifdef _ESP_USE_ASYNC_WEB
+	}).onBody(onPostBodyHandler);
+#else
 	});
+#endif
 
 #endif
 
 	// inverse of whatever it's currently doing
+#ifdef _ESP_USE_ASYNC_WEB
+	wifiInstance.server.on("/toggle", HTTP_POST, [](AsyncWebServerRequest *request) {
+#else	
 	wifiInstance.server.on("/toggle",HTTP_POST, []() {
+#endif		
 
 		if(Details.dblog) Details.dblog->println(debug::dbImportant, "/toggle");
 
@@ -1099,28 +1211,65 @@ void InstallWebServerHandlers()
 
 	});
 
+#ifdef _ESP_USE_ASYNC_WEB
+	wifiInstance.server.on("/button", HTTP_POST, [](AsyncWebServerRequest *request) {
+#else	
 	wifiInstance.server.on("/button",HTTP_POST, []() {
+#endif
 
 		if(Details.dblog) Details.dblog->println(debug::dbInfo, "/button");
 
+#ifdef _ESP_USE_ASYNC_WEB
+		for (int count = 0; count < request->params(); count++)
+#else
 		for (int count = 0; count < wifiInstance.server.args(); count++)
+#endif		
 		{
+#ifdef _ESP_USE_ASYNC_WEB			
+			AsyncWebParameter* p = request->getParam(count);
+#endif			
+
 			if(Details.dblog) Details.dblog->printf(debug::dbInfo, "%d. %s = %s \n\r", 
 				count+1, 
+#ifdef _ESP_USE_ASYNC_WEB
+				p->name().c_str(), 
+				p->value().c_str()
+#else				
 				wifiInstance.server.argName(count).c_str(), 
 				wifiInstance.server.arg(count).c_str()
+#endif				
 			);
 		}
 
 
 
+#ifdef _ESP_USE_ASYNC_WEB
+		if(request->hasParam("action"))
+#else
 		if (wifiInstance.server.hasArg("action"))
+#endif		
 		{
+#ifdef _ESP_USE_ASYNC_WEB			
+			AsyncWebParameter* p = request->getParam("action");
+			bool action = p->value() == "on" ? true : false;
+#else
 			bool action = wifiInstance.server.arg("action") == "on" ? true : false;
+#endif			
+
 			
+#ifdef _ESP_USE_ASYNC_WEB
+			if(request->hasParam("port"))
+#else
 			if(wifiInstance.server.hasArg("port"))
+#endif			
 			{
+#ifdef _ESP_USE_ASYNC_WEB			
+				AsyncWebParameter* p = request->getParam("port");
+				int port=p->value().toInt();
+#else
 				int port=wifiInstance.server.arg("port").toInt();
+#endif
+
 				if(port<Details.switches.size())
 				{
 					Details.switches[port]->DoRelay(action);
@@ -1140,35 +1289,72 @@ void InstallWebServerHandlers()
 
 		}
 
-		//delay(_WEB_TAR_PIT_DELAY);
-
+#ifdef _ESP_USE_ASYNC_WEB
+		SendServerPage(request);
+#else
 		SendServerPage();
+#endif		
 
 	});
 
 	// LEGACY - remove when the beach house is upgraded past 0.0.32 and home assistant does POSTS
+#ifdef _ESP_USE_ASYNC_WEB
+	wifiInstance.server.on("/button", [](AsyncWebServerRequest *request) {
+#else	
 	wifiInstance.server.on("/button", []() {
+#endif
 
 		if(Details.dblog) Details.dblog->println(debug::dbInfo, "/button");
 
+#ifdef _ESP_USE_ASYNC_WEB
+		for (int count = 0; count < request->params(); count++)
+#else
 		for (int count = 0; count < wifiInstance.server.args(); count++)
+#endif		
 		{
+#ifdef _ESP_USE_ASYNC_WEB
+			AsyncWebParameter* p = request->getParam(count);
+#endif
+
 			if(Details.dblog) Details.dblog->printf(debug::dbInfo, "%d. %s = %s \n\r", 
 				count+1, 
+#ifdef _ESP_USE_ASYNC_WEB
+				p->name().c_str(),
+				p->value().c_str()
+#else				
 				wifiInstance.server.argName(count).c_str(), 
 				wifiInstance.server.arg(count).c_str()
+#endif				
 			);
 		}
 
 
 
+#ifdef _ESP_USE_ASYNC_WEB
+		if(request->hasParam("action"))
+#else
 		if (wifiInstance.server.hasArg("action"))
+#endif		
 		{
+#ifdef _ESP_USE_ASYNC_WEB
+			AsyncWebParameter* p = request->getParam("action");
+			bool action = p->value() == "on" ? true : false;
+#else
 			bool action = wifiInstance.server.arg("action") == "on" ? true : false;
+#endif			
 			
+#ifdef _ESP_USE_ASYNC_WEB
+			if(request->hasParam("port"))
+#else
 			if(wifiInstance.server.hasArg("port"))
+#endif			
 			{
+#ifdef _ESP_USE_ASYNC_WEB
+				AsyncWebParameter* p = request->getParam("port");
+				int port=p->value().toInt();
+#else				
 				int port=wifiInstance.server.arg("port").toInt();
+#endif				
 				if(port<Details.switches.size())
 				{
 					Details.switches[port]->DoRelay(action);
@@ -1188,23 +1374,38 @@ void InstallWebServerHandlers()
 
 		}
 
-		//delay(_WEB_TAR_PIT_DELAY);
-
+#ifdef _ESP_USE_ASYNC_WEB
+		SendServerPage(request);
+#else
 		SendServerPage();
+#endif		
 
 	});
 
 
 
-
+#ifdef _ESP_USE_ASYNC_WEB
+	wifiInstance.server.on("/json/logging", HTTP_POST, [](AsyncWebServerRequest *request) {
+#else	
 	wifiInstance.server.on("/json/logging",HTTP_POST, []() {
+#endif		
 
 		if(Details.dblog) Details.dblog->println(debug::dbImportant, "/json/logging");
+#ifdef _ESP_USE_ASYNC_WEB
+		String body((char*)request->_tempObject);
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, body.c_str());
+#else
 		if(Details.dblog) Details.dblog->println(debug::dbImportant, wifiInstance.server.arg("plain"));
+#endif		
 
 		jsonBuffer.clear();
 		// 'plain' is the secret source to get to the body
-		JsonObject& root = jsonBuffer.parseObject(wifiInstance.server.arg("plain"));
+		JsonObject& root = 
+#ifdef _ESP_USE_ASYNC_WEB
+			jsonBuffer.parseObject(body.c_str());
+#else		
+			jsonBuffer.parseObject(wifiInstance.server.arg("plain"));
+#endif		
 
 		bool reboot=false;
 
@@ -1229,13 +1430,21 @@ void InstallWebServerHandlers()
 
 		WriteJSONconfig();
 
+#ifdef _ESP_USE_ASYNC_WEB
+		request->send(200,"text/html","<html/>");
+#else
 		wifiInstance.server.send(200,"text/html","<html/>");
+#endif		
 
 		// minimise heap fracture
 		if(reboot)
 			RebootMe(true);
 
+#ifdef _ESP_USE_ASYNC_WEB
+	}).onBody(onPostBodyHandler);
+#else
 	});
+#endif
 
 
 
@@ -1243,7 +1452,11 @@ void InstallWebServerHandlers()
 
 
 
+#ifdef _ESP_USE_ASYNC_WEB
+	wifiInstance.server.on("/resetCounts", HTTP_POST, [](AsyncWebServerRequest *request) {
+#else	
 	wifiInstance.server.on("/resetCounts",HTTP_POST, []() {
+#endif
 
 		if(Details.dblog) Details.dblog->println(debug::dbImportant, "/resetCounts");
 
@@ -1252,13 +1465,21 @@ void InstallWebServerHandlers()
 		for(auto each=Details.switches.begin();each!=Details.switches.end();each++)
 			(*each)->ResetTransitionCount();
 
+#ifdef _ESP_USE_ASYNC_WEB
+		request->send(200, "text/html", "<html/>");
+#else
 		wifiInstance.server.send(200,"text/html","<html/>");
+#endif		
 
 	});
 
 #ifdef _DEVELOPER_BUILD
 
+#ifdef _ESP_USE_ASYNC_WEB
+	wifiInstance.server.on("/reboot", HTTP_POST, [](AsyncWebServerRequest *request) {
+#else	
 	wifiInstance.server.on("/reboot",HTTP_POST, []() {
+#endif
 
 		if(Details.dblog) Details.dblog->println(debug::dbImportant, "/reboot");
 
@@ -1270,9 +1491,20 @@ void InstallWebServerHandlers()
 
 #ifdef _ALLOW_WIFI_RESET_OVER_WIFI
 
+#ifdef _ESP_USE_ASYNC_WEB
+	wifiInstance.server.on("/resetWIFI", HTTP_POST, [](AsyncWebServerRequest *request) {
+#else	
 	wifiInstance.server.on("/resetWIFI",HTTP_POST, []() {
+#endif		
 
 		if(Details.dblog) Details.dblog->println(debug::dbImportant, "/resetWIFI");
+
+#ifdef _ESP_USE_ASYNC_WEB
+		request->send(200, "text/html", "<html/>");
+#else
+		wifiInstance.server.send(200, "text/html", "<html/>");
+#endif			
+
 
 		ResetToAP();
 
@@ -1280,54 +1512,93 @@ void InstallWebServerHandlers()
 
 #endif
 
+#ifdef _ESP_USE_ASYNC_WEB
+	wifiInstance.server.on("/stopAP", HTTP_POST, [](AsyncWebServerRequest *request) {
+#else	
 	wifiInstance.server.on("/stopAP",HTTP_POST, []() {
+#endif
 
 		if(Details.dblog) Details.dblog->println(debug::dbImportant, "/stopAP");
 
 		if (wifiInstance.currentMode == myWifiClass::wifiMode::modeSTAandAP)
 		{
 			wifiInstance.ConnectWifi(myWifiClass::wifiMode::modeSTA, Details.wifi);
+#ifdef _ESP_USE_ASYNC_WEB
+			request->send(200, "text/html", "<html/>");
+#else
 			wifiInstance.server.send(200, "text/html", "<html/>");
+#endif			
 		}
 		else
 		{
+#ifdef _ESP_USE_ASYNC_WEB
+			request->send(500, "text/html", "<html/>");
+#else
 			wifiInstance.server.send(500, "text/html", "<html/>");
+#endif			
 		}
+
 
 	});
 
 
 
+#ifdef _ESP_USE_ASYNC_WEB
+	wifiInstance.server.on("/",  [](AsyncWebServerRequest *request) {
+#else	
 	wifiInstance.server.on("/", []() {
+#endif
 
 		if(Details.dblog) Details.dblog->println(debug::dbInfo, "/ requested");
 
-		//delay(_WEB_TAR_PIT_DELAY);
-
+#ifdef _ESP_USE_ASYNC_WEB
+		SendServerPage(request);
+#else
 		SendServerPage();
+#endif		
 
 	});
 
+#ifdef _ESP_USE_ASYNC_WEB
+	wifiInstance.server.on("/default.htm",  [](AsyncWebServerRequest *request) {
+#else	
 	wifiInstance.server.on("/default.htm", []() {
+#endif
 
 		if(Details.dblog) Details.dblog->println(debug::dbInfo, "/default.htm");
 
-		//delay(_WEB_TAR_PIT_DELAY);
-
+#ifdef _ESP_USE_ASYNC_WEB
+		SendServerPage(request);
+#else
 		SendServerPage();
+#endif		
 
 	});
 
 	// posted config
+#ifdef _ESP_USE_ASYNC_WEB
+	wifiInstance.server.on("/json/config", HTTP_POST, [](AsyncWebServerRequest *request) {
+#else	
 	wifiInstance.server.on("/json/config", HTTP_POST, []() {
+#endif		
 
 		if(Details.dblog) Details.dblog->println(debug::dbImportant, "json config posted");
+#ifdef _ESP_USE_ASYNC_WEB
+		String body((char*)request->_tempObject);
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, body.c_str());
+#else
 		if(Details.dblog) Details.dblog->println(debug::dbImportant, wifiInstance.server.arg("plain"));
+#endif		
 
 		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 		jsonBuffer.clear();
 		// 'plain' is the secret source to get to the body
-		JsonObject& root = jsonBuffer.parseObject(wifiInstance.server.arg("plain"));
+		JsonObject& root = 
+#ifdef _ESP_USE_ASYNC_WEB
+			jsonBuffer.parseObject(body.c_str());
+#else		
+			jsonBuffer.parseObject(wifiInstance.server.arg("plain"));
+#endif		
 
 
 		if (root.containsKey("friendlyName"))
@@ -1362,24 +1633,50 @@ void InstallWebServerHandlers()
 
 		// extract the details
 		WriteJSONconfig();
-		//delay(_WEB_TAR_PIT_DELAY);
 
-		wifiInstance.server.send(200, "text/html", "<html></html>");
+#ifdef _ESP_USE_ASYNC_WEB
+		request->send(200, "text/html", "<html/>");
+#else
+		wifiInstance.server.send(200, "text/html", "<html/>");
+#endif		
 
-		});
+#ifdef _ESP_USE_ASYNC_WEB
+	}).onBody(onPostBodyHandler);
+#else
+	});
+#endif
 
 
+#ifdef _ESP_USE_ASYNC_WEB
+	wifiInstance.server.on("/json/listen", HTTP_POST, [](AsyncWebServerRequest *request) {
+#else	
 	wifiInstance.server.on("/json/listen", HTTP_POST, []() {
+#endif		
 
-		IPAddress recipientAddr = wifiInstance.server.client().remoteIP();
+		IPAddress recipientAddr = 
+#ifdef _ESP_USE_ASYNC_WEB
+			request->client()->remoteIP();
+#else
+			wifiInstance.server.client().remoteIP();
+#endif		
 
 		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "json listen posted from %s\n\r",recipientAddr.toString().c_str());
-		if(Details.dblog) Details.dblog->println(debug::dbInfo, wifiInstance.server.arg("plain"));
+#ifdef _ESP_USE_ASYNC_WEB
+		String body((char*)request->_tempObject);
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, body.c_str());
+#else
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, wifiInstance.server.arg("plain"));
+#endif		
 
 		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 		jsonBuffer.clear();
 		// 'plain' is the secret source to get to the body
-		JsonObject& root = jsonBuffer.parseObject(wifiInstance.server.arg("plain"));
+		JsonObject& root = 
+#ifdef _ESP_USE_ASYNC_WEB
+			jsonBuffer.parseObject(body.c_str());
+#else		
+			jsonBuffer.parseObject(wifiInstance.server.arg("plain"));
+#endif		
 
 		int recipientPort = root["port"];
 
@@ -1392,7 +1689,12 @@ void InstallWebServerHandlers()
 			if(recipientSensor<Details.sensors.size())
 			{
 				if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Adding recipient %s:%d Sensor %d\n\r", recipientAddr.toString().c_str(), recipientPort, recipientSensor);
+#ifdef _ESP_USE_ASYNC_WEB
+				String body((char*)request->_tempObject);
+				Details.sensors[recipientSensor]->AddAnnounceRecipient(recipientAddr,recipientPort,(body.c_str()));
+#else				
 				Details.sensors[recipientSensor]->AddAnnounceRecipient(recipientAddr,recipientPort,wifiInstance.server.arg("plain"));
+#endif				
 			}
 			else
 			{
@@ -1407,7 +1709,12 @@ void InstallWebServerHandlers()
 			if(recipientSwitch<Details.switches.size())
 			{
 				if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Adding recipient %s:%d Switch %d\n\r", recipientAddr.toString().c_str(), recipientPort, recipientSwitch);
+#ifdef _ESP_USE_ASYNC_WEB
+				String body((char*)request->_tempObject);
+				Details.switches[recipientSwitch]->AddAnnounceRecipient(recipientAddr,recipientPort,body.c_str());
+#else				
 				Details.switches[recipientSwitch]->AddAnnounceRecipient(recipientAddr,recipientPort,wifiInstance.server.arg("plain"));
+#endif				
 
 
 			}
@@ -1419,24 +1726,45 @@ void InstallWebServerHandlers()
 		}
 
 		//delay(_WEB_TAR_PIT_DELAY);
-		wifiInstance.server.send(200, "text/html", "<html></html>");
+#ifdef _ESP_USE_ASYNC_WEB
+		request->send(200, "text/html", "<html/>");
+#else
+		wifiInstance.server.send(200, "text/html", "<html/>");
+#endif
 
-
+#ifdef _ESP_USE_ASYNC_WEB
+	}).onBody(onPostBodyHandler);
+#else
 	});
+#endif
 
 
 
 
 
+#ifdef _ESP_USE_ASYNC_WEB
+	wifiInstance.server.on("/json/wifi", HTTP_POST, [](AsyncWebServerRequest *request) {
+#else	
 	wifiInstance.server.on("/json/wifi", HTTP_POST, []() {
+#endif		
 
 		if(Details.dblog) Details.dblog->println(debug::dbImportant, "json wifi posted");
+#ifdef _ESP_USE_ASYNC_WEB
+		String body((char*)request->_tempObject);
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, body.c_str());
+#else
 		if(Details.dblog) Details.dblog->println(debug::dbImportant, wifiInstance.server.arg("plain"));
+#endif		
 
 		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 		jsonBuffer.clear();
 		// 'plain' is the secret source to get to the body
-		JsonObject& root = jsonBuffer.parseObject(wifiInstance.server.arg("plain"));
+		JsonObject& root = 
+#ifdef _ESP_USE_ASYNC_WEB
+			jsonBuffer.parseObject(body.c_str());
+#else		
+			jsonBuffer.parseObject(wifiInstance.server.arg("plain"));
+#endif		
 
 		String ssid = root["ssid"];
 		String pwd = root["pwd"];
@@ -1477,14 +1805,25 @@ void InstallWebServerHandlers()
 		WriteJSONconfig();
 
 		//delay(_WEB_TAR_PIT_DELAY);
-		//wifiInstance.server.send(200, "text/html", "<html></html>");
+#ifdef _ESP_USE_ASYNC_WEB
+		request->send(200, "text/html", "<html/>");
+#else
+		wifiInstance.server.send(200, "text/html", "<html/>");
+#endif
 
-
+#ifdef _ESP_USE_ASYNC_WEB
+	}).onBody(onPostBodyHandler);
+#else
 	});
+#endif
 
 	// GET
 	
+#ifdef _ESP_USE_ASYNC_WEB
+	wifiInstance.server.on("/json/state", HTTP_GET, [](AsyncWebServerRequest *request) {
+#else	
 	wifiInstance.server.on("/json/state", HTTP_GET, []() {
+#endif		
 		// give them back the port / switch map
 
 		if(Details.dblog) Details.dblog->println(debug::dbInfo, "json state called");
@@ -1495,7 +1834,9 @@ void InstallWebServerHandlers()
 
 		root["name"] = wifiInstance.m_hostName.c_str();
 		root["friendlyName"] = Details.friendlyName;
-		if(wifiInstance.localIP().isSet())
+		
+
+		if(wifiInstance.isLocalIPset())
 			root["ip"] = wifiInstance.localIP().toString();
 
 		root["switchCount"] = Details.switches.size();
@@ -1556,13 +1897,23 @@ void InstallWebServerHandlers()
 
 		if(Details.dblog) Details.dblog->println(debug::dbVerbose, jsonText);
 
+#ifdef _ESP_USE_ASYNC_WEB
+		AsyncWebServerResponse *response = request->beginResponse(200, "application/json", jsonText);
+		response->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+		request->send(response);
+#else
 		wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
 		wifiInstance.server.send(200, "application/json", jsonText);
+#endif		
 	});
 
 
 
+#ifdef _ESP_USE_ASYNC_WEB
+	wifiInstance.server.on("/json/logging", HTTP_GET, [](AsyncWebServerRequest *request) {
+#else	
 	wifiInstance.server.on("/json/logging", HTTP_GET, []() {
+#endif		
 
 		if(Details.dblog) Details.dblog->println(debug::dbInfo, "json config called");
 
@@ -1637,9 +1988,14 @@ void InstallWebServerHandlers()
 
 		if(Details.dblog) Details.dblog->println(debug::dbVerbose, jsonText);
 
+#ifdef _ESP_USE_ASYNC_WEB
+		AsyncWebServerResponse *response = request->beginResponse(200, "application/json", jsonText);
+		response->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+		request->send(response);
+#else
 		wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
 		wifiInstance.server.send(200, "application/json", jsonText);
-
+#endif
 
 
 
@@ -1647,7 +2003,11 @@ void InstallWebServerHandlers()
 
 
 
+#ifdef _ESP_USE_ASYNC_WEB
+	wifiInstance.server.on("/json/config", HTTP_GET, [](AsyncWebServerRequest *request) {
+#else	
 	wifiInstance.server.on("/json/config", HTTP_GET, []() {
+#endif		
 		// give them back the port / switch map
 
 		if(Details.dblog) Details.dblog->println(debug::dbInfo, "json config called");
@@ -1659,8 +2019,10 @@ void InstallWebServerHandlers()
 
 		root["name"] = wifiInstance.m_hostName.c_str();
 		root["version"] = _MYVERSION;
-		if(wifiInstance.localIP().isSet())
+
+		if(wifiInstance.isLocalIPset())
 			root["ip"] = wifiInstance.localIP().toString();
+
 		root["mac"] = wifiInstance.macAddress();
 
 #ifdef _DEVELOPER_BUILD
@@ -1711,11 +2073,21 @@ void InstallWebServerHandlers()
 
 		if(Details.dblog) Details.dblog->println(debug::dbVerbose, jsonText);
 
+#ifdef _ESP_USE_ASYNC_WEB
+		AsyncWebServerResponse *response = request->beginResponse(200, "application/json", jsonText);
+		response->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+		request->send(response);
+#else
 		wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
 		wifiInstance.server.send(200, "application/json", jsonText);
+#endif		
 	});
 
+#ifdef _ESP_USE_ASYNC_WEB
+	wifiInstance.server.on("/json/wificonfig", HTTP_GET, [](AsyncWebServerRequest *request) {
+#else	
 	wifiInstance.server.on("/json/wificonfig", HTTP_GET, []() {
+#endif		
 		// give them back the port / switch map
 
 		if(Details.dblog) Details.dblog->println(debug::dbInfo, "json wificonfig called");
@@ -1727,7 +2099,8 @@ void InstallWebServerHandlers()
 
 		root["name"] = wifiInstance.m_hostName.c_str();
 		root["ssid"] = wifiInstance.SSID();
-		if(wifiInstance.localIP().isSet())
+
+		if(wifiInstance.isLocalIPset())
 			root["ip"] = wifiInstance.localIP().toString();
 
 		root["friendlyName"]=Details.friendlyName;
@@ -1737,12 +2110,22 @@ void InstallWebServerHandlers()
 
 		if(Details.dblog) Details.dblog->println(debug::dbVerbose, jsonText);
 
+#ifdef _ESP_USE_ASYNC_WEB
+		AsyncWebServerResponse *response = request->beginResponse(200, "application/json", jsonText);
+		response->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+		request->send(response);
+#else
 		wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
 		wifiInstance.server.send(200, "application/json", jsonText);
+#endif		
 	});
 
 	///json/peers
+#ifdef _ESP_USE_ASYNC_WEB
+	wifiInstance.server.on("/json/peers", HTTP_GET, [](AsyncWebServerRequest *request) {
+#else	
 	wifiInstance.server.on("/json/peers", HTTP_GET, []() {
+#endif		
 		// give them back the port / switch map
 
 		if(Details.dblog) Details.dblog->println(debug::dbInfo, "json peers called");
@@ -1753,7 +2136,8 @@ void InstallWebServerHandlers()
 		JsonObject &root = jsonBuffer.createObject();
 		root["name"] = wifiInstance.m_hostName.c_str();
 		root["peerCount"] = services.size();
-		if(wifiInstance.localIP().isSet())
+
+		if(wifiInstance.isLocalIPset())
 			root["ip"] = wifiInstance.localIP().toString();
 
 
@@ -1777,14 +2161,23 @@ void InstallWebServerHandlers()
 		if(Details.dblog) Details.dblog->println(debug::dbVerbose, jsonText);
 
 		// do not cache
+#ifdef _ESP_USE_ASYNC_WEB
+		AsyncWebServerResponse *response = request->beginResponse(200, "application/json", jsonText);
+		response->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+		request->send(response);
+#else
 		wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-		wifiInstance.server.send(200, "text/json", jsonText);
+		wifiInstance.server.send(200, "application/json", jsonText);
+#endif		
 	});
 
 
 
-
+#ifdef _ESP_USE_ASYNC_WEB
+	wifiInstance.server.on("/json/wifi", HTTP_GET, [](AsyncWebServerRequest *request) {
+#else	
 	wifiInstance.server.on("/json/wifi", HTTP_GET, []() {
+#endif		
 		// give them back the port / switch map
 
 		if(Details.dblog) Details.dblog->println(debug::dbInfo, "json wifi called");
@@ -1821,17 +2214,31 @@ void InstallWebServerHandlers()
 		if(Details.dblog) Details.dblog->println(debug::dbVerbose, jsonText);
 
 		// do not cache
+#ifdef _ESP_USE_ASYNC_WEB
+		AsyncWebServerResponse *response = request->beginResponse(200, "application/json", jsonText);
+		response->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+		request->send(response);
+#else
 		wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-		wifiInstance.server.send(200, "text/json", jsonText);
+		wifiInstance.server.send(200, "application/json", jsonText);
+#endif		
 	});
 
 	// serve up everthing in SPIFFS
-	SPIFFS.openDir("/");
-
-	
+#ifdef ESP32
+	File root=SPIFFS.open("/");
+	File dir;
+	for (File dir=root.openNextFile();dir;dir=root.openNextFile()) 
+#else	
 	Dir dir = SPIFFS.openDir("/");
-	while (dir.next()) {
+	while (dir.next()) 
+#endif		
+	{
+#ifdef ESP32
+		String file=dir.name();
+#else
 		String file = dir.fileName();
+#endif		
 
 #ifndef _DEVELOPER_BUILD
 		// ensure it doesn't have a leading underscore - hidden flag for me
@@ -1847,9 +2254,11 @@ void InstallWebServerHandlers()
 
 		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Serving %s\r\n", file.c_str());
 
-		// remove the slash
-		// file.remove(0,1);
+#ifdef ESP32
+		servedFiles.push_back(std::pair<String,size_t>(file, dir.size()));
+#else
 		servedFiles.push_back(std::pair<String,size_t>(file, dir.fileSize()));
+#endif		
 	}
 
 	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "InstallWebServerHandlers OUT\n\r");
@@ -1857,7 +2266,12 @@ void InstallWebServerHandlers()
 }
 
 
+
+#ifdef _ESP_USE_ASYNC_WEB
+void SendServerPage(AsyncWebServerRequest *request)
+#else
 void SendServerPage()
+#endif
 {
 	// given the current state of the device, send the appropriate page back
 	
@@ -1882,13 +2296,17 @@ void SendServerPage()
 
 	if(SPIFFS.exists(toOpen))
 	{
+#ifdef _ESP_USE_ASYNC_WEB
+		request->send(SPIFFS, toOpen);
 
+#else
 		File f = SPIFFS.open(toOpen, "r");
 
 		// let's make sure it bloody exists !
+
 		wifiInstance.server.streamFile(f, "text/html");
 		f.close();
-
+#endif
 	}
 	else
 	{
@@ -1942,9 +2360,8 @@ void loop(void)
 	if (Details.configDirty)
 		WriteJSONconfig();
 
-
-	wifiInstance.server.handleClient();
-	wifiInstance.mdns.update();
+	// let internals work
+	wifiInstance.serviceComponents();
 
 	// sensors may need some work
 	for(auto eachSensor=Details.sensors.begin();eachSensor!=Details.sensors.end();eachSensor++)

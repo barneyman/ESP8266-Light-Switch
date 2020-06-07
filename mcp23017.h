@@ -36,12 +36,20 @@ class mcp23017
 
 public:
 	mcp23017(debugBaseClass *dblog, int sdaPin, int sclPin, int resetPin):
+#ifdef ESP32
+		// check this bus number!
+		m_wire(0),
+#endif	
 		m_resetAvailable(true), m_sdaPin(sdaPin), m_sclPin(sclPin), m_resetPin(resetPin),m_dblog(dblog)
 	{
 		commonConstruct();
 	}
 
 	mcp23017(debugBaseClass *dblog, int sdaPin, int sclPin) :
+#ifdef ESP32
+		// check this bus number!
+		m_wire(0),
+#endif	
 		m_resetAvailable(false), m_sdaPin(sdaPin), m_sclPin(sclPin), m_resetPin(0),m_dblog(dblog)
 	{
 		commonConstruct();
