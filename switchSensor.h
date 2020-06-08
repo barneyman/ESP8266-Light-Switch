@@ -100,7 +100,11 @@ public:
 		if(m_dblog)
 			m_dblog->printf(debug::dbInfo, "I2C checking for 0x%x ", addr);
 
+#ifdef ESP32
+		TwoWire localWire(0);
+#else
 		TwoWire localWire;
+#endif		
 		localWire.begin();
 		localWire.beginTransmission(addr);
 		bool retval= localWire.endTransmission()?false:true;
@@ -113,7 +117,11 @@ public:
 
 	void i2cscan()
 	{
+#ifdef ESP32
+		TwoWire localWire(0);
+#else
 		TwoWire localWire;
+#endif
 		localWire.begin();
 
 		if(m_dblog)
@@ -452,11 +460,12 @@ public:
 
 };
 
+
 class PIRInstantSensor : public GPIOInstantSensor
 {
 public:
 	// wemos is inverted LED
-	PIRInstantSensor(debugBaseClass*dbg,unsigned gpio, unsigned displayPin=LED_BUILTIN, bool invertedLED=true):
+	PIRInstantSensor(debugBaseClass*dbg,unsigned gpio, unsigned displayPin, bool invertedLED=true):
 		GPIOInstantSensor(dbg, gpio, displayPin,false,invertedLED)
 	{
 		thingName="PIR";
@@ -800,7 +809,7 @@ class SonoffBasicNoLED : public RelayLEDandSwitch
 };
 
 
-#ifndef ARDUINO_ESP8266_GENERIC
+#ifdef ARDUINO_ESP8266_WEMOS_D1MINI
 
 // TODO - untested
 class WemosRelayShield : public RelayLEDandSwitch
@@ -810,7 +819,7 @@ public:
 	{}
 };
 
-#endif ARDUINO_ESP8266_GENERIC
+#endif ARDUINO_ESP8266_WEMOS_D1MINI
 
 #define _DEBOUNCE_WINDOW_LOGIC_TTL	10
 

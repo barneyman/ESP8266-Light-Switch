@@ -1,135 +1,139 @@
 <HTML>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <HEAD>
-<TITLE>ESP8266 Provisioning</TITLE>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<HEAD>
+    <TITLE>ESP8266 Provisioning</TITLE>
     <link rel="stylesheet" type="text/css" href="switch.css">
 </HEAD>
+
 <BODY onload="OnLoad()">
 
-    <script src="common.js"></script>    
+    <script src="common.js"></script>
 
     <div id="statusbar" hidden>
         <fieldset>
             <div id="statustext"></div>
         </fieldset>
     </div>
-    
-<div class="verticalContainerFull">
 
-    <iframe src="HeaderFrame.htm" id="header" name="header" onload="headerLoaded()" ></iframe>
+    <div class="verticalContainerFull">
 
-<!--
+        <iframe src="HeaderFrame.htm" id="header" name="header" onload="headerLoaded()"></iframe>
+
+        <!--
 <div class="verticalContainer">
     -->
-    <fieldset id="deviceName">
-        <legend>Name</legend>
-        <fieldset>
-            ID for the device; use something that expresses its function (ie Bedroom Lamp)
+        <fieldset id="deviceName">
+            <legend>Name</legend>
+            <fieldset>
+                ID for the device; use something that expresses its function (ie Bedroom Lamp)
+            </fieldset>
+            <br>
+            <fieldset>
+                <div class="horizontalContainer">
+                    <div>Device Name</div>
+                    <div><input name="name" size="15" type="text" id="friendlyName" /></div>
+                </div>
+            </fieldset>
         </fieldset>
         <br>
-        <fieldset>
-            <div class="horizontalContainer">
-                <div>Device Name</div>
-                <div><input name="name" size="15" type="text" id="friendlyName" /></div>
-            </div>
-        </fieldset>
-    </fieldset>
-    <br>
-    <fieldset id="deviceWifi" hidden>
-        <legend>Wifi Details</legend>
+        <fieldset id="deviceWifi" hidden>
+            <legend>Wifi Details</legend>
             <fieldset>
                 <div>
-                    Configure network access for this device       
+                    Configure network access for this device
                 </div>
             </fieldset>
             <br>
-        <fieldset>
-            <div class="horizontalContainer">
-                <div>SSID</div>
+            <fieldset>
+                <div class="horizontalContainer">
+                    <div>SSID</div>
                     <div id="wifis"></div>
-            </div>
-        
+                </div>
 
-            <div class="horizontalContainer">
-                <div>Password</div><div><input name="pwd" size="15" type="password" id="pwd" /></div>
-            </div>
-            <div class="horizontalContainer">
-                <div>Address Type</div>
-                <div>
-                    <select id="dhcp" onchange="chooseDHCP()">
+
+                <div class="horizontalContainer">
+                    <div>Password</div>
+                    <div><input name="pwd" size="15" type="password" id="pwd" /></div>
+                </div>
+                <div class="horizontalContainer">
+                    <div>Address Type</div>
+                    <div>
+                        <select id="dhcp" onchange="chooseDHCP()">
                         <option value="1">DHCP</option>
                         <option value="0">Static</option>
                     </select>
+                    </div>
                 </div>
-            </div>
-            <fieldset hidden id="staticInfo">
-                <legend>Static Details</legend>
-                <div class="horizontalContainer"><div>IP:</div><div><input type="text" id="ip"/></div></div>
-                <div class="horizontalContainer"><div>Gateway:</div><div><input type="text" id="gateway"/></div></div>
-                <div class="horizontalContainer"><div>Netmask:</div><div><input type="text" id="netmask" value="255.255.255.0"></div></div>
+                <fieldset hidden id="staticInfo">
+                    <legend>Static Details</legend>
+                    <div class="horizontalContainer">
+                        <div>IP:</div>
+                        <div><input type="text" id="ip" /></div>
+                    </div>
+                    <div class="horizontalContainer">
+                        <div>Gateway:</div>
+                        <div><input type="text" id="gateway" /></div>
+                    </div>
+                    <div class="horizontalContainer">
+                        <div>Netmask:</div>
+                        <div><input type="text" id="netmask" value="255.255.255.0"></div>
+                    </div>
+                </fieldset>
             </fieldset>
+            <div class="horizontalContainerleft">
+                <button id="rescan" onclick="OnLoad()" disabled>Rescan</button>
+            </div>
         </fieldset>
-        <div class="horizontalContainerleft">
-            <button id="rescan" onclick="OnLoad()" disabled>Rescan</button>            
-        </div>
-    </fieldset>
 
-    <div class="horizontalContainerRight">
-        <button id="prevButton" onclick="previous()" disabled>Previous</button>
-        <button id="nextButton" onclick="next()">Next</button>
-        <!-- <button id="join" onclick="JoinWifi()" hidden>Finish</button> -->
+        <div class="horizontalContainerRight">
+            <button id="prevButton" onclick="previous()" disabled>Previous</button>
+            <button id="nextButton" onclick="next()">Next</button>
+            <!-- <button id="join" onclick="JoinWifi()" hidden>Finish</button> -->
+        </div>
+
+
+        <!--
+</div>
+-->
     </div>
 
 
-<!--
-</div>
--->
-</div>
-    
-
     <script>
-
         function chooseDHCP() {
 
             var select = document.getElementById("dhcp");
             var dhcp = select.options[select.selectedIndex].value
 
             if (dhcp == "1") {
-                document.getElementById('staticInfo').hidden=true
-            }
-            else {
+                document.getElementById('staticInfo').hidden = true
+            } else {
                 document.getElementById('staticInfo').hidden = false
             }
 
 
         }
 
-        function next()
-        {
-            nameFields=document.getElementById("deviceName")
-            wifiFields=document.getElementById("deviceWifi")
-            nextButton=document.getElementById("nextButton")
-            prevButton=document.getElementById("prevButton")
+        function next() {
+            nameFields = document.getElementById("deviceName")
+            wifiFields = document.getElementById("deviceWifi")
+            nextButton = document.getElementById("nextButton")
+            prevButton = document.getElementById("prevButton")
 
-            if(nameFields.hidden==false)
-            {
+            if (nameFields.hidden == false) {
                 // there needs to be a name
-                if(document.getElementById("friendlyName").value.length==0)
-                {
+                if (document.getElementById("friendlyName").value.length == 0) {
                     alert("need a name please")
                     return
                 }
 
                 // it's next !
-                nameFields.hidden=true
-                wifiFields.hidden=false
-                nextButton.innerText="Finish"
-                prevButton.disabled=false
-            }
-            else
-            {
-                if(document.getElementById("pwd").value.length==0)
-                {
+                nameFields.hidden = true
+                wifiFields.hidden = false
+                nextButton.innerText = "Finish"
+                prevButton.disabled = false
+            } else {
+                if (document.getElementById("pwd").value.length == 0) {
                     alert("need a password please")
                     return
                 }
@@ -138,78 +142,71 @@
             }
         }
 
-        function previous()
-        {
-            nameFields=document.getElementById("deviceName")
-            wifiFields=document.getElementById("deviceWifi")
-            nextButton=document.getElementById("nextButton")
-            prevButton=document.getElementById("prevButton")
+        function previous() {
+            nameFields = document.getElementById("deviceName")
+            wifiFields = document.getElementById("deviceWifi")
+            nextButton = document.getElementById("nextButton")
+            prevButton = document.getElementById("prevButton")
 
 
 
             // it's next !
-            nameFields.hidden=false
-            wifiFields.hidden=true
-            nextButton.innerText="Next"
-            prevButton.disabled=true
+            nameFields.hidden = false
+            wifiFields.hidden = true
+            nextButton.innerText = "Next"
+            prevButton.disabled = true
         }
 
 
-        function OnLoad()
-        {
-            let url = base+'/json/wifi'
+        function OnLoad() {
+            let url = base + '/json/wifi'
             var wifis = document.getElementById("wifis");
 
             showStatus("Searching ....")
 
-            var previousNextState=document.getElementById("nextButton").disabled
-            var previousPrevState=document.getElementById("prevButton").disabled
+            var previousNextState = document.getElementById("nextButton").disabled
+            var previousPrevState = document.getElementById("prevButton").disabled
 
             // disable scan
             document.getElementById("rescan").disabled = true;
             document.getElementById("nextButton").disabled = true;
             document.getElementById("prevButton").disabled = true;
 
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", url, true);
+            xhr.timeout = 1000
+            xhr.onload = function(e) {
+                xhr.onload = function(e) {
+                    if (xhr.readyState === 4) {
+                        if (xhr.status === 200) {
 
+                            document.getElementById("friendlyName").value = xhr.responseText["friendlyName"]
 
-            fetch(url)
-                .then(function (response) {
-                    if(response.ok)
-                        return response.json();
-                    throw new Error('network err')
-                })
-                .then(function (data) {
+                            wifis.innerText = ""
+                            select = document.createElement("select")
+                            select.setAttribute('id', 'wifisids')
+                            wifis.appendChild(select)
 
-                    document.getElementById("friendlyName").value=data["friendlyName"]
+                            var wifiArray = xhr.responseText["wifi"]
 
-                    wifis.innerText = ""
-                    select = document.createElement("select")
-                    select.setAttribute('id','wifisids')
-                    wifis.appendChild(select)
+                            for (var eachNode in wifiArray) {
+                                var wifi = document.createElement("option")
+                                wifi.setAttribute("value", wifiArray[eachNode]["ssid"])
+                                wifi.innerText = wifiArray[eachNode]["ssid"];
+                                select.appendChild(wifi);
+                            }
 
-                    var wifiArray = data["wifi"]
+                            clearStatus()
 
-                    for (var eachNode in wifiArray)
-                    {
-                        var wifi = document.createElement("option")
-                        wifi.setAttribute("value", wifiArray[eachNode]["ssid"])
-                        wifi.innerText = wifiArray[eachNode]["ssid"];
-                        select.appendChild(wifi);
+                            document.getElementById("rescan").disabled = false;
+                            document.getElementById("nextButton").disabled = previousNextState;
+                            document.getElementById("prevButton").disabled = previousPrevState;
+
+                        }
                     }
-
-                    clearStatus()
-
-                    document.getElementById("rescan").disabled = false;
-                    document.getElementById("nextButton").disabled = previousNextState;
-                    document.getElementById("prevButton").disabled = previousPrevState;
-                    
-                    })
-                    .catch(function (error) {
-                        wifis.innerText = "Error"
-                        alert(error.message)
-                    })
-
-
+                }
+            }
+            xhr.send(null);
         }
 
         function JoinWifi() {
@@ -219,38 +216,37 @@
 
             // get all inputs
             var pwd = document.getElementById('pwd')
-            var friendlyName= document.getElementById('friendlyName')
+            var friendlyName = document.getElementById('friendlyName')
             var selects = document.getElementById('wifisids')
-            var ssid=selects.options[selects.selectedIndex].value;
+            var ssid = selects.options[selects.selectedIndex].value;
 
             jsonData['pwd'] = pwd.value;
             jsonData['ssid'] = ssid;
-            jsonData['friendlyName']=friendlyName.value;
+            jsonData['friendlyName'] = friendlyName.value;
 
             var select = document.getElementById("dhcp");
             var dhcp = select.options[select.selectedIndex].value
 
             jsonData['dhcp'] = dhcp
 
-            if (dhcp == "0")
-            {
-                jsonData['ip']=document.getElementById('ip').value;
+            if (dhcp == "0") {
+                jsonData['ip'] = document.getElementById('ip').value;
                 jsonData['gateway'] = document.getElementById('gateway').value;
                 jsonData['netmask'] = document.getElementById('netmask').value;
             }
 
             var inputValid = true;
 
-            if(inputValid==true) {
+            if (inputValid == true) {
 
                 let url = base + '/json/wifi'
 
                 var xhr = new XMLHttpRequest();
-                
-                xhr.open("POST", url, true);
+
+                xhr.open("GET", url, true);
                 xhr.setRequestHeader("Content-type", "text/plain");
 
-                xhr.onloadend = function () {
+                xhr.onloadend = function() {
                     // done
                     // we should delay for a couple of seconds, then try to 
                     // go to the .local domain again
@@ -259,14 +255,12 @@
 
                 xhr.send(JSON.stringify(jsonData));
 
-            }
-            else
+            } else
                 alert('values cannot be empty')
         }
-
-
     </script>
 
 
 </BODY>
+
 </HTML>

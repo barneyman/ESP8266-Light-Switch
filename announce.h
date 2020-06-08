@@ -11,7 +11,11 @@
 #endif
 
 #ifdef _USE_REST
+#ifdef ARDUINO_ARCH_ESP32
+#include <HTTPClient.h>
+#else // ARDUINO_ARCH_ESP8266??
 #include <ESP8266HTTPClient.h>
+#endif
 #endif
 
 
