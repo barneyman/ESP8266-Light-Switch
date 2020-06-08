@@ -120,25 +120,25 @@ myWifiClass wifiInstance("esp_", NULL, mdsnNAME);
 
 
 
-// millis timeouts
-#define QUICK_SWITCH_TIMEOUT_DEFAULT	6000
-#define BOUNCE_TIMEOUT_DEFAULT			100
 
 
 #define _ALLOW_WIFI_RESET_OVER_WIFI
 #define _ALLOW_WIFI_RESET_VIA_QUICKSWITCH
-#define _ALLOW_WIFI_RESET_AFTER_APIJOIN_TIMEOUT (2*60*1000)
-
-#ifdef _ALLOW_WIFI_RESET_AFTER_APIJOIN_TIMEOUT
-unsigned long runtimeWhenLastJoined=0;
-#endif
-
 #define _ALLOW_WIFI_RESET
-#define _ALLOW_WIFI_RESET_OVER_WIFI
 
-#ifdef _ALLOW_WIFI_RESET
-bool resetWIFI = false;
+#ifdef _ALLOW_WIFI_RESET_VIA_QUICKSWITCH
+	// millis timeouts
+	#define QUICK_SWITCH_TIMEOUT_DEFAULT	6000
 #endif
+
+
+
+// if joining an AP fails, fall back to STA
+#define _ALLOW_WIFI_RESET_AFTER_AP_JOIN_TIMEOUT (2*60*1000)
+
+// remember the files we are serving statically
+//#define _STORE_STATIC_FILES
+
 
 
 
@@ -172,12 +172,30 @@ struct
 	bool updateAvailable;
 	String url, urlSpiffs;
 
+	// transient
+#ifdef _ALLOW_WIFI_RESET_AFTER_AP_JOIN_TIMEOUT
+	unsigned long runtimeWhenLastJoined;
+#endif
+#if defined( _ALLOW_WIFI_RESET ) || defined( _ALLOW_WIFI_RESET_OVER_WIFI )
+	bool resetWIFI;
+#endif
+
+	// marker
+	bool ignoreThis;
 
 	// sensors
 	std::vector<baseSensor*>	sensors;
 
 	// switches
 	std::vector<baseSwitch*>	switches;
+
+#ifdef _STORE_STATIC_FILES
+	// where we store the files we serve, statically
+	std::vector<std::pair<String,size_t>> servedFiles;
+#endif	
+	// our peers
+	std::vector<myWifiClass::mdnsService> services;
+
 
 } Details=
 {
@@ -213,7 +231,18 @@ struct
 	"",
 
 	// update
-	false,"",""
+	false,"","",
+
+
+	// transient
+#ifdef _ALLOW_WIFI_RESET_AFTER_AP_JOIN_TIMEOUT
+	0,
+#endif
+#if defined( _ALLOW_WIFI_RESET ) || defined( _ALLOW_WIFI_RESET_OVER_WIFI )
+	false,
+#endif
+
+	false // just a marker for comma handling
 
 };
 
@@ -222,10 +251,6 @@ struct
 
 
 
-// where we store the files we serve, statically
-std::vector<std::pair<String,size_t>> servedFiles;
-// our peers
-std::vector<myWifiClass::mdnsService> services;
 
 
 
@@ -671,9 +696,9 @@ void RebootMe(bool preserve)
 
 void ResetToAP()
 {
-	if(Details.dblog) Details.dblog->printf(debug::dbImportant, "Resetting\n\r");
+	if(Details.dblog) Details.dblog->printf(debug::dbImportant, "Resetting wifi to AP\n\r");
 
-	resetWIFI = false;
+	Details.resetWIFI = false;
 	// clear the credentials
 	Details.wifi.configured = false;
 	Details.wifi.password = String();
@@ -686,9 +711,9 @@ void ResetToAP()
 
 // called when i haven't been connected to a configurid ssid for x
 // sideload an AP so i can be configured
-void AddAP()
+void AddAPtoSTA()
 {
-	if(Details.dblog) Details.dblog->printf(debug::dbImportant, "AddAP\n\r");
+	if(Details.dblog) Details.dblog->printf(debug::dbImportant, "AddAPtoSTA\n\r");
 
 	wifiInstance.ConnectWifi(myWifiClass::wifiMode::modeSTAandAP,Details.wifi);
 
@@ -906,12 +931,12 @@ void FindPeers()
 	if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Looking for '%s' siblings ...\n\r", mdsnNAME);
 	
 	// get a list of what's out there
-	services.clear();
-	if (wifiInstance.QueryServices(mdsnNAME, services))
+	Details.services.clear();
+	if (wifiInstance.QueryServices(mdsnNAME, Details.services))
 	{
-		int found=(int)services.size();
+		int found=(int)Details.services.size();
 		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Found %d sibling%c!!\n\r", found, found==1?' ':'s');
-		for (auto iterator = services.begin(); iterator != services.end(); iterator++)
+		for (auto iterator = Details.services.begin(); iterator != Details.services.end(); iterator++)
 		{
 			if(Details.dblog) Details.dblog->printf(debug::dbInfo, "\t%s @ %s\n\r", iterator->hostName.c_str(), iterator->IP.toString().c_str());
 		}
@@ -1505,8 +1530,7 @@ void InstallWebServerHandlers()
 		wifiInstance.server.send(200, "text/html", "<html/>");
 #endif			
 
-
-		ResetToAP();
+		Details.resetWIFI=true;
 
 	});
 
@@ -2135,7 +2159,7 @@ void InstallWebServerHandlers()
 
 		JsonObject &root = jsonBuffer.createObject();
 		root["name"] = wifiInstance.m_hostName.c_str();
-		root["peerCount"] = services.size();
+		root["peerCount"] = Details.services.size();
 
 		if(wifiInstance.isLocalIPset())
 			root["ip"] = wifiInstance.localIP().toString();
@@ -2145,13 +2169,13 @@ void InstallWebServerHandlers()
 		
 		JsonArray &peers = root.createNestedArray("peers");
 
-		for (size_t each = 0; each < services.size(); each++)
+		for (size_t each = 0; each < Details.services.size(); each++)
 		{
 			JsonObject &peer = peers.createNestedObject();
 
-			if(Details.dblog) Details.dblog->printf(debug::dbInfo, "%d '%s' %s\n\r", each + 1, services[each].hostName.c_str(), services[each].IP.toString().c_str());
-			peer["name"]=services[each].hostName;
-			peer["ip"]=services[each].IP.toString();
+			if(Details.dblog) Details.dblog->printf(debug::dbInfo, "%d '%s' %s\n\r", each + 1, Details.services[each].hostName.c_str(), Details.services[each].IP.toString().c_str());
+			peer["name"]=Details.services[each].hostName;
+			peer["ip"]=Details.services[each].IP.toString();
 		}
 
 
@@ -2254,11 +2278,13 @@ void InstallWebServerHandlers()
 
 		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Serving %s\r\n", file.c_str());
 
-#ifdef ESP32
-		servedFiles.push_back(std::pair<String,size_t>(file, dir.size()));
-#else
-		servedFiles.push_back(std::pair<String,size_t>(file, dir.fileSize()));
-#endif		
+#ifdef _STORE_STATIC_FILES
+	#ifdef ESP32
+		Details.servedFiles.push_back(std::pair<String,size_t>(file, dir.size()));
+	#else
+		Details.servedFiles.push_back(std::pair<String,size_t>(file, dir.fileSize()));
+	#endif		
+#endif
 	}
 
 	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "InstallWebServerHandlers OUT\n\r");
@@ -2339,21 +2365,21 @@ void loop(void)
 
 
 #ifdef _ALLOW_WIFI_RESET
-	if (resetWIFI)
+	if (Details.resetWIFI)
 		ResetToAP();
 #endif
 
-#ifdef _ALLOW_WIFI_RESET_AFTER_APIJOIN_TIMEOUT
+#ifdef _ALLOW_WIFI_RESET_AFTER_AP_JOIN_TIMEOUT
 
 	if(wifiInstance.currentMode!=myWifiClass::modeSTA_unjoined)
 	{
-		runtimeWhenLastJoined=millis();
+		Details.runtimeWhenLastJoined=millis();
 	}
 
-	if(millis()-runtimeWhenLastJoined > _ALLOW_WIFI_RESET_AFTER_APIJOIN_TIMEOUT)
+	if(millis()-Details.runtimeWhenLastJoined > _ALLOW_WIFI_RESET_AFTER_AP_JOIN_TIMEOUT)
 	{
-		AddAP();
-		runtimeWhenLastJoined=millis();
+		AddAPtoSTA();
+		Details.runtimeWhenLastJoined=millis();
 	}
 #endif
 
