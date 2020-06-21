@@ -28,3 +28,6 @@
 [submodule "libraries/AsyncTCP"]
 	path = libraries/AsyncTCP
 	url = https://github.com/me-no-dev/AsyncTCP.git
+[submodule "libraries/esp32-camera"]
+	path = libraries/esp32-camera
+	url = https://github.com/espressif/esp32-camera.git

@@ -4,33 +4,7 @@
 
 #include "announce.h"
 
-class baseThing : public StateAnnouncer
-{
 
-public:
-
-	baseThing(debugBaseClass*dbg):StateAnnouncer(dbg),
-		thingName("Default")
-	{
-
-	}
-
-	String GetName()
-	{
-		return thingName;
-	}
-
-	virtual void DoWork(){}
-
-protected:
-
-	unsigned long GetMillis()
-	{
-		return micros() / 1000;
-	}
-
-    String thingName;
-};
 
 class baseSensor : public baseThing
 {

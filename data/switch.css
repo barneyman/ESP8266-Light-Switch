@@ -42,6 +42,9 @@ button {
     cursor: pointer
 }
 
+img {
+    border: 1px solid #555;
+  }
 
 button:disabled
 {

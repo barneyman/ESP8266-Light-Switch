@@ -1,3 +1,6 @@
+#ifndef _announce_h
+#define _announce_h
+
 #include <Arduino.h>
 
 //#define _USE_UDP
@@ -200,3 +203,34 @@ public:
 	}
 
 };
+
+
+class baseThing : public StateAnnouncer
+{
+
+public:
+
+	baseThing(debugBaseClass*dbg):StateAnnouncer(dbg),
+		thingName("Default")
+	{
+
+	}
+
+	String GetName()
+	{
+		return thingName;
+	}
+
+	virtual void DoWork(){}
+
+protected:
+
+	unsigned long GetMillis()
+	{
+		return micros() / 1000;
+	}
+
+    String thingName;
+};
+
+#endif // _announce_h

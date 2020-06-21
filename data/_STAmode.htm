@@ -44,8 +44,12 @@
                 <legend>Sensors</legend>
                 <div class="verticalContainer" id="sensors"></div>
             </fieldset>
+            <fieldset id="cameraSet" hidden>
+                <legend>Cameras</legend>
+                <div class="verticalContainer" id="cameras"></div>
+            </fieldset>
             <div class="horizontalContainerRight"><button id="refresh"
-                    onclick="PopulateSwitchSensorList(true)">Refresh</button></div>
+                    onclick="PopulateSwSenCamList(true)">Refresh</button></div>
 
 
         </div>
@@ -74,7 +78,7 @@
                     <div>Use Prereleases</div>
                     <div><input type="checkbox" id="prerelease" onclick="changePrelease()"></div>
                 </div>
-                <div class="horizontalContainer">
+                <div class="horizontalContainer" id="upgradeWhenOffDiv">
                     <div>Upgrade When OFF</div>
                     <div><input type="checkbox" id="upgradeOnlyWhenRelayOff" onclick="changeUpgradeOnlyWhenRelayOff()"></div>
                 </div>
@@ -150,7 +154,7 @@
         function OnLoad() {
 
             //showStatus("Fetching ...")
-            PopulateSwitchSensorList(true)
+            PopulateSwSenCamList(true)
             fetchPeers()
             getConfig()
             getLogging()
@@ -396,11 +400,19 @@
                     var fname=document.getElementById("friendlyname");
                     fname.value=data["friendlyName"]
 
-                    var upgradeOnlyWhenRelayOff=document.getElementById("upgradeOnlyWhenRelayOff")
-                    if(data["upgradeOnlyWhenRelayOff"]==0)
-                        upgradeOnlyWhenRelayOff.checked=false;
+                    // check for switches
+                    if(data["switchCount"]==0)
+                    {
+                        document.getElementById("upgradeWhenOffDiv").style.display= 'none' ;  
+                    }
                     else
-                        upgradeOnlyWhenRelayOff.checked=true;
+                    {
+                        var upgradeOnlyWhenRelayOff=document.getElementById("upgradeOnlyWhenRelayOff")
+                        if(data["upgradeOnlyWhenRelayOff"]==0)
+                            upgradeOnlyWhenRelayOff.checked=false;
+                        else
+                            upgradeOnlyWhenRelayOff.checked=true;
+                    }
 
                     if("developer" in data)
                     {
@@ -443,7 +455,7 @@
             setConfig(jsonData)
         }
 
-        function PopulateSwitchSensorList(clearTheList) {
+        function PopulateSwSenCamList(clearTheList) {
 
 
             let url = base + '/json/state'
@@ -459,16 +471,20 @@
                     // then work out the switch states
                     var switches = data['switchState']
                     var sensors = data['sensorState']
+                    var cameras = data['cameraState']
 
                     var tableSwitches = document.getElementById('switches')
                     var tableSensors = document.getElementById('sensors')
+                    var tableCameras = document.getElementById('cameras')
 
                     var tableSwitchSet = document.getElementById('switchSet')
                     var tableSensorSet = document.getElementById('sensorSet')
+                    var tableCameraSet = document.getElementById('cameraSet')
 
                     if (clearTheList) {
                         tableSensors.innerHTML = "";
                         tableSwitches.innerHTML = "";
+                        tableCameras.innerHTML="";
                     }
 
                     // get counts
@@ -480,6 +496,9 @@
                         tableSensorSet.hidden = false
                     }
 
+                    if (data['cameraCount'] != "0") {
+                        tableCameraSet.hidden = false
+                    }
 
                     // switches
                     for (var eachState in switches) {
@@ -512,6 +531,7 @@
                         }
                     }
 
+                    // sensors
                     for (var eachState in sensors) {
                         if (sensors.hasOwnProperty(eachState)) {
 
@@ -548,6 +568,41 @@
                     }
 
 
+                    // cameras
+                    for (var eachCamera in cameras) {
+                        if (cameras.hasOwnProperty(eachCamera)) {
+
+                            // sensor, name are always present
+                            // anything else is the sensor
+
+                            // create a row
+                            var row = document.createElement("div")
+                            row.className = "horizontalContainer"
+
+                            var name = document.createElement("div")
+                            name.innerText = cameras[eachCamera]["name"]
+                            row.appendChild(name)
+
+                            var cameragImgDiv= document.createElement("div")
+                            row.appendChild(cameragImgDiv)
+
+                            var cameraImg=document.createElement("img")
+                            cameraImg.src=base+"/camera?cam="+cameras[eachCamera]["camera"]
+                            cameraImg.width=screen.width/3
+
+                            cameragImgDiv.appendChild(cameraImg)
+
+
+                            tableCameras.appendChild(row)
+                            tableCameras.appendChild(document.createElement("br"))
+
+
+                        }
+                    }
+
+
+
+
                 }).catch(function (error) {
 
                     alert(error.message)
@@ -566,7 +621,7 @@
             xhr.open("POST", url, true);
             xhr.setRequestHeader("Content-type", "text/plain");
 
-            xhr.onloadend = function () { PopulateSwitchSensorList(true) }
+            xhr.onloadend = function () { PopulateSwSenCamList(true) }
             xhr.send();
 
 

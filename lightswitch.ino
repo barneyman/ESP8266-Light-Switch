@@ -87,6 +87,17 @@
 
 #endif
 
+#ifdef ESP32
+	// TODO - this needs to be a platform 
+	#define _ESP32_CAMERA
+#endif	
+
+
+#ifdef _ESP32_CAMERA
+	#include "cameraSensor.h"
+#endif
+
+
 #define _MYVERSION			_VERSION_FRIENDLY "|" _VERSION_NUM
 
 // set this to reset the file
@@ -100,10 +111,6 @@
 #define JSON_STATIC_BUFSIZE	2048
 StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 
-#ifdef _DEBUG
-#define _TEST_WFI_STATE	
-#include <GDBStub.h>
-#endif
 
 
 // my libs
@@ -111,11 +118,13 @@ StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 
 
 #ifdef ESP32
-#define mdsnNAME	"barneyman32"
+#define mdsnNAME		"barneyman32"
+#define hostnameStem	"esp32_"
 #else
 #define mdsnNAME	"barneyman"
+#define hostnameStem	"esp_"
 #endif
-myWifiClass wifiInstance("esp_", NULL, mdsnNAME);
+myWifiClass wifiInstance(hostnameStem, NULL, mdsnNAME);
 
 
 
@@ -134,7 +143,11 @@ myWifiClass wifiInstance("esp_", NULL, mdsnNAME);
 
 
 // if joining an AP fails, fall back to STA
-#define _ALLOW_WIFI_RESET_AFTER_AP_JOIN_TIMEOUT (2*60*1000)
+#ifdef _DEVELOPER_BUILD
+	#define _ALLOW_WIFI_RESET_AFTER_AP_JOIN_TIMEOUT (30*1000)
+#else
+	#define _ALLOW_WIFI_RESET_AFTER_AP_JOIN_TIMEOUT (15*60*1000)
+#endif	
 
 // remember the files we are serving statically
 //#define _STORE_STATIC_FILES
@@ -189,6 +202,10 @@ struct
 	// switches
 	std::vector<baseSwitch*>	switches;
 
+#ifdef _ESP32_CAMERA
+	std::vector<espCamera*>	cameras;
+#endif		
+
 #ifdef _STORE_STATIC_FILES
 	// where we store the files we serve, statically
 	std::vector<std::pair<String,size_t>> servedFiles;
@@ -206,6 +223,7 @@ struct
 	// wifi deets
 #ifdef _DEVELOPER_BUILD
 	{
+		// name pwd config dhcp
 		"","",false, true
 	},
 #else	
@@ -222,9 +240,10 @@ struct
 	// logging
 #ifdef _DEVELOPER_BUILD	
 	debug::dbLevel::dbVerbose,
+	//debug::dbLevel::dbImportant,
 	debug::dbImpl::dbSerial,
 #else
-	debug::dbLevel::dbInfo,
+	debug::dbLevel::dbImportant,
 	debug::dbImpl::dbNone,
 #endif	
 	NULL,
@@ -409,7 +428,11 @@ void WriteJSONconfig()
 	///////////////////// written here
 
 	String jsonText;
+#ifdef _DEVELOPER_BUILD
+	root.prettyPrintTo(jsonText);
+#else		
 	root.printTo(jsonText);
+#endif		
 
 	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "JSON : -- %s --\n\r", jsonText.c_str());
 
@@ -609,7 +632,11 @@ void PreserveState()
 	fs::File json = SPIFFS.open(_JSON_PRESERVED_STATE_FILE, "w");
 
 	String jsonText;
+#ifdef _DEVELOPER_BUILD
+	root.prettyPrintTo(jsonText);
+#else		
 	root.printTo(jsonText);
+#endif		
 
 	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "JSON : -- %s --\n\r", jsonText.c_str());
 
@@ -723,7 +750,24 @@ void AddAPtoSTA()
 
 #endif
 
+#ifdef _ESP32_CAMERA
 
+void AddCamera(espCamera *newCamera)
+{
+	if(Details.dblog) Details.dblog->println(debug::dbInfo, "Adding camera");
+
+	if(newCamera->InitialisedOk())
+	{
+		Details.cameras.push_back(newCamera);
+	}
+	else
+	{
+		if(Details.dblog) Details.dblog->println(debug::dbInfo, "camera invalid");
+		delete newCamera;
+	}
+}
+
+#endif
 
 void AddSwitch(baseSwitch *newSwitch)
 {
@@ -756,7 +800,11 @@ void createLogger()
 			{
 				SerialDebug*newOne=new SerialDebug(Details.loggingLevel);
 				// Sonoff doesn't APPEAR to handle any faster
+#ifdef ARDUINO_ESP8266_GENERIC
 				newOne->begin(9600);
+#else
+				newOne->begin(115200);
+#endif				
 				Details.dblog=newOne;
 			}
 			break;
@@ -779,11 +827,6 @@ void createLogger()
 
 void setup(void) 
 {
-#ifdef _DEBUG
-	gdbstub_init();
-#endif
-
-
 
 #ifdef _DEVELOPER_BUILD
 	// just sleep (to let the serial monitor attach)
@@ -849,6 +892,24 @@ void setup(void)
 
 #endif // PIR
 
+#else
+
+#ifdef _ESP32_CAMERA
+
+//#define _USE_FAKE_CAMERAS
+#ifdef _USE_FAKE_CAMERAS
+	AddCamera(new fakeCamera(Details.dblog));
+	AddCamera(new fakeCamera(Details.dblog));
+	AddCamera(new fakeCamera(Details.dblog));
+	AddCamera(new fakeCamera(Details.dblog));
+	AddCamera(new fakeCamera(Details.dblog));
+	AddCamera(new fakeCamera(Details.dblog));
+#else
+	AddCamera(new esp32Cam(Details.dblog));
+#endif
+
+#endif
+
 
 #endif
 
@@ -900,6 +961,8 @@ void setup(void)
 	// set up the callback handlers for the webserver
 	InstallWebServerHandlers();
 
+	// reset the clock
+	Details.runtimeWhenLastJoined=millis();
 
 
 
@@ -910,23 +973,31 @@ void setup(void)
 // look for my siblings
 void FindPeers()
 {
+	bool doFind=true;
 	// if we don't have wifi, dont mdns (it crashes for me)
 	switch(wifiInstance.currentMode)
 	{
-		case myWifiClass::modeOff: 
 		case myWifiClass::modeSTA_unjoined:
+		case myWifiClass::modeSTA_unjoinedAndAP:
+		case myWifiClass::modeSTAspeculative:
+		case myWifiClass::modeAP:
+			if(Details.dblog) Details.dblog->println(debug::dbInfo, "No WIFI joined, not doing FindPeers");
+			doFind=false;
+			break;
+		case myWifiClass::modeOff: 
 		case myWifiClass::modeCold:
 		case myWifiClass::modeUnknown:
-			if(Details.dblog) Details.dblog->println(debug::dbInfo, "No WIFI not doing FindPeers");
-			// very bad form
-			return;
-		case myWifiClass::modeAP:
+			if(Details.dblog) Details.dblog->println(debug::dbInfo, "No WIFI, not doing FindPeers");
+			doFind=false;
+			break;
 		case myWifiClass::modeSTA:
-		case myWifiClass::modeSTAspeculative:
 		case myWifiClass::modeSTAandAP:
 		default:
 			break;
 	}
+
+	if(!doFind)
+		return;
 
 	if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Looking for '%s' siblings ...\n\r", mdsnNAME);
 	
@@ -1843,6 +1914,164 @@ void InstallWebServerHandlers()
 
 	// GET
 	
+#ifdef _ESP32_CAMERA
+
+#ifdef _ESP_USE_ASYNC_WEB
+	wifiInstance.server.on("/camera", HTTP_GET, [](AsyncWebServerRequest *request) {
+#else	
+	wifiInstance.server.on("/camera", HTTP_GET, []() {
+#endif		
+
+		if(Details.dblog) Details.dblog->println(debug::dbInfo, "json camera called");
+
+
+#ifdef _ESP_USE_ASYNC_WEB
+		if(request->hasParam("cam"))
+#else
+		if (wifiInstance.server.hasArg("cam"))
+#endif		
+		{
+#ifdef _ESP_USE_ASYNC_WEB			
+			AsyncWebParameter* p = request->getParam("cam");
+			int cam = p->value().toInt();
+#else
+			int cam = wifiInstance.server.arg("cam").toInt();
+#endif			
+			if(cam>=0 && cam<Details.cameras.size())
+			{
+#ifdef _ESP_USE_ASYNC_WEB
+				//AsyncWebServerResponse *response = request->beginResponse(200, "image/jpg", "<html/>");
+				//baseCamera *theCam=Details.cameras[cam];
+				debugBaseClass *dblog=Details.dblog;
+
+
+				Details.cameras[cam]->AddWork([=](baseCamera *theCam)->void{
+
+					// get an image from that one
+					size_t imgSizeReq=theCam->requestFrame();
+
+					if(imgSizeReq>0)
+					{
+						size_t imgSize=0;
+						uint8_t *imgBytes=NULL;
+						if(theCam->fetchFrame(&imgBytes,&imgSize))
+						{
+
+							if(dblog) dblog->printf(debug::dbVerbose, "json camera %u size @ 0x%x\n\r",imgSize,imgBytes);		
+
+//#define _SEND_IMG_IMMEDIATE							
+
+#ifdef _SEND_IMG_IMMEDIATE
+							request->send("image/jpeg", imgSize, [=](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
+#else								
+							AsyncWebServerResponse *response = request->beginResponse("image/jpeg", imgSize, [=](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
+#endif									
+									if(dblog) dblog->printf(debug::dbVerbose, "called with @ 0x%x %u %u\n\r",buffer,maxLen,index);
+
+									size_t sizeLeft=imgSize-index;
+									size_t sizeToSend=((sizeLeft>maxLen)?maxLen:sizeLeft);
+
+									if(dblog) dblog->printf(debug::dbVerbose, "sending %u bytes\n\r",sizeToSend);
+
+									memcpy(buffer, imgBytes+index, sizeToSend);
+
+									if(!(sizeLeft-sizeToSend))
+									{
+										if(dblog) dblog->println(debug::dbVerbose, "Freeing image");
+										free(imgBytes);
+									}
+
+									return sizeToSend;
+
+
+								});
+
+#ifndef _SEND_IMG_IMMEDIATE
+							response->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+							request->send(response);
+#endif
+
+							if(dblog) dblog->println(debug::dbVerbose, "image sent");
+
+						}
+						else
+						{
+							if(dblog) dblog->println(debug::dbError, "json camera error - fetchFrame error");		
+						}
+					}
+					else
+					{
+						if(dblog) dblog->println(debug::dbError, "json camera error - no img size");		
+					}
+
+
+
+				});
+
+				return;
+
+#else
+
+				// get an image from that one
+				size_t imgSizeReq=Details.cameras[cam]->requestFrame();
+
+				if(imgSizeReq>0)
+				{
+					size_t imgSize;
+					uint8_t *imgBytes=NULL;
+					if(Details.cameras[cam]->fetchFrame(&imgBytes,&imgSize))
+					{
+						if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "json camera %u size\n\r",imgSize);		
+						wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+						wifiInstance.server.send(200, "image/jpeg", imgBytes, imgSize);
+						free(imgBytes);
+
+						return;
+					}
+					else
+					{
+						if(Details.dblog) Details.dblog->println(debug::dbError, "json camera error - fetchFrame error");		
+					}
+				}
+				else
+				{
+					if(Details.dblog) Details.dblog->println(debug::dbError, "json camera error - no img size");		
+				}
+
+#endif
+
+
+			}
+			else
+			{
+				if(Details.dblog) Details.dblog->println(debug::dbError, "json camera error - cam out of bounds");		
+			}
+			
+		}
+		else
+		{
+			if(Details.dblog) Details.dblog->println(debug::dbError, "json camera error - no cam number");		
+		}
+		
+
+
+#ifdef _ESP_USE_ASYNC_WEB
+		AsyncWebServerResponse *response = request->beginResponse(500, "html/text", "<html/>");
+		response->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+		request->send(response);
+#else
+		wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+		wifiInstance.server.send(500, "html/text", "<html/>");
+#endif		
+
+
+	});
+
+
+#endif
+
+
+
 #ifdef _ESP_USE_ASYNC_WEB
 	wifiInstance.server.on("/json/state", HTTP_GET, [](AsyncWebServerRequest *request) {
 #else	
@@ -1899,6 +2128,9 @@ void InstallWebServerHandlers()
 			}
 
 			switchRelay["name"] = (*each)->GetName();
+
+			yield();
+
 		}
 
 		root["sensorCount"] = Details.sensors.size();
@@ -1912,12 +2144,36 @@ void InstallWebServerHandlers()
 			(*each)->GetSensorValue(switchRelay);
 
 			switchRelay["name"] = (*each)->GetName();
+
+			yield();
+
 		}
 
+#ifdef _ESP32_CAMERA
+
+		root["cameraCount"] = Details.cameras.size();
+		JsonArray &cameraState = root.createNestedArray("cameraState");
+		count=0;
+		for(auto each=Details.cameras.begin();each!=Details.cameras.end();each++, count++)
+		{
+			JsonObject &camera = cameraState.createNestedObject();
+			camera["camera"] = count;
+
+			camera["name"] = (*each)->GetName();
+
+			yield();
+
+		}
+
+#endif
 
 
 		String jsonText;
+#ifdef _DEVELOPER_BUILD
+		root.prettyPrintTo(jsonText);
+#else		
 		root.printTo(jsonText);
+#endif		
 
 		if(Details.dblog) Details.dblog->println(debug::dbVerbose, jsonText);
 
@@ -2008,7 +2264,11 @@ void InstallWebServerHandlers()
 		}
 
 		String jsonText;
+#ifdef _DEVELOPER_BUILD
+		root.prettyPrintTo(jsonText);
+#else		
 		root.printTo(jsonText);
+#endif		
 
 		if(Details.dblog) Details.dblog->println(debug::dbVerbose, jsonText);
 
@@ -2074,9 +2334,11 @@ void InstallWebServerHandlers()
 			(*each)->GetSensorConfig(switchRelay);
 
 			switchRelay["name"] = (*each)->GetName();
+
+			yield();
 		}
 
-
+		// add switches
 		root["switchCount"] = Details.switches.size();
 		JsonArray &switchConfig = root.createNestedArray("switchConfig");
 		count=0;
@@ -2090,19 +2352,49 @@ void InstallWebServerHandlers()
 				switchRelay["impl"]=impl;
 
 			switchRelay["name"] = (*each)->GetName();
+
+			yield();
+
 		}
 
+#ifdef _ESP32_CAMERA
+
+		// add cameras
+		root["cameraCount"] = Details.cameras.size();
+		JsonArray &cameraConfig = root.createNestedArray("cameraConfig");
+		count=0;
+		for(auto each=Details.cameras.begin();each!=Details.cameras.end();each++, count++)
+		{
+			JsonObject &camera = cameraConfig.createNestedObject();
+			camera["camera"] = count;
+
+			String impl=(*each)->GetImpl();
+			if(impl.length())
+				camera["impl"]=impl;
+
+			camera["name"] = (*each)->GetName();
+
+			yield();
+
+		}
+
+#endif
+
 		String jsonText;
+#ifdef _DEVELOPER_BUILD
+		root.prettyPrintTo(jsonText);
+#else		
 		root.printTo(jsonText);
+#endif		
 
 		if(Details.dblog) Details.dblog->println(debug::dbVerbose, jsonText);
 
 #ifdef _ESP_USE_ASYNC_WEB
 		AsyncWebServerResponse *response = request->beginResponse(200, "application/json", jsonText);
-		response->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+		response->addHeader("Cache-Control", "max-age=120");
 		request->send(response);
 #else
-		wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+		wifiInstance.server.sendHeader("Cache-Control", "max-age=120");
 		wifiInstance.server.send(200, "application/json", jsonText);
 #endif		
 	});
@@ -2130,7 +2422,11 @@ void InstallWebServerHandlers()
 		root["friendlyName"]=Details.friendlyName;
 
 		String jsonText;
+#ifdef _DEVELOPER_BUILD
+		root.prettyPrintTo(jsonText);
+#else		
 		root.printTo(jsonText);
+#endif		
 
 		if(Details.dblog) Details.dblog->println(debug::dbVerbose, jsonText);
 
@@ -2180,7 +2476,11 @@ void InstallWebServerHandlers()
 
 
 		String jsonText;
+#ifdef _DEVELOPER_BUILD
+		root.prettyPrintTo(jsonText);
+#else		
 		root.printTo(jsonText);
+#endif		
 
 		if(Details.dblog) Details.dblog->println(debug::dbVerbose, jsonText);
 
@@ -2233,7 +2533,11 @@ void InstallWebServerHandlers()
 		
 
 		String jsonText;
+#ifdef _DEVELOPER_BUILD
+		root.prettyPrintTo(jsonText);
+#else		
 		root.printTo(jsonText);
+#endif		
 
 		if(Details.dblog) Details.dblog->println(debug::dbVerbose, jsonText);
 
@@ -2307,6 +2611,7 @@ void SendServerPage()
 	case myWifiClass::wifiMode::modeSTAandAP:
 		toOpen="/_STAAPmode.htm";
 		break;
+	case myWifiClass::wifiMode::modeSTA_unjoinedAndAP:
 	case myWifiClass::wifiMode::modeAP:
 		toOpen = "/_APmode.htm";
 		break;
@@ -2375,9 +2680,9 @@ void loop(void)
 	{
 		Details.runtimeWhenLastJoined=millis();
 	}
-
-	if(millis()-Details.runtimeWhenLastJoined > _ALLOW_WIFI_RESET_AFTER_AP_JOIN_TIMEOUT)
+	else if(millis()-Details.runtimeWhenLastJoined > _ALLOW_WIFI_RESET_AFTER_AP_JOIN_TIMEOUT)
 	{
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, "Timedout trying to join Wifi - adding AP");
 		AddAPtoSTA();
 		Details.runtimeWhenLastJoined=millis();
 	}
@@ -2399,6 +2704,13 @@ void loop(void)
 	{
 		(*eachSwitch)->DoWork();
 	}
+
+#ifdef _ESP32_CAMERA
+	for(auto eachCamera=Details.cameras.begin();eachCamera!=Details.cameras.end();eachCamera++)
+	{
+		(*eachCamera)->DoWork();
+	}
+#endif
 
 	// sump any debug from isr
 	if(Details.dblog) Details.dblog->isr_pump();
