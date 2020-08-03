@@ -3,6 +3,7 @@
 #include <WiFiClient.h>
 #include <debugLogger.h>
 #include "switchSensor.h"
+#include <tuple>
 
 //#define _AT_RGBSTRIP					// a strip of RGBs
 
@@ -116,12 +117,11 @@ StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 // my libs
 #include <myWifi.h>
 
+#define mdsnNAME		"barneyman"
 
 #ifdef ESP32
-#define mdsnNAME		"barneyman32"
 #define hostnameStem	"esp32_"
 #else
-#define mdsnNAME	"barneyman"
 #define hostnameStem	"esp_"
 #endif
 myWifiClass wifiInstance(hostnameStem, NULL, mdsnNAME);
@@ -152,6 +152,79 @@ myWifiClass wifiInstance(hostnameStem, NULL, mdsnNAME);
 // remember the files we are serving statically
 //#define _STORE_STATIC_FILES
 
+
+#ifdef ARDUINO_ESP8266_WEMOS_D1MINI
+
+
+class baseConfigurator
+{
+public:
+
+	baseConfigurator(debugBaseClass*dbg, unsigned id, const char*bigname):m_dbg(dbg),m_id(id)
+	{
+		m_bigName=bigname;
+	}
+
+	virtual void getConfigOptionsJSON(JsonObject &tohere)=0;
+
+	virtual baseSensor *createOne(const char*config)=0;
+
+	bool operator ==(const unsigned &id) const
+	{
+		return id==m_id;
+	}
+
+	const char *Name() { return m_bigName.c_str(); }
+
+
+protected:
+
+	debugBaseClass *m_dbg;
+	unsigned m_id;
+	String m_bigName;
+
+};
+
+
+template <class T>
+class configurator : public baseConfigurator
+{
+public:
+
+	configurator(debugBaseClass*dbg, unsigned id, const char*bigname):baseConfigurator(dbg,id, bigname)
+	{
+	}
+
+	// proxy for the real object
+	virtual void getConfigOptionsJSON(JsonObject &tohere)
+	{
+		tohere["name"]=m_bigName;
+		tohere["id"]=m_id;
+
+		if(m_dbg)
+			m_dbg->printf(debug::dbError,"getConfigOptionsJSON %s, %u\n\r",m_bigName.c_str(),m_id );
+
+		T::getConfigOptionsJSON(tohere);
+	}
+
+	virtual baseSensor *createOne(const char*config)
+	{
+		baseSensor *tmp=new T(m_dbg,config);//PIRInstantSensor(m_dbg,config);
+		return tmp;
+	}
+
+
+
+protected:
+
+
+};
+
+
+
+
+
+#endif
 
 
 
@@ -193,14 +266,23 @@ struct
 	bool resetWIFI;
 #endif
 
-	// marker
+
+	// marker - everything after this is dynamic
 	bool ignoreThis;
 
+#ifdef ARDUINO_ESP8266_WEMOS_D1MINI
+	std::vector<baseConfigurator*> options;
+	std::vector<std::tuple<unsigned,String,baseSensor*>> instances;
+	// std::get<offset>()
+#else	
 	// sensors
 	std::vector<baseSensor*>	sensors;
+#endif	
+
 
 	// switches
 	std::vector<baseSwitch*>	switches;
+
 
 #ifdef _ESP32_CAMERA
 	std::vector<espCamera*>	cameras;
@@ -224,7 +306,8 @@ struct
 #ifdef _DEVELOPER_BUILD
 	{
 		// name pwd config dhcp
-		"","",false, true
+		//"","",false, true
+		"beige","0404407219", true, true
 	},
 #else	
 	{
@@ -420,6 +503,21 @@ void WriteJSONconfig()
 	root["loggingImplConfig"]=Details.loggingImplConfig;
 
 
+#ifdef ARDUINO_ESP8266_WEMOS_D1MINI
+	// write instances
+
+	JsonArray &instances=root.createNestedArray("instances");
+
+	for(auto each=Details.instances.begin();each!=Details.instances.end();each++)
+	{
+		JsonObject &thisInstance=instances.createNestedObject();
+		thisInstance["id"]=std::get<0>(*each);
+		thisInstance["config"]=std::get<1>(*each);
+	}
+
+#endif
+
+
 	wifiInstance.WriteDetailsToJSON(root, Details.wifi);
 
 
@@ -600,7 +698,26 @@ void ReadJSONconfig()
 	else 
 		Details.loggingImplConfig="";
 
-	
+#ifdef ARDUINO_ESP8266_WEMOS_D1MINI
+	// read instances
+	if(root.containsKey("instances"))
+	{
+		JsonArray &instances=root["instances"];
+		// for each one
+		for(auto each=instances.begin();each!=instances.end();++each)
+		{
+			Details.instances.push_back(std::tuple<unsigned,String,baseSensor*>(each->as<JsonObject>().get<unsigned>("id"),each->as<JsonObject>().get<const char*>("config"),NULL));
+		}
+	}
+
+#ifdef _KILL_INSTANCES
+	Details.instances.clear();
+	Details.dirty=true;
+
+#endif
+
+#endif	
+
 	Details.dblog=NULL;
 
 
@@ -609,6 +726,33 @@ void ReadJSONconfig()
 	yield();
 }
 
+#ifdef ARDUINO_ESP8266_WEMOS_D1MINI
+
+void AddDeviceInstance()
+{
+	if(Details.dblog) Details.dblog->println(debug::dbVerbose, "Adding instances");
+
+	for(auto eachInstance=Details.instances.begin();eachInstance!=Details.instances.end();eachInstance++)
+	{
+		// walk thru
+		for(auto each=Details.options.begin();each!=Details.options.end();each++)
+		{
+			yield();
+			if(*(*each)==std::get<0>(*eachInstance))
+			{
+				if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "creating '%s' instance\n\r", (*each)->Name());
+				// found it ... create one
+				baseSensor *newOne=(*each)->createOne(std::get<1>(*eachInstance).c_str());
+				std::get<2>(*eachInstance)=newOne;
+				break;
+			}
+
+		}
+	}
+
+}
+
+#endif	
 
 void PreserveState()
 {
@@ -648,7 +792,7 @@ void PreserveState()
 
 bool RestoreState()
 {
-	if(Details.dblog) Details.dblog->println(debug::dbVerbose, "RestoreState");
+	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "RestoreState ");
 
 	// see if there is a preserved state
 	if (SPIFFS.exists(_JSON_PRESERVED_STATE_FILE))
@@ -686,6 +830,7 @@ bool RestoreState()
 	}
 	else
 	{
+		if(Details.dblog) Details.dblog->println(debug::dbVerbose, " ignored");
 		return false;
 	}
 	
@@ -769,6 +914,7 @@ void AddCamera(espCamera *newCamera)
 
 #endif
 
+
 void AddSwitch(baseSwitch *newSwitch)
 {
 	if(newSwitch)
@@ -791,6 +937,10 @@ void AddSwitch(baseSwitch *newSwitch)
 
 void createLogger()
 {
+#ifdef _DEVELOPER_BUILD	
+	Details.loggingImpl=debug::dbImpl::dbSerial;
+#endif	
+
 	// sort out the debugger
 	switch(Details.loggingImpl)
 	{
@@ -810,9 +960,8 @@ void createLogger()
 			break;
 		case debug::dbImpl::dbSysLog:
 			{
-				//syslogDebug *newOne=new syslogDebug(debug::dbVerbose, "192.168.42.112", 514, "temp", _MYVERSION);
-				syslogDebug *newOne=new syslogDebug(Details.loggingLevel,wifiInstance.m_hostName.c_str(),Details.loggingImplConfig);
-				//syslogDebug *newOne=new syslogDebug(Details.loggingLevel,"wibble",Details.loggingImplConfig);
+				//syslogDebug *newOne=new syslogDebug(Details.loggingLevel,wifiInstance.m_hostName.c_str(),Details.loggingImplConfig);
+				syslogDebug *newOne=new syslogDebug(Details.loggingLevel,"wibble",IPAddress(129,168,42,112));
 				newOne->SetAppName(_MYVERSION);
 				Details.dblog=newOne;
 			}
@@ -822,6 +971,19 @@ void createLogger()
 	// tell wifi
 	wifiInstance.SetDebug(Details.dblog);
 
+}
+
+void loadOptions()
+{
+#ifdef ARDUINO_ESP8266_WEMOS_D1MINI	
+
+	// these IDs *must not change*
+	Details.options.push_back(new configurator<DallasSingleSensor>(Details.dblog, 0x100, "Dallas Temperature Sensor"));
+	Details.options.push_back(new configurator<BME280Sensor>(Details.dblog, 0x101, "BME280 Environment Sensor"));
+	Details.options.push_back(new configurator<MAX44009Sensor>(Details.dblog, 0x102, "MAX44009 Lux Sensor"));
+	Details.options.push_back(new configurator<PIRInstantSensor>(Details.dblog, 0x103, "HC-SR501 PIR Sensor"));
+
+#endif	
 }
 
 
@@ -836,8 +998,13 @@ void setup(void)
 	SPIFFS.begin();
 	ReadJSONconfig();
 
-	createLogger();
 
+	createLogger();
+	// ONLY AFTER HERE WILL THERE BE LOGGING!
+
+
+	// add the options
+	loadOptions();
 
 	if(Details.dblog) Details.dblog->printf(debug::dbInfo, "\r\n\n\n===========================================");
 
@@ -865,13 +1032,19 @@ void setup(void)
 
 	}
 
-#define _LOCH_SPORT_VARIANT
+//#define _LOCH_SPORT_VARIANT
 
 #ifdef ARDUINO_ESP8266_GENERIC
 
 	AddSwitch(new SonoffBasic(Details.dblog));
 
 #elif defined(ARDUINO_ESP8266_WEMOS_D1MINI)
+
+	// create from the stored details
+	AddDeviceInstance();
+
+
+/*
 
 #ifdef _PIR_VARIANT
 
@@ -891,12 +1064,11 @@ void setup(void)
 
 
 #endif // PIR
+*/
 
-#else
+#elif defined(_ESP32_CAMERA)
 
-#ifdef _ESP32_CAMERA
-
-//#define _USE_FAKE_CAMERAS
+#define _USE_FAKE_CAMERAS
 #ifdef _USE_FAKE_CAMERAS
 	AddCamera(new fakeCamera(Details.dblog));
 	AddCamera(new fakeCamera(Details.dblog));
@@ -910,43 +1082,6 @@ void setup(void)
 
 #endif
 
-
-#endif
-
-#ifdef _WIP
-
-// thermos and lux
-//#define WEMOS_COM3
-// PIR
-//#define WEMOS_COM4
-// 6switch
-#define WEMOS_COM5 
-
-#ifdef WEMOS_COM3
-	// load up the sensors and switches
-	AddSwitch(new SonoffBasicNoLED(Details.dblog));
-
-
-	// OF COURSE i reused D7 which is used by Sonoff! duh!
-	Details.sensors.push_back(new DallasSingleSensor(D7, Details.dblog));
-	Details.sensors.push_back(new BME280Sensor(Details.dblog));
-	Details.sensors.push_back(new MAX44009Sensor(Details.dblog));
-
-	Details.sensors.push_back(new testInstantSensor(Details.dblog));
-
-#elif defined(WEMOS_COM4) 
-
-	Details.sensors.push_back(new PIRInstantSensor(Details.dblog, D7, LED_BUILTIN));
-
-#elif defined(WEMOS_COM5) 
-
-	Details.sensors.push_back(new testInstantSensor(Details.dblog, 10*60*1000));
-	AddSwitch(new MCP23017MultiSwitch(Details.dblog, 6, SDA, SCL, D5));
-
-
-#endif
-
-#endif // _WIP
 
 	if(!RestoreState())
 	{
@@ -1478,6 +1613,131 @@ void InstallWebServerHandlers()
 
 	});
 
+#ifdef _ESP_USE_ASYNC_WEB
+	wifiInstance.server.on("/json/devices/del", HTTP_POST, [](AsyncWebServerRequest *request) {
+#else	
+	wifiInstance.server.on("/json/devices/del",HTTP_POST, []() {
+#endif		
+
+		jsonBuffer.clear();
+		// 'plain' is the secret source to get to the body
+		JsonObject& root = 
+#ifdef _ESP_USE_ASYNC_WEB
+			jsonBuffer.parseObject(body.c_str());
+#else		
+			jsonBuffer.parseObject(wifiInstance.server.arg("plain"));
+#endif		
+
+		if(root.containsKey("id") && root.containsKey("config") && root.containsKey("instance"))
+		{
+
+			unsigned id=root["id"];
+			String config=root["config"];
+			unsigned long instance=root["instance"];
+
+			// remove instance and sensor
+			for(auto each=Details.instances.begin();each!=Details.instances.end();each++)
+			{
+				if(std::get<0>(*each)==id && std::get<1>(*each)==config)
+				{
+					// remove it
+					delete std::get<2>(*each);
+					std::get<2>(*each)=NULL;
+					Details.instances.erase(each);
+					break;
+				}
+			}
+
+		}
+
+#ifdef _ESP_USE_ASYNC_WEB
+		request->send(200,"text/html","<html/>");
+#else
+		wifiInstance.server.send(200,"text/html","<html/>");
+#endif		
+
+	});
+
+
+
+#ifdef _ESP_USE_ASYNC_WEB
+	wifiInstance.server.on("/json/devices/add", HTTP_POST, [](AsyncWebServerRequest *request) {
+#else	
+	wifiInstance.server.on("/json/devices/add",HTTP_POST, []() {
+#endif		
+
+
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, "/json/devices");
+#ifdef _ESP_USE_ASYNC_WEB
+		String body((char*)request->_tempObject);
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, body.c_str());
+#else
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, wifiInstance.server.arg("plain"));
+#endif		
+
+		jsonBuffer.clear();
+		// 'plain' is the secret source to get to the body
+		JsonObject& root = 
+#ifdef _ESP_USE_ASYNC_WEB
+			jsonBuffer.parseObject(body.c_str());
+#else		
+			jsonBuffer.parseObject(wifiInstance.server.arg("plain"));
+#endif		
+
+		bool reboot=false, add=true;
+
+		String newInstanceConfig;
+
+		if(root.containsKey("config"))
+		{
+			root["config"].printTo(newInstanceConfig);
+		}
+
+		// check it's not already there
+		unsigned id=root["id"];
+
+#ifdef ARDUINO_ESP8266_WEMOS_D1MINI
+		// 
+		for(auto each=Details.instances.begin();each!=Details.instances.end();each++)
+		{
+			if(std::get<0>(*each)==id)
+			{
+				if(std::get<1>(*each)==newInstanceConfig)
+				{
+					// er - no
+					add=false;
+					reboot=false;
+					if(Details.dblog) Details.dblog->println(debug::dbWarning, "adding same instance ignored");
+					break;
+				}
+			}
+		}
+
+		if(add)
+		{
+			// TODO - add live
+			Details.instances.push_back(std::tuple<unsigned,String,baseSensor*>(id,newInstanceConfig,NULL));
+			WriteJSONconfig();
+		}
+
+#endif
+
+#ifdef _ESP_USE_ASYNC_WEB
+		request->send(200,"text/html","<html/>");
+#else
+		wifiInstance.server.send(200,"text/html","<html/>");
+#endif		
+
+		// minimise heap fracture
+		if(reboot)
+			RebootMe(true);
+
+
+#ifdef _ESP_USE_ASYNC_WEB
+	}).onBody(onPostBodyHandler);
+#else
+	});
+#endif
 
 
 #ifdef _ESP_USE_ASYNC_WEB
@@ -1781,14 +2041,14 @@ void InstallWebServerHandlers()
 
 			int recipientSensor = root["sensor"];
 
-			if(recipientSensor<Details.sensors.size())
+			if(recipientSensor<Details.instances.size())
 			{
 				if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Adding recipient %s:%d Sensor %d\n\r", recipientAddr.toString().c_str(), recipientPort, recipientSensor);
 #ifdef _ESP_USE_ASYNC_WEB
 				String body((char*)request->_tempObject);
 				Details.sensors[recipientSensor]->AddAnnounceRecipient(recipientAddr,recipientPort,(body.c_str()));
 #else				
-				Details.sensors[recipientSensor]->AddAnnounceRecipient(recipientAddr,recipientPort,wifiInstance.server.arg("plain"));
+				std::get<2>(Details.instances[recipientSensor])->AddAnnounceRecipient(recipientAddr,recipientPort,wifiInstance.server.arg("plain"));
 #endif				
 			}
 			else
@@ -1957,7 +2217,7 @@ void InstallWebServerHandlers()
 						if(theCam->fetchFrame(&imgBytes,&imgSize))
 						{
 
-							if(dblog) dblog->printf(debug::dbVerbose, "json camera %u size @ 0x%x\n\r",imgSize,imgBytes);		
+							if(dblog) dblog->printf(debug::dbVerbose, "json camera:%d - img %u size @ 0x%x\n\r",cam,imgSize,imgBytes);		
 
 //#define _SEND_IMG_IMMEDIATE							
 
@@ -2133,17 +2393,17 @@ void InstallWebServerHandlers()
 
 		}
 
-		root["sensorCount"] = Details.sensors.size();
+		root["sensorCount"] = Details.instances.size();
 		JsonArray &sensorState = root.createNestedArray("sensorState");
 		count=0;
-		for(auto each=Details.sensors.begin();each!=Details.sensors.end();each++, count++)
+		for(auto each=Details.instances.begin();each!=Details.instances.end();each++, count++)
 		{
 			JsonObject &switchRelay = sensorState.createNestedObject();
 			switchRelay["sensor"] = count;
 
-			(*each)->GetSensorValue(switchRelay);
+			std::get<2>(*each)->GetSensorValue(switchRelay);
 
-			switchRelay["name"] = (*each)->GetName();
+			switchRelay["name"] = std::get<2>(*each)->GetName();
 
 			yield();
 
@@ -2164,7 +2424,8 @@ void InstallWebServerHandlers()
 			yield();
 
 		}
-
+#else
+		root["cameraCount"] =0;
 #endif
 
 
@@ -2286,6 +2547,86 @@ void InstallWebServerHandlers()
 	});
 
 
+#ifdef _ESP_USE_ASYNC_WEB
+	wifiInstance.server.on("/json/devices", HTTP_GET, [](AsyncWebServerRequest *request) {
+#else	
+	wifiInstance.server.on("/json/devices", HTTP_GET, []() {
+#endif		
+
+		if(Details.dblog) Details.dblog->println(debug::dbInfo, "json devices called");
+
+		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
+		jsonBuffer.clear();
+
+		JsonObject &root = jsonBuffer.createObject();
+
+		JsonArray &instances=root.createNestedArray("instances");
+
+#ifdef ARDUINO_ESP8266_WEMOS_D1MINI		
+
+		for(auto each=Details.instances.begin();each!=Details.instances.end();each++)
+		{
+			auto found=Details.options.begin();//std::find(Details.options.begin(),Details.options.end(),each->first);
+
+			for(;found!=Details.options.end();found++)
+			{
+				// deref to get to pointer, deref to get to object
+				if(*(*found)==std::get<0>(*each))
+					break;
+			}
+
+
+			if(found==Details.options.end())
+			{
+				// this is bad!
+				if(Details.dblog) Details.dblog->println(debug::dbError, "device not found");
+				continue;
+			}
+
+			JsonObject &instance=instances.createNestedObject();
+			instance["id"]=(unsigned long)(*found);
+			instance["config"]=std::get<1>(*each);
+			instance["name"]=(*found)->Name();
+		}
+
+#endif		
+
+		JsonArray &options=root.createNestedArray("options");
+
+#ifdef ARDUINO_ESP8266_WEMOS_D1MINI		
+
+		for(auto each=Details.options.begin();each!=Details.options.end();each++)
+		{
+			JsonObject& option=options.createNestedObject();
+
+			(*each)->getConfigOptionsJSON(option);
+
+
+		}
+
+#endif
+
+
+
+		String jsonText;
+#ifdef _DEVELOPER_BUILD
+		root.prettyPrintTo(jsonText);
+#else		
+		root.printTo(jsonText);
+#endif		
+
+
+#ifdef _ESP_USE_ASYNC_WEB
+		AsyncWebServerResponse *response = request->beginResponse(200, "application/json", jsonText);
+		response->addHeader("Cache-Control", "max-age=120");
+		request->send(response);
+#else
+		wifiInstance.server.sendHeader("Cache-Control", "max-age=120");
+		wifiInstance.server.send(200, "application/json", jsonText);
+#endif		
+	});
+
+
 
 #ifdef _ESP_USE_ASYNC_WEB
 	wifiInstance.server.on("/json/config", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -2323,17 +2664,17 @@ void InstallWebServerHandlers()
 #endif
 
 		// add sensors
-		root["sensorCount"] = Details.sensors.size();
+		root["sensorCount"] = Details.instances.size();
 		JsonArray &sensorConfig = root.createNestedArray("sensorConfig");
 		int count=0;
-		for(auto each=Details.sensors.begin();each!=Details.sensors.end();each++, count++)
+		for(auto each=Details.instances.begin();each!=Details.instances.end();each++, count++)
 		{
 			JsonObject &switchRelay = sensorConfig.createNestedObject();
 			switchRelay["sensor"] = count;
 
-			(*each)->GetSensorConfig(switchRelay);
+			std::get<2>(*each)->GetSensorConfig(switchRelay);
 
-			switchRelay["name"] = (*each)->GetName();
+			switchRelay["name"] = std::get<2>(*each)->GetName();
 
 			yield();
 		}
@@ -2515,7 +2856,8 @@ void InstallWebServerHandlers()
 
 		// let's get all wifis we can see
 		std::vector<std::pair<String, int>> allWifis;
-		int found=wifiInstance.ScanNetworks(allWifis);
+		
+		int found=0;wifiInstance.ScanNetworks(allWifis);
 
 		JsonArray &wifis = root.createNestedArray("wifi");
 
@@ -2695,9 +3037,9 @@ void loop(void)
 	wifiInstance.serviceComponents();
 
 	// sensors may need some work
-	for(auto eachSensor=Details.sensors.begin();eachSensor!=Details.sensors.end();eachSensor++)
+	for(auto eachSensor=Details.instances.begin();eachSensor!=Details.instances.end();eachSensor++)
 	{
-		(*eachSensor)->DoWork();
+		std::get<2>(*eachSensor)->DoWork();
 	}
 
 	for(auto eachSwitch=Details.switches.begin();eachSwitch!=Details.switches.end();eachSwitch++)

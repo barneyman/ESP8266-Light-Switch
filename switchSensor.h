@@ -46,6 +46,23 @@ public:
 
     }
 
+    OneWireSensor(debugBaseClass*dbg, const char *config):baseSensor(dbg)
+    {
+		DynamicJsonBuffer json;
+		JsonObject &configjson=json.parse(config);
+
+		int wirePin=0;
+
+		if(configjson.containsKey("GPIO"))
+			wirePin=configjson["GPIO"];
+
+		m_oneWire.begin(wirePin);
+
+		
+
+    }
+
+
 protected:
 
     OneWire m_oneWire;
@@ -133,11 +150,44 @@ public:
 };
 
 
+class gpioMap
+{
+
+public:
+
+	static void getConfigOptionsJSON(JsonObject &tohere)
+	{
+		JsonArray &deets=tohere.createNestedArray("config");
+		JsonObject& one=deets.createNestedObject();
+		one["name"]="GPIO";
+		one["type"]="select";
+
+#ifdef ARDUINO_ESP8266_WEMOS_D1MINI
+		// cannot use 0 or 2 (D3, D4 respectively)
+		int gpioMap[]={ 16,5,4,-1,-1,14,12,13 };
+
+		JsonArray &opts=one.createNestedArray("options");
+
+		for(int each=0;each<sizeof(gpioMap)/sizeof(int);each++)
+		{
+			if(gpioMap[each]<0)
+				continue;
+
+			JsonObject &opt=opts.createNestedObject();
+			opt["name"]=String("D")+String(each);
+			opt["value"]=gpioMap[each];
+		}
+#endif
+
+	}
+
+};
+
 
 
 #include <DallasTemperature.h>
 
-class DallasSingleSensor : public OneWireSensor
+class DallasSingleSensor : public OneWireSensor, public gpioMap
 {
 
 public: 
@@ -149,6 +199,18 @@ public:
         m_tempC.begin();
         thingName="DS18B20";
     }
+
+    DallasSingleSensor(debugBaseClass*dbg, const char*config):
+        OneWireSensor(dbg,config),
+        m_tempC(&m_oneWire)
+    {
+        m_tempC.begin();
+        thingName="DS18B20";
+    }
+
+
+
+
 
 	virtual void GetSensorConfigElements(JsonArray &toHere)
 	{
@@ -197,13 +259,20 @@ protected:
 
 class BME280Sensor : public I2CSensor
 {
+protected:
 
-public:
-
-	BME280Sensor(debugBaseClass*dbg):I2CSensor(0x76, dbg)
+	void initSensor()
 	{
 		m_sensor.begin();
 		thingName="BME280";
+
+	}
+
+public:
+
+	BME280Sensor(debugBaseClass*dbg, const char *config=NULL):I2CSensor(0x76, dbg)
+	{
+		initSensor();
 	}
 
 	virtual void GetSensorConfigElements(JsonArray &toHere)
@@ -224,6 +293,9 @@ public:
 		sensorElement3["round"] = "0";
 	}
 
+	static void getConfigOptionsJSON(JsonObject &tohere)
+	{
+	}
 
     virtual bool GetSensorValue(JsonObject &toHere)
     {
@@ -254,12 +326,23 @@ class MAX44009Sensor: public I2CSensor
 {
 protected:
 
+	void initSensor()
+	{
+		thingName="MAX44009";
+		m_sensor.begin();
+
+	}
+
 public:
 
 	MAX44009Sensor(debugBaseClass*dbg,int address=0x4a):I2CSensor(address, dbg)//,m_sensor(address)
 	{
-		thingName="MAX44009";
-		m_sensor.begin();
+		initSensor();
+	}
+
+	MAX44009Sensor(debugBaseClass*dbg, const char*config):I2CSensor(0x4a, dbg)
+	{
+		initSensor();
 	}
 
 	virtual void GetSensorConfigElements(JsonArray &toHere)
@@ -270,6 +353,9 @@ public:
 		sensorElement["round"] = "0";
 	}
 
+	static void getConfigOptionsJSON(JsonObject &tohere)
+	{
+	}
 
     virtual bool GetSensorValue(JsonObject &toHere)
     {
@@ -387,9 +473,7 @@ protected:
 
 	static GPIOInstantSensor* m_singleton;
 
-public:
-
-	GPIOInstantSensor(debugBaseClass*dbg,unsigned gpio, unsigned displayPin=-1, bool invertedInput=false, bool invertedOutput=false):instantSensor(dbg),m_gpio(gpio),m_ioChanged(false),m_gpOut(displayPin)
+	void initSensor()
 	{
 		m_singleton=this;
 		pinMode(m_gpio, INPUT);
@@ -398,8 +482,42 @@ public:
 		if(m_gpOut!=-1)
 			pinMode(m_gpOut,OUTPUT);
 
-		m_invertedInput=invertedInput;
-		m_invertedOutput=invertedOutput;
+	}
+
+public:
+
+	GPIOInstantSensor(debugBaseClass*dbg,unsigned gpio, unsigned displayPin=-1, bool invertedInput=false, bool invertedOutput=false):instantSensor(dbg),
+		m_gpio(gpio),m_ioChanged(false),m_gpOut(displayPin),m_invertedInput(invertedInput),m_invertedOutput(invertedOutput)
+	{
+		initSensor();
+	}
+
+	GPIOInstantSensor(debugBaseClass*dbg,const char *config):instantSensor(dbg)
+	{
+
+		if(dbg) dbg->printf(debug::dbVerbose,"%s !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! IN\n\r",config);
+
+		// sensible defaults
+		m_gpio=0;
+		m_ioChanged=false;
+		m_gpOut=-1;
+		m_invertedInput=false;
+		m_invertedOutput=false;
+
+		DynamicJsonBuffer json;
+		JsonObject &configjson=json.parseObject(config);
+
+		if(configjson.containsKey("GPIO"))
+		{
+			m_gpio=D7;//configjson["GPIO"];
+			if(dbg) dbg->printf(debug::dbVerbose,"GPID = %d\n\r",m_gpio);
+		}
+
+		initSensor();
+
+		if(dbg) dbg->printf(debug::dbVerbose,"%s !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! OUT\n\r",config);
+		return;
+
 
 	}
 
@@ -435,7 +553,7 @@ public:
 };
 
 
-class PIRInstantSensor : public GPIOInstantSensor
+class PIRInstantSensor : public GPIOInstantSensor, public gpioMap
 {
 public:
 	// wemos is inverted LED
@@ -445,6 +563,18 @@ public:
 		thingName="PIR";
 		deviceClass="motion";
 	}
+
+	// comes from AddDeviceInstance
+	PIRInstantSensor(debugBaseClass*dbg,const char*config):
+		GPIOInstantSensor(dbg, config)
+	{
+		thingName="PIR";
+		deviceClass="motion";
+	}
+
+
+
+
 
 };
 

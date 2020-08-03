@@ -174,35 +174,33 @@
 
             var xhr = new XMLHttpRequest();
             xhr.open("GET", url, true);
-            xhr.timeout = 1000
+            //xhr.timeout = 1000
             xhr.onload = function(e) {
-                xhr.onload = function(e) {
-                    if (xhr.readyState === 4) {
-                        if (xhr.status === 200) {
+                if (xhr.readyState === 4) {
+                    if (xhr.status === 200) {
 
-                            document.getElementById("friendlyName").value = xhr.responseText["friendlyName"]
+                        document.getElementById("friendlyName").value = xhr.responseText["friendlyName"]
 
-                            wifis.innerText = ""
-                            select = document.createElement("select")
-                            select.setAttribute('id', 'wifisids')
-                            wifis.appendChild(select)
+                        wifis.innerText = ""
+                        select = document.createElement("select")
+                        select.setAttribute('id', 'wifisids')
+                        wifis.appendChild(select)
 
-                            var wifiArray = xhr.responseText["wifi"]
+                        var wifiArray = xhr.responseText["wifi"]
 
-                            for (var eachNode in wifiArray) {
-                                var wifi = document.createElement("option")
-                                wifi.setAttribute("value", wifiArray[eachNode]["ssid"])
-                                wifi.innerText = wifiArray[eachNode]["ssid"];
-                                select.appendChild(wifi);
-                            }
-
-                            clearStatus()
-
-                            document.getElementById("rescan").disabled = false;
-                            document.getElementById("nextButton").disabled = previousNextState;
-                            document.getElementById("prevButton").disabled = previousPrevState;
-
+                        for (var eachNode in wifiArray) {
+                            var wifi = document.createElement("option")
+                            wifi.setAttribute("value", wifiArray[eachNode]["ssid"])
+                            wifi.innerText = wifiArray[eachNode]["ssid"];
+                            select.appendChild(wifi);
                         }
+
+                        clearStatus()
+
+                        document.getElementById("rescan").disabled = false;
+                        document.getElementById("nextButton").disabled = previousNextState;
+                        document.getElementById("prevButton").disabled = previousPrevState;
+
                     }
                 }
             }

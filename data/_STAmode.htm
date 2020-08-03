@@ -22,12 +22,13 @@
         <iframe src="HeaderFrame.htm" id="header" name="header" onload="headerLoaded()"></iframe>
 
         <script>
-        const frames = ["home", "admin", "logging"];
+        const frames = ["home","config", "admin", "logging"];
 
         </script>
 
         <ul id="menu" class="main">
             <li><a href="#" onclick="onMenu('home')">Home</a></li>
+            <li><a href="#" onclick="onMenu('config')">Config</a></li>
             <li><a href="#" onclick="onMenu('admin')">Admin</a></li>
             <li><a href="#" onclick="onMenu('logging')">Logging</a></li>
         </ul>
@@ -104,6 +105,23 @@
 
         </div>
 
+        <div id="config" hidden>
+            <fieldset>
+                <legend>Installed</legend>
+                <div id="installed" class="verticalContainer" hidden=true>
+
+                </div>
+            </fieldset>
+            <fieldset>
+                <legend>Available</legend>
+                <div class="horizontalContainer">
+                    <select id="additionaDevices" onchange="showCorrectDeviceConfig()"></select>
+                    <button onclick="addConfig()">Add</button>
+                </div>
+                <div class="verticalContainer" id="deviceConfig"></div>
+            </fieldset>
+        </div>
+
         <div id="logging" hidden>
             <fieldset>
                 <legend>Level</legend>
@@ -115,7 +133,6 @@
                         <button onclick="setLogLevel()">Set</button>
                     </div>
                 </div>
-                </select>
             </fieldset>
             <br>
             <fieldset>
@@ -125,7 +142,6 @@
                 <button onclick="setLogImpl()">Set</button>
                 </div>
                 <div class="verticalContainer" id="implConfig"></div>
-                </select>
             </fieldset>
         </div>
 
@@ -159,6 +175,7 @@
             getConfig()
             getLogging()
             //clearStatus();
+            getDevices()
         }
 
         function postSetting(config, url)
@@ -221,71 +238,14 @@
             setDebug(jsonData);
         }
 
-        function addConfigItems(container, name, configItems)
-        {
-            var configFieldSet=document.createElement("fieldset")
-            var configLegend=document.createElement("legend")
-            configLegend.innerText=name;
-            configFieldSet.appendChild(configLegend)
 
-
-            configItems.forEach(function(item) {
-
-                var configDiv=document.createElement("div")
-                configDiv.className="horizontalContainer"
-
-                configFieldSet.appendChild(configDiv)
-
-                var configName=document.createElement("div")
-                configName.innerText=item["name"]
-
-                configDiv.appendChild(configName)
-
-                switch(item["type"])
-                {
-                    case "text":
-                        var input=document.createElement("input")
-                        input.type="text"
-                        input.name=item["name"]
-                        if(item.hasOwnProperty("default"))
-                        {
-                            input.value=item["default"]
-                        }
-                        configDiv.appendChild(input)
-                        break
-                    case "number":
-                        var input=document.createElement("input")
-                        input.type="number"
-                        input.name=item["name"]
-                        if(item.hasOwnProperty("default"))
-                            {
-                                input.value=item["default"]
-                            }
-                        configDiv.appendChild(input)
-                        break
-
-                }
-
-
-            });
-
-            configFieldSet.hidden=true
-
-            container.appendChild(configFieldSet)
-
-            
-        }
 
         function getImplConfigs()
         {
             // get the impl that's selected, and unhide that tab
-
             var configDiv=document.getElementById("implConfig")
-
             var configs=configDiv.getElementsByTagName("fieldset")
-
             return configs
-
         }
 
         function showCorrectConfigTab()
@@ -304,6 +264,153 @@
                 else
                     item.hidden=true
             }
+
+        }
+
+        function getDeviceConfigs()
+        {
+            var configDiv=document.getElementById("deviceConfig")
+            var configs=configDiv.getElementsByTagName("fieldset")
+            return configs
+        }
+
+
+        function showCorrectDeviceConfig()
+        {
+            // get the impl that's selected, and unhide that tab
+            var configs=getDeviceConfigs()
+            var selector=document.getElementById("additionaDevices");
+            var selected=selector.options[selector.selectedIndex].innerText
+
+            for(var loop=0;loop<configs.length;loop++)
+            {
+                item=configs.item(loop)
+
+                if(item.getElementsByTagName("legend")[0].innerText==selected)
+                    item.hidden=false
+                else
+                    item.hidden=true
+            }            
+        }
+
+        function addConfig()
+        {
+            // get id and stringify the options
+            var jsonData={}
+            var devType=document.getElementById("additionaDevices");
+            jsonData["id"]=devType.value;
+
+            var options=getDeviceConfigs()
+            var selector=devType
+            var selected=selector.options[selector.selectedIndex].innerText
+
+            for(var loop=0;loop<options.length;loop++)
+            {
+                item=options.item(loop)
+
+                if(item.getElementsByTagName("legend")[0].innerText==selected)
+                {
+                    var inputs=item.getElementsByTagName("input")
+                    var jsonConfig={}
+
+                    for(var eachItem=0;eachItem<inputs.length;eachItem++)
+                    {
+                        jsonConfig[inputs[eachItem].name]=inputs[eachItem].value
+                    }
+                    
+                    jsonData["config"]=jsonConfig
+
+                    break
+                }
+            }
+
+            let url = base + '/json/devices/add'
+            postSetting(jsonData,url)
+
+
+
+        }
+
+        function removeDevice(id)
+        {
+
+            var jsonData={}
+
+            jsonData["id"]=id;
+
+            let url = base + '/json/devices/del'
+            postSetting(jsonData,url)
+
+            getDevices()
+
+        }
+
+        function getDevices()
+        {
+            let url = base + '/json/devices'
+
+            fetch(url)
+                .then(function (response) {
+                    if (response.ok)
+                        return response.json();
+                    throw new Error('network err')
+                })
+                .then(function (data) {
+
+                    var deviceConfig=document.getElementById("deviceConfig")
+                    var deviceShown=document.getElementById("additionaDevices")
+                    var deviceInstalled=document.getElementById("installed")
+
+                    deviceShown.innerHTML=''
+                    deviceInstalled.innerHTML=''
+
+                    for(var eachinstall in data["instances"])
+                    {
+                        if(data["instances"].hasOwnProperty(eachinstall))
+                        {
+                            var installDiv=document.createElement("div")
+                            installDiv.setAttribute("class","horizontalContainer")
+
+                            var nameDiv=document.createElement("div")
+                            nameDiv.innerText=data["instances"][eachinstall]["name"]
+
+                            var delButton=document.createElement("button")
+                            delButton.innerText="Remove"
+                            delButton.setAttribute("onclick","removeDevice("+ data["instances"][eachinstall]["id"] +")")
+
+                            installDiv.appendChild(nameDiv)
+                            installDiv.appendChild(delButton)
+
+                            deviceInstalled.appendChild(installDiv)
+                        }
+                    }
+
+
+                    for(var eachDevice in data["options"])
+                    {
+                        if(data["options"].hasOwnProperty(eachDevice))
+                        {
+                            var opt=document.createElement("option")
+                            opt.value=data["options"][eachDevice]["id"]
+                            opt.innerText=data["options"][eachDevice]["name"]
+
+                            deviceShown.appendChild(opt)
+
+                            if(data["options"][eachDevice].hasOwnProperty("config"))
+                            {
+                                var deviceOptions=data["options"][eachDevice]["config"]
+
+                                if(deviceOptions.length)
+                                {
+                                    addConfigItems(deviceConfig,data["options"][eachDevice]["name"],deviceOptions)    
+
+                                }
+                            }
+
+                        }
+                    }
+                    showCorrectDeviceConfig()
+                })            
 
         }
 
@@ -349,7 +456,6 @@
                     {
                         if (data["impls"].hasOwnProperty(eachImpl))
                         {
-
                             // get the internal config items
                             var configItems=data["impls"][eachImpl]["config"]
                             if(configItems.length)
