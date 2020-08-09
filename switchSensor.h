@@ -164,7 +164,8 @@ public:
 
 #ifdef ARDUINO_ESP8266_WEMOS_D1MINI
 		// cannot use 0 or 2 (D3, D4 respectively)
-		int gpioMap[]={ 16,5,4,-1,-1,14,12,13 };
+		//              d0 d1 d2 d3 d4 d5 d7 d7
+		int gpioMap[]={ 16, 5, 4,-1,-1,14,12,13 };
 
 		JsonArray &opts=one.createNestedArray("options");
 
@@ -468,7 +469,8 @@ protected:
 
 	static void ICACHE_RAM_ATTR static_isr()
 	{
-		m_singleton->m_ioChanged=true;
+		if(m_singleton)
+			m_singleton->m_ioChanged=true;
 	}
 
 	static GPIOInstantSensor* m_singleton;
@@ -484,6 +486,15 @@ protected:
 
 	}
 
+	void deinitSensor()
+	{
+		if(m_singleton)
+		{
+			m_singleton=NULL;
+			detachInterrupt(m_gpio);
+		}
+	}
+
 public:
 
 	GPIOInstantSensor(debugBaseClass*dbg,unsigned gpio, unsigned displayPin=-1, bool invertedInput=false, bool invertedOutput=false):instantSensor(dbg),
@@ -495,10 +506,8 @@ public:
 	GPIOInstantSensor(debugBaseClass*dbg,const char *config):instantSensor(dbg)
 	{
 
-		if(dbg) dbg->printf(debug::dbVerbose,"%s !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! IN\n\r",config);
-
 		// sensible defaults
-		m_gpio=0;
+		m_gpio=-1;
 		m_ioChanged=false;
 		m_gpOut=-1;
 		m_invertedInput=false;
@@ -509,16 +518,17 @@ public:
 
 		if(configjson.containsKey("GPIO"))
 		{
-			m_gpio=D7;//configjson["GPIO"];
-			if(dbg) dbg->printf(debug::dbVerbose,"GPID = %d\n\r",m_gpio);
+			m_gpio=configjson["GPIO"];
+			if(dbg) dbg->printf(debug::dbVerbose,"GPIO = %d\n\r",m_gpio);
+			initSensor();
 		}
 
-		initSensor();
 
-		if(dbg) dbg->printf(debug::dbVerbose,"%s !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! OUT\n\r",config);
-		return;
+	}
 
-
+	~GPIOInstantSensor()
+	{
+		deinitSensor();
 	}
 
 	virtual void DoWork()
@@ -793,9 +803,15 @@ public:
 
 	}
 
+	~RelayLEDandSwitch()
+	{
+		detachInterrupt(m_ioPinIn);
+	}
+
 	static void ICACHE_RAM_ATTR staticOnSwitchISR()
 	{
-		m_singleton->OnSwitchISR();
+		if(m_singleton)
+			m_singleton->OnSwitchISR();
 
 	}
 
@@ -1053,7 +1069,7 @@ protected:
 public:
 
 	MCP23017MultiSwitch(debugBaseClass *m_dblog, unsigned numSwitches, int sdaPin, int sclPin, int intPin):
-		MultiSwitch(m_dblog),m_isrHits(0),
+		MultiSwitch(m_dblog),m_isrHits(0),m_intPin(intPin),
 #ifdef USE_MCP_RELAY		
 		m_iochip(m_dblog, sdaPin,sclPin, D0, D3)
 #else
@@ -1072,6 +1088,11 @@ public:
 		{
 			m_children.push_back(new MCP23071ChildSwitch(m_dblog, this, each));
 		}
+	}
+
+	~MCP23017MultiSwitch()
+	{
+		detachInterrupt(m_intPin);
 	}
 
 	virtual void DoChildRelay(unsigned child,bool on, bool forceSwitchToReflect=false)
@@ -1097,7 +1118,8 @@ public:
 
 	static void ICACHE_RAM_ATTR staticOnSwitchISR()
 	{
-		m_singleton->OnSwitchISR();
+		if(m_singleton)
+			m_singleton->OnSwitchISR();
 	}
 
 	void ICACHE_RAM_ATTR OnSwitchISR()
@@ -1203,6 +1225,8 @@ protected:
 #else	
 	mcp23017 m_iochip;
 #endif	
+
+	int m_intPin;
 
 	static MCP23017MultiSwitch *m_singleton;
 

@@ -304,19 +304,43 @@
             var selector=devType
             var selected=selector.options[selector.selectedIndex].innerText
 
+
+
             for(var loop=0;loop<options.length;loop++)
             {
-                item=options.item(loop)
+                var item=options[loop]
 
-                if(item.getElementsByTagName("legend")[0].innerText==selected)
+                if(!item.hidden)
                 {
-                    var inputs=item.getElementsByTagName("input")
                     var jsonConfig={}
 
-                    for(var eachItem=0;eachItem<inputs.length;eachItem++)
+                    // <legend>
+                    // each line is a <div><div><input|select></></>
+
+                    var lineItems=item.children
+
+                    // skip the legend
+                    for(var eachChild=1;eachChild<lineItems.length;eachChild++)
                     {
-                        jsonConfig[inputs[eachItem].name]=inputs[eachItem].value
+                        console.log(lineItems[eachChild].children.length)
+
+                        var optname=lineItems[eachChild].children[0].innerText;
+                        var optValue=null
+                        var valueHolder=lineItems[eachChild].children[1]
+
+                        console.log(valueHolder.tagName)
+
+                        switch(valueHolder.tagName)
+                        {
+                            case "SELECT":
+                                optValue=parseInt(valueHolder.options[valueHolder.selectedIndex].value)
+                                break;
+                        }
+
+                        jsonConfig[optname]=optValue
                     }
+
+
                     
                     jsonData["config"]=jsonConfig
 
@@ -331,17 +355,21 @@
 
         }
 
-        function removeDevice(id)
+        function removeDevice(id, config, instance, name)
         {
 
-            var jsonData={}
+            if(confirm("About to remove device '"+name+"'"))
+            {
+                var jsonData={}
+                jsonData["id"]=id;
+                jsonData["config"]=config;
+                jsonData["instance"]=instance;
+                let url = base + '/json/devices/del'
+                postSetting(jsonData,url)
+                getDevices()
+                PopulateSwSenCamList(true)
+            }
 
-            jsonData["id"]=id;
-
-            let url = base + '/json/devices/del'
-            postSetting(jsonData,url)
-
-            getDevices()
 
         }
 
@@ -357,12 +385,13 @@
                 })
                 .then(function (data) {
 
-                    var deviceConfig=document.getElementById("deviceConfig")
                     var deviceShown=document.getElementById("additionaDevices")
+                    var deviceConfig=document.getElementById("deviceConfig")
                     var deviceInstalled=document.getElementById("installed")
 
                     deviceShown.innerHTML=''
                     deviceInstalled.innerHTML=''
+                    deviceConfig.innerHTML=''
 
                     for(var eachinstall in data["instances"])
                     {
@@ -376,7 +405,8 @@
 
                             var delButton=document.createElement("button")
                             delButton.innerText="Remove"
-                            delButton.setAttribute("onclick","removeDevice("+ data["instances"][eachinstall]["id"] +")")
+                            var quick=data["instances"][eachinstall]
+                            delButton.setAttribute("onclick","removeDevice("+ quick["id"] +",'"+ quick["config"] +"',"+ quick["instance"] +",'"+ quick["name"] + "')")
 
                             installDiv.appendChild(nameDiv)
                             installDiv.appendChild(delButton)
@@ -592,6 +622,9 @@
                         tableSwitches.innerHTML = "";
                         tableCameras.innerHTML="";
                     }
+
+                    // sensors can be removed
+                    tableSensorSet.hidden=true
 
                     // get counts
                     if (data['switchCount'] != "0") {

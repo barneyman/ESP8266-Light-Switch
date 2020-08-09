@@ -734,6 +734,10 @@ void AddDeviceInstance()
 
 	for(auto eachInstance=Details.instances.begin();eachInstance!=Details.instances.end();eachInstance++)
 	{
+		// this gets called by add to only new if it's not already there
+		if(std::get<2>(*eachInstance))
+			continue;
+
 		// walk thru
 		for(auto each=Details.options.begin();each!=Details.options.end();each++)
 		{
@@ -1618,9 +1622,15 @@ void InstallWebServerHandlers()
 #else	
 	wifiInstance.server.on("/json/devices/del",HTTP_POST, []() {
 #endif		
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, "/json/devices/del");
 
 		jsonBuffer.clear();
 		// 'plain' is the secret source to get to the body
+
+#ifdef _ESP_USE_ASYNC_WEB
+		String body((char*)request->_tempObject);
+#endif
+
 		JsonObject& root = 
 #ifdef _ESP_USE_ASYNC_WEB
 			jsonBuffer.parseObject(body.c_str());
@@ -1640,6 +1650,8 @@ void InstallWebServerHandlers()
 			{
 				if(std::get<0>(*each)==id && std::get<1>(*each)==config)
 				{
+					if(Details.dblog) Details.dblog->printf(debug::dbImportant, "removing sensor %d - '%s'\n\r",std::get<0>(*each),std::get<2>(*each)->GetName().c_str());
+
 					// remove it
 					delete std::get<2>(*each);
 					std::get<2>(*each)=NULL;
@@ -1648,6 +1660,17 @@ void InstallWebServerHandlers()
 				}
 			}
 
+			WriteJSONconfig();
+
+		}
+		else
+		{
+		
+#ifdef _ESP_USE_ASYNC_WEB
+			if(Details.dblog) Details.dblog->printf(debug::dbImportant, "malformed data '%s'\n\r",body.c_str());
+#else		
+			if(Details.dblog) Details.dblog->printf(debug::dbError, "malformed data '%s'\n\r",wifiInstance.server.arg("plain").c_str());
+#endif
 		}
 
 #ifdef _ESP_USE_ASYNC_WEB
@@ -1667,7 +1690,7 @@ void InstallWebServerHandlers()
 #endif		
 
 
-		if(Details.dblog) Details.dblog->println(debug::dbImportant, "/json/devices");
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, "/json/devices/add");
 #ifdef _ESP_USE_ASYNC_WEB
 		String body((char*)request->_tempObject);
 		if(Details.dblog) Details.dblog->println(debug::dbImportant, body.c_str());
@@ -1718,6 +1741,7 @@ void InstallWebServerHandlers()
 			// TODO - add live
 			Details.instances.push_back(std::tuple<unsigned,String,baseSensor*>(id,newInstanceConfig,NULL));
 			WriteJSONconfig();
+			AddDeviceInstance();
 		}
 
 #endif
@@ -1730,7 +1754,10 @@ void InstallWebServerHandlers()
 
 		// minimise heap fracture
 		if(reboot)
+		{
 			RebootMe(true);
+			if(Details.dblog) Details.dblog->println(debug::dbImportant, "rebooting");
+		}
 
 
 #ifdef _ESP_USE_ASYNC_WEB
@@ -2584,9 +2611,10 @@ void InstallWebServerHandlers()
 			}
 
 			JsonObject &instance=instances.createNestedObject();
-			instance["id"]=(unsigned long)(*found);
+			instance["id"]=(unsigned int)std::get<0>(*each);
 			instance["config"]=std::get<1>(*each);
 			instance["name"]=(*found)->Name();
+			instance["instance"]=(unsigned long)std::get<2>(*each);
 		}
 
 #endif		
