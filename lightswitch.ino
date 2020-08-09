@@ -272,7 +272,7 @@ struct
 
 #ifdef ARDUINO_ESP8266_WEMOS_D1MINI
 	std::vector<baseConfigurator*> options;
-	std::vector<std::tuple<unsigned,String,baseSensor*>> instances;
+	std::vector<std::tuple<unsigned,String,baseSensor*>> sensors;
 	// std::get<offset>()
 #else	
 	// sensors
@@ -508,7 +508,7 @@ void WriteJSONconfig()
 
 	JsonArray &instances=root.createNestedArray("instances");
 
-	for(auto each=Details.instances.begin();each!=Details.instances.end();each++)
+	for(auto each=Details.sensors.begin();each!=Details.sensors.end();each++)
 	{
 		JsonObject &thisInstance=instances.createNestedObject();
 		thisInstance["id"]=std::get<0>(*each);
@@ -706,12 +706,12 @@ void ReadJSONconfig()
 		// for each one
 		for(auto each=instances.begin();each!=instances.end();++each)
 		{
-			Details.instances.push_back(std::tuple<unsigned,String,baseSensor*>(each->as<JsonObject>().get<unsigned>("id"),each->as<JsonObject>().get<const char*>("config"),NULL));
+			Details.sensors.push_back(std::tuple<unsigned,String,baseSensor*>(each->as<JsonObject>().get<unsigned>("id"),each->as<JsonObject>().get<const char*>("config"),NULL));
 		}
 	}
 
 #ifdef _KILL_INSTANCES
-	Details.instances.clear();
+	Details.sensors.clear();
 	Details.dirty=true;
 
 #endif
@@ -732,7 +732,7 @@ void AddDeviceInstance()
 {
 	if(Details.dblog) Details.dblog->println(debug::dbVerbose, "Adding instances");
 
-	for(auto eachInstance=Details.instances.begin();eachInstance!=Details.instances.end();eachInstance++)
+	for(auto eachInstance=Details.sensors.begin();eachInstance!=Details.sensors.end();eachInstance++)
 	{
 		// this gets called by add to only new if it's not already there
 		if(std::get<2>(*eachInstance))
@@ -1617,6 +1617,8 @@ void InstallWebServerHandlers()
 
 	});
 
+#ifndef ARDUINO_ESP8266_GENERIC
+
 #ifdef _ESP_USE_ASYNC_WEB
 	wifiInstance.server.on("/json/devices/del", HTTP_POST, [](AsyncWebServerRequest *request) {
 #else	
@@ -1646,7 +1648,7 @@ void InstallWebServerHandlers()
 			unsigned long instance=root["instance"];
 
 			// remove instance and sensor
-			for(auto each=Details.instances.begin();each!=Details.instances.end();each++)
+			for(auto each=Details.sensors.begin();each!=Details.sensors.end();each++)
 			{
 				if(std::get<0>(*each)==id && std::get<1>(*each)==config)
 				{
@@ -1655,7 +1657,7 @@ void InstallWebServerHandlers()
 					// remove it
 					delete std::get<2>(*each);
 					std::get<2>(*each)=NULL;
-					Details.instances.erase(each);
+					Details.sensors.erase(each);
 					break;
 				}
 			}
@@ -1719,9 +1721,8 @@ void InstallWebServerHandlers()
 		// check it's not already there
 		unsigned id=root["id"];
 
-#ifdef ARDUINO_ESP8266_WEMOS_D1MINI
 		// 
-		for(auto each=Details.instances.begin();each!=Details.instances.end();each++)
+		for(auto each=Details.sensors.begin();each!=Details.sensors.end();each++)
 		{
 			if(std::get<0>(*each)==id)
 			{
@@ -1738,13 +1739,12 @@ void InstallWebServerHandlers()
 
 		if(add)
 		{
-			// TODO - add live
-			Details.instances.push_back(std::tuple<unsigned,String,baseSensor*>(id,newInstanceConfig,NULL));
+			Details.sensors.push_back(std::tuple<unsigned,String,baseSensor*>(id,newInstanceConfig,NULL));
 			WriteJSONconfig();
 			AddDeviceInstance();
 		}
 
-#endif
+
 
 #ifdef _ESP_USE_ASYNC_WEB
 		request->send(200,"text/html","<html/>");
@@ -1766,6 +1766,7 @@ void InstallWebServerHandlers()
 	});
 #endif
 
+#endif ARDUINO_ESP8266_GENERIC
 
 #ifdef _ESP_USE_ASYNC_WEB
 	wifiInstance.server.on("/json/logging", HTTP_POST, [](AsyncWebServerRequest *request) {
@@ -2068,14 +2069,18 @@ void InstallWebServerHandlers()
 
 			int recipientSensor = root["sensor"];
 
-			if(recipientSensor<Details.instances.size())
+			if(recipientSensor<Details.sensors.size())
 			{
 				if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Adding recipient %s:%d Sensor %d\n\r", recipientAddr.toString().c_str(), recipientPort, recipientSensor);
 #ifdef _ESP_USE_ASYNC_WEB
 				String body((char*)request->_tempObject);
 				Details.sensors[recipientSensor]->AddAnnounceRecipient(recipientAddr,recipientPort,(body.c_str()));
 #else				
-				std::get<2>(Details.instances[recipientSensor])->AddAnnounceRecipient(recipientAddr,recipientPort,wifiInstance.server.arg("plain"));
+#ifndef ARDUINO_ESP8266_WEMOS_D1MINI
+				Details.sensors[recipientSensor]->AddAnnounceRecipient(recipientAddr,recipientPort,(wifiInstance.server.arg("plain")));
+#else
+				std::get<2>(Details.sensors[recipientSensor])->AddAnnounceRecipient(recipientAddr,recipientPort,wifiInstance.server.arg("plain"));
+#endif				
 #endif				
 			}
 			else
@@ -2420,17 +2425,21 @@ void InstallWebServerHandlers()
 
 		}
 
-		root["sensorCount"] = Details.instances.size();
+		root["sensorCount"] = Details.sensors.size();
 		JsonArray &sensorState = root.createNestedArray("sensorState");
 		count=0;
-		for(auto each=Details.instances.begin();each!=Details.instances.end();each++, count++)
+		for(auto each=Details.sensors.begin();each!=Details.sensors.end();each++, count++)
 		{
 			JsonObject &switchRelay = sensorState.createNestedObject();
 			switchRelay["sensor"] = count;
 
+#ifdef ARDUINO_ESP8266_WEMOS_D1MINI
 			std::get<2>(*each)->GetSensorValue(switchRelay);
-
 			switchRelay["name"] = std::get<2>(*each)->GetName();
+#else
+			(*each)->GetSensorValue(switchRelay);
+			switchRelay["name"] = (*each)->GetName();
+#endif			
 
 			yield();
 
@@ -2574,6 +2583,8 @@ void InstallWebServerHandlers()
 	});
 
 
+#ifndef ARDUINO_ESP8266_GENERIC
+
 #ifdef _ESP_USE_ASYNC_WEB
 	wifiInstance.server.on("/json/devices", HTTP_GET, [](AsyncWebServerRequest *request) {
 #else	
@@ -2591,7 +2602,7 @@ void InstallWebServerHandlers()
 
 #ifdef ARDUINO_ESP8266_WEMOS_D1MINI		
 
-		for(auto each=Details.instances.begin();each!=Details.instances.end();each++)
+		for(auto each=Details.sensors.begin();each!=Details.sensors.end();each++)
 		{
 			auto found=Details.options.begin();//std::find(Details.options.begin(),Details.options.end(),each->first);
 
@@ -2654,7 +2665,7 @@ void InstallWebServerHandlers()
 #endif		
 	});
 
-
+#endif
 
 #ifdef _ESP_USE_ASYNC_WEB
 	wifiInstance.server.on("/json/config", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -2692,17 +2703,21 @@ void InstallWebServerHandlers()
 #endif
 
 		// add sensors
-		root["sensorCount"] = Details.instances.size();
+		root["sensorCount"] = Details.sensors.size();
 		JsonArray &sensorConfig = root.createNestedArray("sensorConfig");
 		int count=0;
-		for(auto each=Details.instances.begin();each!=Details.instances.end();each++, count++)
+		for(auto each=Details.sensors.begin();each!=Details.sensors.end();each++, count++)
 		{
 			JsonObject &switchRelay = sensorConfig.createNestedObject();
 			switchRelay["sensor"] = count;
 
+#ifdef ARDUINO_ESP8266_WEMOS_D1MINI
 			std::get<2>(*each)->GetSensorConfig(switchRelay);
-
 			switchRelay["name"] = std::get<2>(*each)->GetName();
+#else
+			(*each)->GetSensorConfig(switchRelay);
+			switchRelay["name"] = (*each)->GetName();
+#endif
 
 			yield();
 		}
@@ -3065,9 +3080,13 @@ void loop(void)
 	wifiInstance.serviceComponents();
 
 	// sensors may need some work
-	for(auto eachSensor=Details.instances.begin();eachSensor!=Details.instances.end();eachSensor++)
+	for(auto eachSensor=Details.sensors.begin();eachSensor!=Details.sensors.end();eachSensor++)
 	{
+#ifndef ARDUINO_ESP8266_WEMOS_D1MINI
+		(*eachSensor)->DoWork();
+#else
 		std::get<2>(*eachSensor)->DoWork();
+#endif		
 	}
 
 	for(auto eachSwitch=Details.switches.begin();eachSwitch!=Details.switches.end();eachSwitch++)

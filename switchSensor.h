@@ -31,6 +31,49 @@ public:
 
 };
 
+
+
+
+class gpioMap
+{
+
+public:
+
+	static void getConfigOptionsJSON(JsonObject &tohere)
+	{
+		JsonArray &deets=tohere.createNestedArray("config");
+		JsonObject& one=deets.createNestedObject();
+		one["name"]="GPIO";
+		one["type"]="select";
+
+#ifdef ARDUINO_ESP8266_WEMOS_D1MINI
+		// cannot use 0 or 2 (D3, D4 respectively)
+		//              d0 d1 d2 d3 d4 d5 d7 d7
+		int gpioMap[]={ 16, 5, 4,-1,-1,14,12,13 };
+
+#elif defined(ARDUINO_ESP8266_GENERIC)
+
+		int gpioMap[]={ 14 };
+#endif
+
+		JsonArray &opts=one.createNestedArray("options");
+
+		for(int each=0;each<sizeof(gpioMap)/sizeof(int);each++)
+		{
+			if(gpioMap[each]<0)
+				continue;
+
+			JsonObject &opt=opts.createNestedObject();
+			opt["name"]=String("D")+String(each);
+			opt["value"]=gpioMap[each];
+		}
+
+	}
+
+};
+
+
+
 #ifndef ARDUINO_ESP8266_GENERIC
 
 #include <OneWire.h>
@@ -150,39 +193,7 @@ public:
 };
 
 
-class gpioMap
-{
 
-public:
-
-	static void getConfigOptionsJSON(JsonObject &tohere)
-	{
-		JsonArray &deets=tohere.createNestedArray("config");
-		JsonObject& one=deets.createNestedObject();
-		one["name"]="GPIO";
-		one["type"]="select";
-
-#ifdef ARDUINO_ESP8266_WEMOS_D1MINI
-		// cannot use 0 or 2 (D3, D4 respectively)
-		//              d0 d1 d2 d3 d4 d5 d7 d7
-		int gpioMap[]={ 16, 5, 4,-1,-1,14,12,13 };
-
-		JsonArray &opts=one.createNestedArray("options");
-
-		for(int each=0;each<sizeof(gpioMap)/sizeof(int);each++)
-		{
-			if(gpioMap[each]<0)
-				continue;
-
-			JsonObject &opt=opts.createNestedObject();
-			opt["name"]=String("D")+String(each);
-			opt["value"]=gpioMap[each];
-		}
-#endif
-
-	}
-
-};
 
 
 
@@ -378,7 +389,7 @@ protected:
 
 };
 
-#endif ARDUINO_ESP8266_GENERIC
+#endif // ARDUINO_ESP8266_GENERIC
 
 
 class instantSensor : public baseSensor
