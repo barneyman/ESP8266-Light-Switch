@@ -274,9 +274,11 @@ struct
 	std::vector<baseConfigurator*> options;
 	std::vector<std::tuple<unsigned,String,baseSensor*>> sensors;
 	// std::get<offset>()
+#define GETSENSOR(a) std::get<2>(a)
 #else	
 	// sensors
 	std::vector<baseSensor*>	sensors;
+#define GETSENSOR(a) (a)
 #endif	
 
 
@@ -2076,11 +2078,7 @@ void InstallWebServerHandlers()
 				String body((char*)request->_tempObject);
 				Details.sensors[recipientSensor]->AddAnnounceRecipient(recipientAddr,recipientPort,(body.c_str()));
 #else				
-#ifndef ARDUINO_ESP8266_WEMOS_D1MINI
-				Details.sensors[recipientSensor]->AddAnnounceRecipient(recipientAddr,recipientPort,(wifiInstance.server.arg("plain")));
-#else
-				std::get<2>(Details.sensors[recipientSensor])->AddAnnounceRecipient(recipientAddr,recipientPort,wifiInstance.server.arg("plain"));
-#endif				
+				GETSENSOR(Details.sensors[recipientSensor])->AddAnnounceRecipient(recipientAddr,recipientPort,(wifiInstance.server.arg("plain")));
 #endif				
 			}
 			else
@@ -2433,13 +2431,8 @@ void InstallWebServerHandlers()
 			JsonObject &switchRelay = sensorState.createNestedObject();
 			switchRelay["sensor"] = count;
 
-#ifdef ARDUINO_ESP8266_WEMOS_D1MINI
-			std::get<2>(*each)->GetSensorValue(switchRelay);
-			switchRelay["name"] = std::get<2>(*each)->GetName();
-#else
-			(*each)->GetSensorValue(switchRelay);
-			switchRelay["name"] = (*each)->GetName();
-#endif			
+			GETSENSOR(*each)->GetSensorValue(switchRelay);
+			switchRelay["name"] = GETSENSOR(*each)->GetName();
 
 			yield();
 
@@ -2711,13 +2704,8 @@ void InstallWebServerHandlers()
 			JsonObject &switchRelay = sensorConfig.createNestedObject();
 			switchRelay["sensor"] = count;
 
-#ifdef ARDUINO_ESP8266_WEMOS_D1MINI
-			std::get<2>(*each)->GetSensorConfig(switchRelay);
-			switchRelay["name"] = std::get<2>(*each)->GetName();
-#else
-			(*each)->GetSensorConfig(switchRelay);
-			switchRelay["name"] = (*each)->GetName();
-#endif
+			GETSENSOR(*each)->GetSensorConfig(switchRelay);
+			switchRelay["name"] = GETSENSOR(*each)->GetName();
 
 			yield();
 		}
@@ -3082,11 +3070,7 @@ void loop(void)
 	// sensors may need some work
 	for(auto eachSensor=Details.sensors.begin();eachSensor!=Details.sensors.end();eachSensor++)
 	{
-#ifndef ARDUINO_ESP8266_WEMOS_D1MINI
-		(*eachSensor)->DoWork();
-#else
-		std::get<2>(*eachSensor)->DoWork();
-#endif		
+		GETSENSOR(*eachSensor)->DoWork();
 	}
 
 	for(auto eachSwitch=Details.switches.begin();eachSwitch!=Details.switches.end();eachSwitch++)
