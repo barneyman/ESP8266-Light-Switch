@@ -153,8 +153,7 @@ myWifiClass wifiInstance(hostnameStem, NULL, mdsnNAME);
 //#define _STORE_STATIC_FILES
 
 
-#ifdef ARDUINO_ESP8266_WEMOS_D1MINI
-
+#if defined(ARDUINO_ESP8266_WEMOS_D1MINI) || defined(ARDUINO_ARCH_ESP32)
 
 class baseConfigurator
 {
@@ -270,7 +269,7 @@ struct
 	// marker - everything after this is dynamic
 	bool ignoreThis;
 
-#ifdef ARDUINO_ESP8266_WEMOS_D1MINI
+#if defined(ARDUINO_ESP8266_WEMOS_D1MINI) || defined(ARDUINO_ARCH_ESP32)
 	std::vector<baseConfigurator*> options;
 	std::vector<std::tuple<unsigned,String,baseSensor*>> sensors;
 	// std::get<offset>()
@@ -728,7 +727,7 @@ void ReadJSONconfig()
 	yield();
 }
 
-#ifdef ARDUINO_ESP8266_WEMOS_D1MINI
+#if defined(ARDUINO_ESP8266_WEMOS_D1MINI) || defined(ARDUINO_ARCH_ESP32)
 
 void AddDeviceInstance()
 {
@@ -2076,7 +2075,7 @@ void InstallWebServerHandlers()
 				if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Adding recipient %s:%d Sensor %d\n\r", recipientAddr.toString().c_str(), recipientPort, recipientSensor);
 #ifdef _ESP_USE_ASYNC_WEB
 				String body((char*)request->_tempObject);
-				Details.sensors[recipientSensor]->AddAnnounceRecipient(recipientAddr,recipientPort,(body.c_str()));
+				GETSENSOR(Details.sensors[recipientSensor])->AddAnnounceRecipient(recipientAddr,recipientPort,(body.c_str()));
 #else				
 				GETSENSOR(Details.sensors[recipientSensor])->AddAnnounceRecipient(recipientAddr,recipientPort,(wifiInstance.server.arg("plain")));
 #endif				

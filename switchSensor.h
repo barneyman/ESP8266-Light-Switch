@@ -53,7 +53,15 @@ public:
 
 #elif defined(ARDUINO_ESP8266_GENERIC)
 
+		// the only spare pin
 		int gpioMap[]={ 14 };
+
+// this is CAM!!!!!!!
+#elif defined(ARDUINO_ARCH_ESP32)
+
+		// the only spare pin
+		int gpioMap[]={ -1, 1, 2, 3, 4, -1,-1,-1,-1,-1,-1,-1, 12,13,14,15,16 };
+
 #endif
 
 		JsonArray &opts=one.createNestedArray("options");
