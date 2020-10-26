@@ -1,5 +1,12 @@
 # ESP8266-Light-Switch
 
+I now use Home Assistant to drive this, it's also changed to support other devices - it's on my list to update this readme
+
+** below here, beware monsters **
+
+
+
+
 Replacement firmware for Sonoff Basic, or firmware for your own build of esp8266 and solenoids 
 
 This can handle (with #defines) 1 to 6 switches
