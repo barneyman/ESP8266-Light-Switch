@@ -103,8 +103,8 @@ jobs:
           echo "setting up env ..."
           echo ${GITHUB_REF}
           echo ${GITHUB_REPOSITORY}
-          echo "::set-env name=NEW_TAG::${GITHUB_REF#refs/tags/}"
-          echo "::set-env name=NEW_HEAD::${GITHUB_REF#refs/heads/}"
+          echo "NEW_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
+          echo "NEW_HEAD=${GITHUB_REF#refs/heads/}" >> $GITHUB_ENV
           
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - name: Checking out tag ${{ github.ref }}
@@ -117,7 +117,7 @@ jobs:
         run: |
           wget https://github.com/igrr/mkspiffs/releases/download/0.2.0/mkspiffs-0.2.0-no_magic_length-linux64.tar.gz
           tar -xvf mkspiffs-0.2.0-no_magic_length-linux64.tar.gz
-          echo "::set-env name=MKSPIFFS_DIR::./mkspiffs-0.2.0-no_magic_length-linux64"
+          echo "MKSPIFFS_DIR=./mkspiffs-0.2.0-no_magic_length-linux64" >> $GITHUB_ENV
       
       
       # We use the arduino/setup-arduino-cli action to install and
