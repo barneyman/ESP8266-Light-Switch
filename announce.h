@@ -114,7 +114,7 @@ public:
 		// 
 		jsonBuffer.clear();
 		JsonObject& udproot = jsonBuffer.createObject();
-		udproot["state"]=state?"on":"off";
+		udproot["state"]=state;//?"on":"off";
 		String bodyText;
 		udproot.printTo(bodyText);
 
@@ -130,6 +130,9 @@ public:
 #endif		
 		if(m_dblog)
 			m_dblog->println(debug::dbInfo,"Starting IP yell");
+
+		if(m_dblog)
+			m_dblog->printf(debug::dbWarning,"%d to yell to\r",m_HAhosts.size());
 
 		for(auto eachHA=m_HAhosts.begin();eachHA!=m_HAhosts.end();eachHA++)
 		{
