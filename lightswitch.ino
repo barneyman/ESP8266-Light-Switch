@@ -32,7 +32,7 @@
 
 // do not exceed 1Mb of spiffs in wemos (and maybe others) - you get assertions in DataSource.h
 
-
+// wemos = LOLIN(WEMONS) D1 R2 & mini
 
 
 #include <ArduinoJson.h>
@@ -2596,7 +2596,7 @@ void InstallWebServerHandlers()
 
 		for(auto each=Details.sensors.begin();each!=Details.sensors.end();each++)
 		{
-			auto found=Details.options.begin();//std::find(Details.options.begin(),Details.options.end(),each->first);
+			auto found=Details.options.begin();
 
 			for(;found!=Details.options.end();found++)
 			{
@@ -2624,7 +2624,7 @@ void InstallWebServerHandlers()
 
 		JsonArray &options=root.createNestedArray("options");
 
-#ifdef ARDUINO_ESP8266_WEMOS_D1MINI		
+#if defined(ARDUINO_ESP8266_WEMOS_D1MINI) || defined(ARDUINO_ARCH_ESP32)
 
 		for(auto each=Details.options.begin();each!=Details.options.end();each++)
 		{
@@ -2695,58 +2695,67 @@ void InstallWebServerHandlers()
 #endif
 
 		// add sensors
-		root["sensorCount"] = Details.sensors.size();
-		JsonArray &sensorConfig = root.createNestedArray("sensorConfig");
-		int count=0;
-		for(auto each=Details.sensors.begin();each!=Details.sensors.end();each++, count++)
+		if(Details.sensors.size())
 		{
-			JsonObject &switchRelay = sensorConfig.createNestedObject();
-			switchRelay["sensor"] = count;
+			root["sensorCount"] = Details.sensors.size();
+			JsonArray &sensorConfig = root.createNestedArray("sensorConfig");
+			int count=0;
+			for(auto each=Details.sensors.begin();each!=Details.sensors.end();each++, count++)
+			{
+				JsonObject &switchRelay = sensorConfig.createNestedObject();
+				switchRelay["sensor"] = count;
 
-			GETSENSOR(*each)->GetSensorConfig(switchRelay);
-			switchRelay["name"] = GETSENSOR(*each)->GetName();
+				GETSENSOR(*each)->GetSensorConfig(switchRelay);
+				switchRelay["name"] = GETSENSOR(*each)->GetName();
 
-			yield();
+				yield();
+			}
 		}
 
 		// add switches
-		root["switchCount"] = Details.switches.size();
-		JsonArray &switchConfig = root.createNestedArray("switchConfig");
-		count=0;
-		for(auto each=Details.switches.begin();each!=Details.switches.end();each++, count++)
+		if(Details.switches.size())
 		{
-			JsonObject &switchRelay = switchConfig.createNestedObject();
-			switchRelay["switch"] = count;
+			root["switchCount"] = Details.switches.size();
+			JsonArray &switchConfig = root.createNestedArray("switchConfig");
+			int count=0;
+			for(auto each=Details.switches.begin();each!=Details.switches.end();each++, count++)
+			{
+				JsonObject &switchRelay = switchConfig.createNestedObject();
+				switchRelay["switch"] = count;
 
-			String impl=(*each)->GetImpl();
-			if(impl.length())
-				switchRelay["impl"]=impl;
+				String impl=(*each)->GetImpl();
+				if(impl.length())
+					switchRelay["impl"]=impl;
 
-			switchRelay["name"] = (*each)->GetName();
+				switchRelay["name"] = (*each)->GetName();
 
-			yield();
+				yield();
 
+			}
 		}
 
 #ifdef _ESP32_CAMERA
 
 		// add cameras
-		root["cameraCount"] = Details.cameras.size();
-		JsonArray &cameraConfig = root.createNestedArray("cameraConfig");
-		count=0;
-		for(auto each=Details.cameras.begin();each!=Details.cameras.end();each++, count++)
+		if(Details.cameras.size())
 		{
-			JsonObject &camera = cameraConfig.createNestedObject();
-			camera["camera"] = count;
+			root["cameraCount"] = Details.cameras.size();
+			JsonArray &cameraConfig = root.createNestedArray("cameraConfig");
+			int count=0;
+			for(auto each=Details.cameras.begin();each!=Details.cameras.end();each++, count++)
+			{
+				JsonObject &camera = cameraConfig.createNestedObject();
+				camera["camera"] = count;
 
-			String impl=(*each)->GetImpl();
-			if(impl.length())
-				camera["impl"]=impl;
+				String impl=(*each)->GetImpl();
+				if(impl.length())
+					camera["impl"]=impl;
 
-			camera["name"] = (*each)->GetName();
+				camera["name"] = (*each)->GetName();
 
-			yield();
+				yield();
 
+			}
 		}
 
 #endif
