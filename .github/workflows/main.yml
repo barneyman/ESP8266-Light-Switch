@@ -74,7 +74,8 @@ jobs:
     strategy:
       matrix: 
         # generic needs some #define love - D7 doesnt exist
-        platform: ["sonoff", "d1_mini", "esp32cam"]
+        # platform: ["sonoff", "d1_mini", "esp32cam"]
+        platform: ["sonoff", "d1_mini"]
         #platform: ["esp8266:esp8266:d1"]
         include:
           # unproven!
@@ -115,10 +116,14 @@ jobs:
           ref: ${{ github.ref }}
 
       # esp32cam builder needs py
+      # https://github.com/marketplace/actions/python-dependency-installation 
+      # esp32 esptool needs serial
       - name: install py
+        if: ${{ matrix.friendly == 'esp32_cam' }}
         uses: actions/setup-python@v2
         with:
           python-version: '3.x'
+
 
       - name: Install mkspiffs
         run: |
