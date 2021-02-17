@@ -73,16 +73,12 @@ jobs:
     # wemos d1 - esp8266:esp8266:d1
     strategy:
       matrix: 
-        # generic needs some #define love - D7 doesnt exist
-        # platform: ["sonoff", "d1_mini", "esp32cam"]
-        platform: ["sonoff", "d1_mini"]
-        #platform: ["esp8266:esp8266:d1"]
         include:
           # unproven!
-          - platform: "esp32cam"
-            platform_options: "esp32:esp32:esp32wrover:PartitionScheme=min_spiffs,FlashMode=qio,FlashFreq=80,UploadSpeed=115200,DebugLevel=none"
-            friendly: "esp32_cam"
-            spiffsCmdLine: -p 256 -b 4096 -s 0x3D0000
+          # - platform: "esp32cam"
+          #   platform_options: "esp32:esp32:esp32wrover:PartitionScheme=min_spiffs,FlashMode=qio,FlashFreq=80,UploadSpeed=115200,DebugLevel=none"
+          #   friendly: "esp32_cam"
+          #   spiffsCmdLine: -p 256 -b 4096 -s 0x3D0000
           - platform: "sonoff"
             # have to use generic, because the sonoff board doesn't SDA & others defined
             # platform_options: "esp8266:esp8266:sonoff:BoardModel=sonoffBasic,xtal=80,vt=flash,exception=legacy,ssl=all,eesz=1M256,ip=lm2f,dbg=Disabled"
