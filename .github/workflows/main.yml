@@ -27,6 +27,7 @@ jobs:
   createRelease:
     runs-on: ubuntu-latest
     steps:
+
       - name: Create Release
         id: create_release
         uses: actions/create-release@latest
@@ -78,7 +79,7 @@ jobs:
         include:
           # unproven!
           - platform: "esp32cam"
-            platform_options: "PartitionScheme=min_spiffs,FlashMode=qio,FlashFreq=80,UploadSpeed=115200,DebugLevel=none"
+            platform_options: "esp32:esp32:esp32wrover:PartitionScheme=min_spiffs,FlashMode=qio,FlashFreq=80,UploadSpeed=115200,DebugLevel=none"
             friendly: "esp32_cam"
             spiffsCmdLine: -p 256 -b 4096 -s 0x3D0000
           - platform: "sonoff"
@@ -112,6 +113,12 @@ jobs:
         with:
           submodules: "true"
           ref: ${{ github.ref }}
+
+      # esp32cam builder needs py
+      - name: install py
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
 
       - name: Install mkspiffs
         run: |
