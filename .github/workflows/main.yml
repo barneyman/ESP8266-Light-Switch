@@ -190,7 +190,7 @@ jobs:
       - uses: octokit/request-action@v2.x
         id: changeDraft
         with:
-          route: PATCH /repos/:repository/releases/:id
+          route: PATCH /repos/{repository}/releases/{id}
           repository: ${{ github.repository }}
           id: ${{ steps.get_release_id.outputs.release_id }}
           draft: false
