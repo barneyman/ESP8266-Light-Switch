@@ -24,6 +24,20 @@ on:
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   
+  # output some env vars, for later use :)
+  paintEnvs:
+    runs-on: ubuntu-latest
+    steps:
+      # https://docs.github.com/en/actions/reference/context-and-expression-syntax-for-github-actions#contexts
+      - name: Context
+        run: |
+          echo "github.event_name"
+          echo "${{ github.event_name }}"
+          echo "github.ref"
+          echo "${{ github.ref }}"
+
+
+
   createRelease:
     runs-on: ubuntu-latest
     steps:
@@ -97,6 +111,7 @@ jobs:
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       - name: Environment
+        # remove refs/tags/ from github-ref
         run: |
           echo "setting up env ..."
           echo ${GITHUB_REF}
@@ -119,14 +134,7 @@ jobs:
         uses: actions/setup-python@v2
         with:
           python-version: '3.x'
-
-
-      - name: Install mkspiffs
-        run: |
-          wget https://github.com/igrr/mkspiffs/releases/download/0.2.0/mkspiffs-0.2.0-no_magic_length-linux64.tar.gz
-          tar -xvf mkspiffs-0.2.0-no_magic_length-linux64.tar.gz
-          echo "MKSPIFFS_DIR=./mkspiffs-0.2.0-no_magic_length-linux64" >> $GITHUB_ENV
-      
+     
       
       # We use the arduino/setup-arduino-cli action to install and
       # configure the Arduino CLI on the system.
@@ -139,14 +147,22 @@ jobs:
             arduino-cli core install esp8266:esp8266@2.6.3 --additional-urls https://arduino.esp8266.com/stable/package_esp8266com_index.json
             arduino-cli core install esp32:esp32 --additional-urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
 
-      - name: Create SPIFFS
-        run: ${{ env.MKSPIFFS_DIR }}/mkspiffs -c ./data ${{ matrix.spiffsCmdLine }} ${{ matrix.friendly }}_${GITHUB_RUN_ID}.spiffs
-
       # Finally, we compile the sketch, using the FQBN that was set
       # in the build matrix.
       - name: Compile Sketch Matrix
         run: arduino-cli compile --fqbn ${{ matrix.platform_options }} --output-dir . --build-property compiler.cpp.extra_flags="-D_VERSION_FRIENDLY_CLI=${{ matrix.friendly }} -D_VERSION_NUM_CLI=${{ env.NEW_TAG }}"  --libraries ./libraries lightswitch
-      
+
+      # then handle spiffs
+      - name: Install mkspiffs
+        run: |
+          wget https://github.com/igrr/mkspiffs/releases/download/0.2.0/mkspiffs-0.2.0-no_magic_length-linux64.tar.gz
+          tar -xvf mkspiffs-0.2.0-no_magic_length-linux64.tar.gz
+          echo "MKSPIFFS_DIR=./mkspiffs-0.2.0-no_magic_length-linux64" >> $GITHUB_ENV
+
+      - name: Create SPIFFS
+        run: ${{ env.MKSPIFFS_DIR }}/mkspiffs -c ./data ${{ matrix.spiffsCmdLine }} ${{ matrix.friendly }}_${GITHUB_RUN_ID}.spiffs
+
+      # compress deliverables
       - name: Compress output
         run: tar -czvf ${{ matrix.friendly }}.tar.gz *.elf *.bin *.spiffs
         
