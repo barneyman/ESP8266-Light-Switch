@@ -106,10 +106,10 @@ jobs:
       matrix: 
         include:
           # unproven!
-          # - platform: "esp32cam"
-          #   platform_options: "esp32:esp32:esp32wrover:PartitionScheme=min_spiffs,FlashMode=qio,FlashFreq=80,UploadSpeed=115200,DebugLevel=none"
-          #   friendly: "esp32_cam"
-          #   spiffsCmdLine: -p 256 -b 4096 -s 0x3D0000
+          - platform: "esp32cam"
+            platform_options: "esp32:esp32:esp32wrover:PartitionScheme=min_spiffs,FlashMode=qio,FlashFreq=80,UploadSpeed=115200,DebugLevel=none"
+            friendly: "esp32_cam"
+            spiffsCmdLine: -p 256 -b 4096 -s 0x3D0000
           - platform: "sonoff"
             # have to use generic, because the sonoff board doesn't SDA & others defined
             # platform_options: "esp8266:esp8266:sonoff:BoardModel=sonoffBasic,xtal=80,vt=flash,exception=legacy,ssl=all,eesz=1M256,ip=lm2f,dbg=Disabled"
@@ -162,7 +162,12 @@ jobs:
         if: ${{ matrix.friendly == 'esp32_cam' }}
         uses: actions/setup-python@v2
         with:
-          python-version: '3.x'
+          python-version: '2.x'
+
+      # esp32 needs serial around to build successfully
+      - name: Install Python dependencies
+        if: ${{ matrix.friendly == 'esp32_cam' }}
+        uses: py-actions/py-dependency-install@v2      
      
       
       # We use the arduino/setup-arduino-cli action to install and
