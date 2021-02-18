@@ -42,11 +42,11 @@ jobs:
 
   createRelease:
     runs-on: ubuntu-latest
-    # no need if we're doing a build after push
-    if: ${{ github.event_name != 'push' }}
     steps:
 
       - name: Create Release
+        # no need if we're doing a build after push
+        if: ${{ github.event_name == 'create' }}
         id: create_release
         uses: actions/create-release@latest
         env:
@@ -66,22 +66,35 @@ jobs:
           prerelease: ${{endsWith(github.ref,'pr')}}
   
       - name: Output Release URL File
+        # no need if we're doing a build after push
+        if: ${{ github.event_name == 'create' }}
         run: echo "${{ steps.create_release.outputs.upload_url }}" > release_url.txt
         
       - name: Save Release URL File for publish
+        # no need if we're doing a build after push
+        if: ${{ github.event_name == 'create' }}
         uses: actions/upload-artifact@v1
         with:
           name: release_url
           path: release_url.txt  
 
       - name: Output Release ID File
+        # no need if we're doing a build after push
+        if: ${{ github.event_name == 'create' }}
         run: echo "${{ steps.create_release.outputs.id }}" > release_id.txt
 
       - name: Save Release ID File for publish
+        # no need if we're doing a build after push
+        if: ${{ github.event_name == 'create' }}
         uses: actions/upload-artifact@v1
         with:
           name: release_id
           path: release_id.txt  
+
+      - name: Null task
+        if: ${{ github.event_name == 'push' }}
+        run: echo "push build"
+
 
   # This workflow contains a single job called "build"
   builder:
@@ -115,7 +128,7 @@ jobs:
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
       - name: EnvironmentForRelease
-        if: ${{ github.event_name != 'push' }}
+        if: ${{ github.event_name == 'create' }}
         # remove refs/tags/ from github-ref
         run: |
           echo "setting up env for release ..."
@@ -171,7 +184,7 @@ jobs:
       # then handle spiffs
       - name: Install mkspiffs
         # no need if a push build
-        if: ${{ github.event_name != 'push' }}
+        if: ${{ github.event_name == 'create' }}
         run: |
           wget https://github.com/igrr/mkspiffs/releases/download/0.2.0/mkspiffs-0.2.0-no_magic_length-linux64.tar.gz
           tar -xvf mkspiffs-0.2.0-no_magic_length-linux64.tar.gz
@@ -179,25 +192,25 @@ jobs:
 
       - name: Create SPIFFS
         # no need if a push build
-        if: ${{ github.event_name != 'push' }}
+        if: ${{ github.event_name == 'create' }}
         run: ${{ env.MKSPIFFS_DIR }}/mkspiffs -c ./data ${{ matrix.spiffsCmdLine }} ${{ matrix.friendly }}_${GITHUB_RUN_ID}.spiffs
 
       # compress deliverables
       - name: Compress output
         # no need if a push build
-        if: ${{ github.event_name != 'push' }}
+        if: ${{ github.event_name == 'create' }}
         run: tar -czvf ${{ matrix.friendly }}.tar.gz *.elf *.bin *.spiffs
         
       - name: Load Release URL File from release job
         # no need if a push build
-        if: ${{ github.event_name != 'push' }}
+        if: ${{ github.event_name == 'create' }}
         uses: actions/download-artifact@v1
         with:
           name: release_url
 
       - name: Get Release File Name & Upload URL
         # no need if a push build
-        if: ${{ github.event_name != 'push' }}
+        if: ${{ github.event_name == 'create' }}
         id: get_release_info
         run: |
           value=`cat release_url/release_url.txt`
@@ -206,7 +219,7 @@ jobs:
 
       - name: Upload Release Asset
         # no need if a push build
-        if: ${{ github.event_name != 'push' }}
+        if: ${{ github.event_name == 'create' }}
         id: upload-release-asset 
         uses: actions/upload-release-asset@v1
         env:
@@ -220,7 +233,7 @@ jobs:
   undraft:
     runs-on: ubuntu-latest
     # no need if a push build
-    if: ${{ github.event_name != 'push' }}
+    if: ${{ github.event_name == 'create' }}
     needs: [builder]
     steps:
       - name: Load Release ID File from release job
