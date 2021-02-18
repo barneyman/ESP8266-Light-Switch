@@ -44,6 +44,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
+      # create a change listing (from the previous release )
+      - name: Changelog
+        if: ${{ github.event_name == 'create' }}
+        uses: scottbrenner/generate-changelog-action@master
+        id: Changelog
+
       - name: Create Release
         # no need if we're doing a build after push
         if: ${{ github.event_name == 'create' }}
@@ -59,8 +65,7 @@ jobs:
           release_name: Release ${{ github.run_id }} (from Action)
           # ${{ github.event.release.body }}
           body: | 
-            Release auto created by 
-            'create tag' event
+            ${{ steps.Changelog.outputs.changelog }}            
           # save it as draft until all assets are uploaded, then undraft it at the end
           draft: true
           prerelease: ${{endsWith(github.ref,'pr')}}
