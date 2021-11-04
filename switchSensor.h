@@ -304,7 +304,7 @@ public:
 
 		JsonObject &sensorElement2 = toHere.createNestedObject();
 		sensorElement2["type"] = "pressure";
-		sensorElement2["uom"] = "hPA";
+		sensorElement2["uom"] = "hPa";
 		sensorElement2["round"] = "1";
 
 		JsonObject &sensorElement3 = toHere.createNestedObject();
