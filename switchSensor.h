@@ -1068,12 +1068,12 @@ class MCP23017MultiSwitch : public MultiSwitch
 protected:
 
 	// TODO - one of the bases should inherit from StateAnnouncer
-	class MCP23071ChildSwitch : public MultiSwitch::childSwitch, public StateAnnouncer
+	class MCP23071ChildSwitch : public MultiSwitch::childSwitch//, public StateAnnouncer
 	{
 	public:
 		MCP23071ChildSwitch(debugBaseClass *m_dblog, MultiSwitch *parent, unsigned ordinal):
-			MultiSwitch::childSwitch(m_dblog,parent,ordinal),
-			StateAnnouncer(m_dblog)
+			MultiSwitch::childSwitch(m_dblog,parent,ordinal)
+			//StateAnnouncer(m_dblog)
 		{
 
 		}
