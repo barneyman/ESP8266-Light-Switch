@@ -1767,7 +1767,7 @@ void InstallWebServerHandlers()
 	});
 #endif
 
-#endif ARDUINO_ESP8266_GENERIC
+#endif //ARDUINO_ESP8266_GENERIC
 
 #ifdef _ESP_USE_ASYNC_WEB
 	wifiInstance.server.on("/json/logging", HTTP_POST, [](AsyncWebServerRequest *request) {
