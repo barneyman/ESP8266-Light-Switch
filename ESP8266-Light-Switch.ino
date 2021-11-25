@@ -78,8 +78,8 @@
 
 #ifndef _VERSION_NUM_CLI
 
-	#define _VERSION_NUM "v99.99.99.pr"
-//	#define _VERSION_NUM "v0.0.1.pr"
+//	#define _VERSION_NUM "v99.99.99.pr"
+	#define _VERSION_NUM "v0.0.1.pr"
 	#define _DEVELOPER_BUILD
 
 #else
@@ -729,8 +729,14 @@ void ReadJSONconfig()
 
 #if defined(ARDUINO_ESP8266_WEMOS_D1MINI) || defined(ARDUINO_ARCH_ESP32)
 
-void AddDeviceInstance()
+bool AddDeviceInstance()
 {
+	if(!Details.sensors.size())
+	{
+		if(Details.dblog) Details.dblog->println(debug::dbWarning, "No available devices/sensors");
+		return false;
+	}
+	
 	if(Details.dblog) Details.dblog->println(debug::dbVerbose, "Adding instances");
 
 	for(auto eachInstance=Details.sensors.begin();eachInstance!=Details.sensors.end();eachInstance++)
@@ -754,6 +760,8 @@ void AddDeviceInstance()
 
 		}
 	}
+
+	return true;
 
 }
 
@@ -1037,6 +1045,7 @@ void setup(void)
 
 	}
 
+//#define _PIR_VARIANT
 //#define _LOCH_SPORT_VARIANT
 
 #ifdef ARDUINO_ESP8266_GENERIC
@@ -1046,7 +1055,9 @@ void setup(void)
 #elif defined(ARDUINO_ESP8266_WEMOS_D1MINI)
 
 	// create from the stored details
-	AddDeviceInstance();
+	if(!AddDeviceInstance())
+	{
+	}
 
 
 /*
