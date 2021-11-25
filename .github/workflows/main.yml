@@ -182,14 +182,19 @@ jobs:
       
       - name: Install platform
         run: |
-            arduino-cli core update-index --additional-urls https://arduino.esp8266.com/stable/package_esp8266com_index.json,https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
-            arduino-cli core install esp8266:esp8266@2.7.4 --additional-urls https://arduino.esp8266.com/stable/package_esp8266com_index.json
-            arduino-cli core install esp32:esp32@1.0.6 --additional-urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          arduino-cli core update-index --additional-urls https://arduino.esp8266.com/stable/package_esp8266com_index.json,https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+          arduino-cli core install esp8266:esp8266@2.7.4 --additional-urls https://arduino.esp8266.com/stable/package_esp8266com_index.json
+          arduino-cli core install esp32:esp32@1.0.6 --additional-urls https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
 
       # Finally, we compile the sketch, using the FQBN that was set
       # in the build matrix.
       - name: Compile Sketch Matrix
         run: arduino-cli compile --fqbn ${{ matrix.platform_options }} --output-dir . --build-property compiler.cpp.extra_flags="-D_VERSION_FRIENDLY_CLI=${{ matrix.friendly }} -D_VERSION_NUM_CLI=${{ env.NEW_TAG }}"  --libraries ./libraries lightswitch
+
+      - name: rename output
+        run: |
+          mv ESP8266-Light-Switch.ino.elf ${{ matrix.friendly }}_${GITHUB_RUN_ID}.elf
+          mv ESP8266-Light-Switch.ino.bin ${{ matrix.friendly }}_${GITHUB_RUN_ID}.bin
 
       # then handle spiffs
       - name: Install mkspiffs
