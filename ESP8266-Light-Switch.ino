@@ -360,8 +360,6 @@ struct
 
 
 
-// how long we slow the web hits down for (millis)
-#define _WEB_TAR_PIT_DELAY 20
 
 
 
@@ -1446,9 +1444,6 @@ void InstallWebServerHandlers()
 
 		if(Details.dblog) Details.dblog->println(debug::dbImportant, "/toggle");
 
-		//delay(_WEB_TAR_PIT_DELAY);
-
-
 		// TODO pick the right one
 		// just go thru them all
 		for(auto each=Details.switches.begin();each!=Details.switches.end();each++)
@@ -1856,8 +1851,6 @@ void InstallWebServerHandlers()
 
 		if(Details.dblog) Details.dblog->println(debug::dbImportant, "/resetCounts");
 
-		//delay(_WEB_TAR_PIT_DELAY);
-
 		for(auto each=Details.switches.begin();each!=Details.switches.end();each++)
 			(*each)->ResetTransitionCount();
 
@@ -2120,7 +2113,6 @@ void InstallWebServerHandlers()
 
 		}
 
-		//delay(_WEB_TAR_PIT_DELAY);
 #ifdef _ESP_USE_ASYNC_WEB
 		request->send(200, "text/html", "<html/>");
 #else
@@ -2199,7 +2191,6 @@ void InstallWebServerHandlers()
 		// and update json
 		WriteJSONconfig();
 
-		//delay(_WEB_TAR_PIT_DELAY);
 #ifdef _ESP_USE_ASYNC_WEB
 		request->send(200, "text/html", "<html/>");
 #else
