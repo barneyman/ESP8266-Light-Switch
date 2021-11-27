@@ -70,12 +70,41 @@
 	#define _VERSION_FRIENDLY	"unknown"
 	#endif
 
+// devhack platform options
+//#define PLATFORM_SONOFF_SWITCH
+//#define PLATFORM_WEMOS_SENSOR
+//#define PLATFORM_ESP32_CAMERA
+
 #else
 
 	#define _VERSION_FRIENDLY TOSTRING(_VERSION_FRIENDLY_CLI)
 
+
 #endif
 
+#if !defined(PLATFORM_SONOFF_SWITCH) && !defined(PLATFORM_WEMOS_SENSOR) && !defined(PLATFORM_ESP32_CAMERA)
+	// let's sort out our platform
+	#ifdef ARDUINO_ESP8266_GENERIC
+		#define PLATFORM_SONOFF_SWITCH
+	#elif defined(ARDUINO_ESP8266_WEMOS_D1MINI)
+		#define PLATFORM_WEMOS_SENSOR
+	#elif defined(ESP32)
+		#define PLATFORM_ESP32_CAMERA
+	#endif
+#endif
+
+#ifdef PLATFORM_SONOFF_SWITCH
+#pragma message "SONOFF BUILD"
+#elif defined(PLATFORM_WEMOS_SENSOR)
+#pragma message "WEMOS BUILD"
+#elif defined(PLATFORM_ESP32_CAMERA)
+#pragma message "ESPCAM BUILD"
+#else
+#error "Platform not defined"
+#endif
+
+
+// similarly, set by the github action
 #ifndef _VERSION_NUM_CLI
 
 //	#define _VERSION_NUM "v99.99.99.pr"
@@ -88,13 +117,8 @@
 
 #endif
 
-#ifdef ESP32
-	// TODO - this needs to be a platform 
-	#define _ESP32_CAMERA
-#endif	
 
-
-#ifdef _ESP32_CAMERA
+#ifdef PLATFORM_ESP32_CAMERA
 	#include "cameraSensor.h"
 #endif
 
@@ -153,7 +177,7 @@ myWifiClass wifiInstance(hostnameStem, NULL, mdsnNAME);
 //#define _STORE_STATIC_FILES
 
 
-#if defined(ARDUINO_ESP8266_WEMOS_D1MINI) || defined(ARDUINO_ARCH_ESP32)
+#if !defined(PLATFORM_SONOFF_SWITCH)
 
 class baseConfigurator
 {
@@ -269,7 +293,7 @@ struct
 	// marker - everything after this is dynamic
 	bool ignoreThis;
 
-#if defined(ARDUINO_ESP8266_WEMOS_D1MINI) || defined(ARDUINO_ARCH_ESP32)
+#if !defined(PLATFORM_SONOFF_SWITCH)
 	std::vector<baseConfigurator*> options;
 	std::vector<std::tuple<unsigned,String,baseSensor*>> sensors;
 	// std::get<offset>()
@@ -285,7 +309,7 @@ struct
 	std::vector<baseSwitch*>	switches;
 
 
-#ifdef _ESP32_CAMERA
+#ifdef PLATFORM_ESP32_CAMERA
 	std::vector<espCamera*>	cameras;
 #endif		
 
@@ -502,7 +526,7 @@ void WriteJSONconfig()
 	root["loggingImplConfig"]=Details.loggingImplConfig;
 
 
-#ifdef ARDUINO_ESP8266_WEMOS_D1MINI
+#ifdef PLATFORM_WEMOS_SENSOR
 	// write instances
 
 	JsonArray &instances=root.createNestedArray("instances");
@@ -697,7 +721,7 @@ void ReadJSONconfig()
 	else 
 		Details.loggingImplConfig="";
 
-#ifdef ARDUINO_ESP8266_WEMOS_D1MINI
+#ifdef PLATFORM_WEMOS_SENSOR
 	// read instances
 	if(root.containsKey("instances"))
 	{
@@ -725,7 +749,7 @@ void ReadJSONconfig()
 	yield();
 }
 
-#if defined(ARDUINO_ESP8266_WEMOS_D1MINI) || defined(ARDUINO_ARCH_ESP32)
+#if !defined(PLATFORM_SONOFF_SWITCH)
 
 bool AddDeviceInstance()
 {
@@ -906,7 +930,7 @@ void AddAPtoSTA()
 
 #endif
 
-#ifdef _ESP32_CAMERA
+#ifdef PLATFORM_ESP32_CAMERA
 
 void AddCamera(espCamera *newCamera)
 {
@@ -933,7 +957,7 @@ void AddSwitch(baseSwitch *newSwitch)
 		if(Details.dblog) Details.dblog->println(debug::dbInfo, "Adding switch");
 		Details.switches.push_back(newSwitch);
 
-#ifndef ARDUINO_ESP8266_GENERIC
+#ifndef PLATFORM_SONOFF_SWITCH
 
 		MultiSwitch* multi=(MultiSwitch*)newSwitch;
 		for(unsigned eachChild=0;eachChild<newSwitch->ChildSwitchCount();eachChild++)
@@ -961,7 +985,7 @@ void createLogger()
 			{
 				SerialDebug*newOne=new SerialDebug(Details.loggingLevel);
 				// Sonoff doesn't APPEAR to handle any faster
-#ifdef ARDUINO_ESP8266_GENERIC
+#ifdef PLATFORM_SONOFF_SWITCH
 				newOne->begin(9600);
 #else
 				newOne->begin(115200);
@@ -986,7 +1010,7 @@ void createLogger()
 
 void loadOptions()
 {
-#ifdef ARDUINO_ESP8266_WEMOS_D1MINI	
+#ifdef PLATFORM_WEMOS_SENSOR	
 
 	// these IDs *must not change*
 	Details.options.push_back(new configurator<DallasSingleSensor>(Details.dblog, 0x100, "Dallas Temperature Sensor"));
@@ -1043,14 +1067,12 @@ void setup(void)
 
 	}
 
-//#define _PIR_VARIANT
-//#define _LOCH_SPORT_VARIANT
 
-#ifdef ARDUINO_ESP8266_GENERIC
+#ifdef PLATFORM_SONOFF_SWITCH
 
 	AddSwitch(new SonoffBasic(Details.dblog));
 
-#elif defined(ARDUINO_ESP8266_WEMOS_D1MINI)
+#elif defined(PLATFORM_WEMOS_SENSOR)
 
 	// create from the stored details
 	if(!AddDeviceInstance())
@@ -1058,29 +1080,8 @@ void setup(void)
 	}
 
 
-/*
 
-#ifdef _PIR_VARIANT
-
-	Details.sensors.push_back(new PIRInstantSensor(Details.dblog, D7, LED_BUILTIN));
-	AddSwitch(new WemosRelayShield(Details.dblog));
-
-#elif defined (_LOCH_SPORT_VARIANT)	
-
-	Details.sensors.push_back(new DallasSingleSensor(D7, Details.dblog));
-	Details.sensors.push_back(new BME280Sensor(Details.dblog));
-	Details.sensors.push_back(new MAX44009Sensor(Details.dblog));
-
-#else
-
-	Details.sensors.push_back(new BME280Sensor(Details.dblog));
-	Details.sensors.push_back(new MAX44009Sensor(Details.dblog));
-
-
-#endif // PIR
-*/
-
-#elif defined(_ESP32_CAMERA)
+#elif defined(PLATFORM_ESP32_CAMERA)
 
 #define _USE_FAKE_CAMERAS
 #ifdef _USE_FAKE_CAMERAS
@@ -1624,7 +1625,7 @@ void InstallWebServerHandlers()
 
 	});
 
-#ifndef ARDUINO_ESP8266_GENERIC
+#ifndef PLATFORM_SONOFF_SWITCH
 
 #ifdef _ESP_USE_ASYNC_WEB
 	wifiInstance.server.on("/json/devices/del", HTTP_POST, [](AsyncWebServerRequest *request) {
@@ -2205,7 +2206,7 @@ void InstallWebServerHandlers()
 
 	// GET
 	
-#ifdef _ESP32_CAMERA
+#ifdef PLATFORM_ESP32_CAMERA
 
 #ifdef _ESP_USE_ASYNC_WEB
 	wifiInstance.server.on("/camera", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -2439,7 +2440,7 @@ void InstallWebServerHandlers()
 
 		}
 
-#ifdef _ESP32_CAMERA
+#ifdef PLATFORM_ESP32_CAMERA
 
 		root["cameraCount"] = Details.cameras.size();
 		JsonArray &cameraState = root.createNestedArray("cameraState");
@@ -2577,7 +2578,7 @@ void InstallWebServerHandlers()
 	});
 
 
-#ifndef ARDUINO_ESP8266_GENERIC
+#ifndef PLATFORM_SONOFF_SWITCH
 
 #ifdef _ESP_USE_ASYNC_WEB
 	wifiInstance.server.on("/json/devices", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -2594,7 +2595,7 @@ void InstallWebServerHandlers()
 
 		JsonArray &instances=root.createNestedArray("instances");
 
-#ifdef ARDUINO_ESP8266_WEMOS_D1MINI		
+#ifdef PLATFORM_WEMOS_SENSOR		
 
 		for(auto each=Details.sensors.begin();each!=Details.sensors.end();each++)
 		{
@@ -2626,7 +2627,7 @@ void InstallWebServerHandlers()
 
 		JsonArray &options=root.createNestedArray("options");
 
-#if defined(ARDUINO_ESP8266_WEMOS_D1MINI) || defined(ARDUINO_ARCH_ESP32)
+#if !defined(PLATFORM_SONOFF_SWITCH)
 
 		for(auto each=Details.options.begin();each!=Details.options.end();each++)
 		{
@@ -2736,7 +2737,7 @@ void InstallWebServerHandlers()
 			}
 		}
 
-#ifdef _ESP32_CAMERA
+#ifdef PLATFORM_ESP32_CAMERA
 
 		// add cameras
 		if(Details.cameras.size())
@@ -3088,7 +3089,7 @@ void loop(void)
 		(*eachSwitch)->DoWork();
 	}
 
-#ifdef _ESP32_CAMERA
+#ifdef PLATFORM_ESP32_CAMERA
 	for(auto eachCamera=Details.cameras.begin();eachCamera!=Details.cameras.end();eachCamera++)
 	{
 		(*eachCamera)->DoWork();
