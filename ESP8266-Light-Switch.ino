@@ -582,7 +582,10 @@ void ReadJSONconfig()
 
 #ifdef _ERASE_JSON_CONFIG
 	if(Details.dblog) Details.dblog->printf(debug::dbImportant, "erasing JSON file\n\r");
-	SPIFFS.remove(_JSON_CONFIG_FILE);
+	if(!SPIFFS.remove(_JSON_CONFIG_FILE))
+	{
+		if(Details.dblog) Details.dblog->printf(debug::dbError, "Failed to erase JSON file\n\r");
+	}
 #endif
 
 	// check for legacy!
@@ -1036,12 +1039,18 @@ void setup(void)
 #endif	
 
 	SPIFFS.begin();
-	ReadJSONconfig();
 
+// reading json could change the logger, so in prod do before we create the logger
+#ifndef _DEVELOPER_BUILD
+	ReadJSONconfig();
+#endif	
 
 	createLogger();
 	// ONLY AFTER HERE WILL THERE BE LOGGING!
 
+#ifdef _DEVELOPER_BUILD
+	ReadJSONconfig();
+#endif	
 
 	// add the options
 	loadOptions();
