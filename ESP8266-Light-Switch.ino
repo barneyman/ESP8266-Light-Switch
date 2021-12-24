@@ -117,6 +117,10 @@
 
 #endif
 
+#ifdef _DEVELOPER_BUILD
+#pragma message "Developer Build"
+#endif
+
 
 #ifdef PLATFORM_ESP32_CAMERA
 	#include "cameraSensor.h"
@@ -136,7 +140,9 @@
 #define JSON_STATIC_BUFSIZE	2048
 StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 
-
+#ifdef _ERASE_JSON_CONFIG
+#pragma message "Erasing Config!"
+#endif
 
 // my libs
 #include <myWifi.h>
