@@ -172,39 +172,39 @@
             document.getElementById("nextButton").disabled = true;
             document.getElementById("prevButton").disabled = true;
 
-            var xhr = new XMLHttpRequest();
-            xhr.open("GET", url, true);
-            //xhr.timeout = 1000
-            xhr.onload = function(e) {
-                if (xhr.readyState === 4) {
-                    if (xhr.status === 200) {
+            fetch(url)
+                .then(function(response) {
+                    return response.json();
+                })
+                .then(function(jsonResponse) {
 
-                        document.getElementById("friendlyName").value = xhr.responseText["friendlyName"]
+                    document.getElementById("friendlyName").value = jsonResponse["friendlyName"]
 
-                        wifis.innerText = ""
-                        select = document.createElement("select")
-                        select.setAttribute('id', 'wifisids')
-                        wifis.appendChild(select)
+                    // flush the div and recreate the select
+                    wifis.innerText = ""
+                    select = document.createElement("select")
+                    select.setAttribute('id', 'wifisids')
+                    wifis.appendChild(select)
 
-                        var wifiArray = xhr.responseText["wifi"]
+                    var wifiArray = jsonResponse["wifi"]
 
-                        for (var eachNode in wifiArray) {
-                            var wifi = document.createElement("option")
-                            wifi.setAttribute("value", wifiArray[eachNode]["ssid"])
-                            wifi.innerText = wifiArray[eachNode]["ssid"];
-                            select.appendChild(wifi);
-                        }
+                    for (var eachNode in wifiArray) {
 
-                        clearStatus()
-
-                        document.getElementById("rescan").disabled = false;
-                        document.getElementById("nextButton").disabled = previousNextState;
-                        document.getElementById("prevButton").disabled = previousPrevState;
+                        var wifi = document.createElement("option")
+                        wifi.setAttribute("value", wifiArray[eachNode]["ssid"])
+                        wifi.innerText = wifiArray[eachNode]["ssid"];
+                        select.appendChild(wifi);
 
                     }
-                }
-            }
-            xhr.send(null);
+
+                    clearStatus()
+
+                    document.getElementById("rescan").disabled = false;
+                    document.getElementById("nextButton").disabled = previousNextState;
+                    document.getElementById("prevButton").disabled = previousPrevState;
+                });
+
+
         }
 
         function JoinWifi() {
