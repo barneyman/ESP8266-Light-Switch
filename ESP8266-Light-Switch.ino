@@ -337,8 +337,7 @@ struct
 #ifdef _DEVELOPER_BUILD
 	{
 		// name pwd config dhcp
-		//"","",false, true
-		"beige","0404407219", true, true
+		"","",false, true
 	},
 #else	
 	{
