@@ -105,18 +105,18 @@
 
         <div id="config" hidden>
             <fieldset>
-                <legend>Installed</legend>
-                <div id="installed" class="verticalContainer" hidden=true>
+                <legend>Installed Devices</legend>
+                <div id="deviceInstalledDiv" class="verticalContainer" hidden=true>
 
                 </div>
             </fieldset>
             <fieldset>
                 <legend>Available</legend>
                 <div class="horizontalContainer">
-                    <select id="additionaDevices" onchange="showCorrectDeviceConfig()"></select>
+                    <select id="additionaDevicesSelect" onchange="showCorrectDeviceConfig()"></select>
                     <button onclick="addConfig()">Add</button>
                 </div>
-                <div class="verticalContainer" id="deviceConfig"></div>
+                <div class="verticalContainer" id="deviceConfigDiv"></div>
             </fieldset>
         </div>
 
@@ -251,8 +251,8 @@
 
         }
 
-        function getDeviceConfigs() {
-            var configDiv = document.getElementById("deviceConfig")
+        function getDeviceConfigsFieldset() {
+            var configDiv = document.getElementById("deviceConfigDiv")
             var configs = configDiv.getElementsByTagName("fieldset")
             return configs
         }
@@ -260,8 +260,8 @@
 
         function showCorrectDeviceConfig() {
             // get the impl that's selected, and unhide that tab
-            var configs = getDeviceConfigs()
-            var selector = document.getElementById("additionaDevices");
+            var configs = getDeviceConfigsFieldset()
+            var selector = document.getElementById("additionaDevicesSelect");
             var selected = selector.options[selector.selectedIndex].innerText
 
             for (var loop = 0; loop < configs.length; loop++) {
@@ -277,10 +277,10 @@
         function addConfig() {
             // get id and stringify the options
             var jsonData = {}
-            var devType = document.getElementById("additionaDevices");
+            var devType = document.getElementById("additionaDevicesSelect");
             jsonData["id"] = devType.value;
 
-            var options = getDeviceConfigs()
+            var options = getDeviceConfigsFieldset()
             var selector = devType
             var selected = selector.options[selector.selectedIndex].innerText
 
@@ -358,13 +358,13 @@
                 })
                 .then(function(data) {
 
-                    var deviceShown = document.getElementById("additionaDevices")
-                    var deviceConfig = document.getElementById("deviceConfig")
-                    var deviceInstalled = document.getElementById("installed")
+                    var deviceShown = document.getElementById("additionaDevicesSelect")
+                    var deviceConfigDiv = document.getElementById("deviceConfigDiv")
+                    var deviceInstalledDiv = document.getElementById("deviceInstalledDiv")
 
                     deviceShown.innerHTML = ''
-                    deviceInstalled.innerHTML = ''
-                    deviceConfig.innerHTML = ''
+                    deviceInstalledDiv.innerHTML = ''
+                    deviceConfigDiv.innerHTML = ''
 
                     for (var eachinstall in data["instances"]) {
                         if (data["instances"].hasOwnProperty(eachinstall)) {
@@ -382,7 +382,7 @@
                             installDiv.appendChild(nameDiv)
                             installDiv.appendChild(delButton)
 
-                            deviceInstalled.appendChild(installDiv)
+                            deviceInstalledDiv.appendChild(installDiv)
                         }
                     }
 
@@ -399,7 +399,7 @@
                                 var deviceOptions = data["options"][eachDevice]["config"]
 
                                 if (deviceOptions.length) {
-                                    addConfigItems(deviceConfig, data["options"][eachDevice]["name"], deviceOptions)
+                                    addConfigItems(deviceConfigDiv, data["options"][eachDevice]["name"], deviceOptions)
 
                                 }
                             }
