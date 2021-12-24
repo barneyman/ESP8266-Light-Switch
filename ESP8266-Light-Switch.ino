@@ -2913,10 +2913,13 @@ void InstallWebServerHandlers()
 		// let's get all wifis we can see
 		std::vector<std::pair<String, int>> allWifis;
 		
-		int found=0;wifiInstance.ScanNetworks(allWifis);
+		int found=wifiInstance.ScanNetworks(allWifis);
+
+		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "jScanNetworks found %d\r",found);
 
 		JsonArray &wifis = root.createNestedArray("wifi");
 
+		// get the 10 strongest (it's a sorted list)
 		int maxFound = found < 10 ? found : 10;
 
 		for (int each = 0; each < maxFound ; each++)
