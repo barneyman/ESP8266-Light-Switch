@@ -22,8 +22,7 @@
         <iframe src="HeaderFrame.htm" id="header" name="header" onload="headerLoaded()"></iframe>
 
         <script>
-        const frames = ["home","config", "admin", "logging"];
-
+            const frames = ["home", "config", "admin", "logging"];
         </script>
 
         <ul id="menu" class="main">
@@ -49,8 +48,7 @@
                 <legend>Cameras</legend>
                 <div class="verticalContainer" id="cameras"></div>
             </fieldset>
-            <div class="horizontalContainerRight"><button id="refresh"
-                    onclick="PopulateSwSenCamList(true)">Refresh</button></div>
+            <div class="horizontalContainerRight"><button id="refresh" onclick="PopulateSwSenCamList(true)">Refresh</button></div>
 
 
         </div>
@@ -138,8 +136,8 @@
             <fieldset>
                 <legend>Implementation</legend>
                 <div class="horizontalContainer">
-                <select id="loggingType" onchange="showCorrectConfigTab()"></select>
-                <button onclick="setLogImpl()">Set</button>
+                    <select id="loggingType" onchange="showCorrectConfigTabForLogging()"></select>
+                    <button onclick="setLogImpl()">Set</button>
                 </div>
                 <div class="verticalContainer" id="implConfig"></div>
             </fieldset>
@@ -149,16 +147,12 @@
     </div>
 
     <script>
-
-
-
         function onMenu(divNameShow) {
-            frames.forEach(function (item, index) {
+            frames.forEach(function(item, index) {
 
                 if (item == divNameShow) {
                     document.getElementById(item).hidden = false;
-                }
-                else {
+                } else {
                     document.getElementById(item).hidden = true;
                 }
 
@@ -174,61 +168,54 @@
             fetchPeers()
             getConfig()
             getLogging()
-            //clearStatus();
+                //clearStatus();
             getDevices()
         }
 
-        function postSetting(config, url)
-        {
+        function postSetting(config, url) {
             var xhr = new XMLHttpRequest();
             xhr.open("POST", url, true);
             xhr.setRequestHeader("Content-type", "text/plain");
             xhr.send(JSON.stringify(config));
-            
+
         }
 
-        function setDebug(config)
-        {
+        function setDebug(config) {
             let url = base + '/json/logging'
-            postSetting(config,url)
+            postSetting(config, url)
         }
 
 
-        function setLogLevel()
-        {
-            var jsonData={}
-            var logLevel=document.getElementById("loggingLevel");
-            jsonData["level"]=logLevel.value;
+        function setLogLevel() {
+            var jsonData = {}
+            var logLevel = document.getElementById("loggingLevel");
+            jsonData["level"] = logLevel.value;
             setDebug(jsonData);
 
         }
 
-        function setLogImpl()
-        {
-            var jsonData={}
-            var logType=document.getElementById("loggingType");
-            jsonData["impl"]=logType.value;
+        function setLogImpl() {
+            var jsonData = {}
+            var logType = document.getElementById("loggingType");
+            jsonData["impl"] = logType.value;
 
             // then get any config
-            var configs=getImplConfigs()
-            var selector=document.getElementById("loggingType");
-            var selected=selector.options[selector.selectedIndex].innerText
+            var configs = getImplConfigs()
+            var selector = document.getElementById("loggingType");
+            var selected = selector.options[selector.selectedIndex].innerText
 
-            for(var loop=0;loop<configs.length;loop++)
-            {
-                item=configs.item(loop)
+            for (var loop = 0; loop < configs.length; loop++) {
+                item = configs.item(loop)
 
-                if(item.getElementsByTagName("legend")[0].innerText==selected)
-                {
-                    var inputs=item.getElementsByTagName("input")
-                    var jsonConfig={}
+                if (item.getElementsByTagName("legend")[0].innerText == selected) {
+                    var inputs = item.getElementsByTagName("input")
+                    var jsonConfig = {}
 
-                    for(var eachItem=0;eachItem<inputs.length;eachItem++)
-                    {
-                        jsonConfig[inputs[eachItem].name]=inputs[eachItem].value
+                    for (var eachItem = 0; eachItem < inputs.length; eachItem++) {
+                        jsonConfig[inputs[eachItem].name] = inputs[eachItem].value
                     }
-                    
-                    jsonData["config"]=jsonConfig
+
+                    jsonData["config"] = jsonConfig
 
                     break
                 }
@@ -240,132 +227,119 @@
 
 
 
-        function getImplConfigs()
-        {
+        function getImplConfigs() {
             // get the impl that's selected, and unhide that tab
-            var configDiv=document.getElementById("implConfig")
-            var configs=configDiv.getElementsByTagName("fieldset")
+            var configDiv = document.getElementById("implConfig")
+            var configs = configDiv.getElementsByTagName("fieldset")
             return configs
         }
 
-        function showCorrectConfigTab()
-        {
+        function showCorrectConfigTabForLogging() {
             // get the impl that's selected, and unhide that tab
-            var configs=getImplConfigs()
-            var selector=document.getElementById("loggingType");
-            var selected=selector.options[selector.selectedIndex].innerText
+            var configs = getImplConfigs()
+            var selector = document.getElementById("loggingType");
+            var selected = selector.options[selector.selectedIndex].innerText
 
-            for(var loop=0;loop<configs.length;loop++)
-            {
-                item=configs.item(loop)
+            for (var loop = 0; loop < configs.length; loop++) {
+                item = configs.item(loop)
 
-                if(item.getElementsByTagName("legend")[0].innerText==selected)
-                    item.hidden=false
+                if (item.getElementsByTagName("legend")[0].innerText == selected)
+                    item.hidden = false
                 else
-                    item.hidden=true
+                    item.hidden = true
             }
 
         }
 
-        function getDeviceConfigs()
-        {
-            var configDiv=document.getElementById("deviceConfig")
-            var configs=configDiv.getElementsByTagName("fieldset")
+        function getDeviceConfigs() {
+            var configDiv = document.getElementById("deviceConfig")
+            var configs = configDiv.getElementsByTagName("fieldset")
             return configs
         }
 
 
-        function showCorrectDeviceConfig()
-        {
+        function showCorrectDeviceConfig() {
             // get the impl that's selected, and unhide that tab
-            var configs=getDeviceConfigs()
-            var selector=document.getElementById("additionaDevices");
-            var selected=selector.options[selector.selectedIndex].innerText
+            var configs = getDeviceConfigs()
+            var selector = document.getElementById("additionaDevices");
+            var selected = selector.options[selector.selectedIndex].innerText
 
-            for(var loop=0;loop<configs.length;loop++)
-            {
-                item=configs.item(loop)
+            for (var loop = 0; loop < configs.length; loop++) {
+                item = configs.item(loop)
 
-                if(item.getElementsByTagName("legend")[0].innerText==selected)
-                    item.hidden=false
+                if (item.getElementsByTagName("legend")[0].innerText == selected)
+                    item.hidden = false
                 else
-                    item.hidden=true
-            }            
+                    item.hidden = true
+            }
         }
 
-        function addConfig()
-        {
+        function addConfig() {
             // get id and stringify the options
-            var jsonData={}
-            var devType=document.getElementById("additionaDevices");
-            jsonData["id"]=devType.value;
+            var jsonData = {}
+            var devType = document.getElementById("additionaDevices");
+            jsonData["id"] = devType.value;
 
-            var options=getDeviceConfigs()
-            var selector=devType
-            var selected=selector.options[selector.selectedIndex].innerText
+            var options = getDeviceConfigs()
+            var selector = devType
+            var selected = selector.options[selector.selectedIndex].innerText
 
 
 
-            for(var loop=0;loop<options.length;loop++)
-            {
-                var item=options[loop]
+            for (var loop = 0; loop < options.length; loop++) {
+                var item = options[loop]
 
-                if(!item.hidden)
-                {
-                    var jsonConfig={}
+                if (!item.hidden) {
+                    var jsonConfig = {}
 
                     // <legend>
                     // each line is a <div><div><input|select></></>
 
-                    var lineItems=item.children
+                    var lineItems = item.children
 
                     // skip the legend
-                    for(var eachChild=1;eachChild<lineItems.length;eachChild++)
-                    {
+                    for (var eachChild = 1; eachChild < lineItems.length; eachChild++) {
                         console.log(lineItems[eachChild].children.length)
 
-                        var optname=lineItems[eachChild].children[0].innerText;
-                        var optValue=null
-                        var valueHolder=lineItems[eachChild].children[1]
+                        var optname = lineItems[eachChild].children[0].innerText;
+                        var optValue = null
+                        var valueHolder = lineItems[eachChild].children[1]
 
                         console.log(valueHolder.tagName)
 
-                        switch(valueHolder.tagName)
-                        {
+                        switch (valueHolder.tagName) {
                             case "SELECT":
-                                optValue=parseInt(valueHolder.options[valueHolder.selectedIndex].value)
+                                optValue = parseInt(valueHolder.options[valueHolder.selectedIndex].value)
                                 break;
                         }
 
-                        jsonConfig[optname]=optValue
+                        jsonConfig[optname] = optValue
                     }
 
 
-                    
-                    jsonData["config"]=jsonConfig
+
+                    jsonData["config"] = jsonConfig
 
                     break
                 }
             }
 
             let url = base + '/json/devices/add'
-            postSetting(jsonData,url)
+            postSetting(jsonData, url)
 
 
 
         }
 
-        function removeDevice(id, config, instance, name)
-        {
+        function removeDevice(id, config, instance, name) {
 
-            if(confirm("About to remove device '"+name+"'"))
-            {
-                var jsonData={}
-                jsonData["id"]=id;
-                jsonData["config"]=config;
-                jsonData["instance"]=instance;
+            if (confirm("About to remove device '" + name + "'")) {
+                var jsonData = {}
+                jsonData["id"] = id;
+                jsonData["config"] = config;
+                jsonData["instance"] = instance;
                 let url = base + '/json/devices/del'
-                postSetting(jsonData,url)
+                postSetting(jsonData, url)
                 getDevices()
                 PopulateSwSenCamList(true)
             }
@@ -373,40 +347,37 @@
 
         }
 
-        function getDevices()
-        {
+        function getDevices() {
             let url = base + '/json/devices'
 
             fetch(url)
-                .then(function (response) {
+                .then(function(response) {
                     if (response.ok)
                         return response.json();
                     throw new Error('network err')
                 })
-                .then(function (data) {
+                .then(function(data) {
 
-                    var deviceShown=document.getElementById("additionaDevices")
-                    var deviceConfig=document.getElementById("deviceConfig")
-                    var deviceInstalled=document.getElementById("installed")
+                    var deviceShown = document.getElementById("additionaDevices")
+                    var deviceConfig = document.getElementById("deviceConfig")
+                    var deviceInstalled = document.getElementById("installed")
 
-                    deviceShown.innerHTML=''
-                    deviceInstalled.innerHTML=''
-                    deviceConfig.innerHTML=''
+                    deviceShown.innerHTML = ''
+                    deviceInstalled.innerHTML = ''
+                    deviceConfig.innerHTML = ''
 
-                    for(var eachinstall in data["instances"])
-                    {
-                        if(data["instances"].hasOwnProperty(eachinstall))
-                        {
-                            var installDiv=document.createElement("div")
-                            installDiv.setAttribute("class","horizontalContainer")
+                    for (var eachinstall in data["instances"]) {
+                        if (data["instances"].hasOwnProperty(eachinstall)) {
+                            var installDiv = document.createElement("div")
+                            installDiv.setAttribute("class", "horizontalContainer")
 
-                            var nameDiv=document.createElement("div")
-                            nameDiv.innerText=data["instances"][eachinstall]["name"]
+                            var nameDiv = document.createElement("div")
+                            nameDiv.innerText = data["instances"][eachinstall]["name"]
 
-                            var delButton=document.createElement("button")
-                            delButton.innerText="Remove"
-                            var quick=data["instances"][eachinstall]
-                            delButton.setAttribute("onclick","removeDevice("+ quick["id"] +",'"+ quick["config"] +"',"+ quick["instance"] +",'"+ quick["name"] + "')")
+                            var delButton = document.createElement("button")
+                            delButton.innerText = "Remove"
+                            var quick = data["instances"][eachinstall]
+                            delButton.setAttribute("onclick", "removeDevice(" + quick["id"] + ",'" + quick["config"] + "'," + quick["instance"] + ",'" + quick["name"] + "')")
 
                             installDiv.appendChild(nameDiv)
                             installDiv.appendChild(delButton)
@@ -416,23 +387,19 @@
                     }
 
 
-                    for(var eachDevice in data["options"])
-                    {
-                        if(data["options"].hasOwnProperty(eachDevice))
-                        {
-                            var opt=document.createElement("option")
-                            opt.value=data["options"][eachDevice]["id"]
-                            opt.innerText=data["options"][eachDevice]["name"]
+                    for (var eachDevice in data["options"]) {
+                        if (data["options"].hasOwnProperty(eachDevice)) {
+                            var opt = document.createElement("option")
+                            opt.value = data["options"][eachDevice]["id"]
+                            opt.innerText = data["options"][eachDevice]["name"]
 
                             deviceShown.appendChild(opt)
 
-                            if(data["options"][eachDevice].hasOwnProperty("config"))
-                            {
-                                var deviceOptions=data["options"][eachDevice]["config"]
+                            if (data["options"][eachDevice].hasOwnProperty("config")) {
+                                var deviceOptions = data["options"][eachDevice]["config"]
 
-                                if(deviceOptions.length)
-                                {
-                                    addConfigItems(deviceConfig,data["options"][eachDevice]["name"],deviceOptions)    
+                                if (deviceOptions.length) {
+                                    addConfigItems(deviceConfig, data["options"][eachDevice]["name"], deviceOptions)
 
                                 }
                             }
@@ -440,154 +407,134 @@
                         }
                     }
                     showCorrectDeviceConfig()
-                })            
+                })
 
         }
 
-        function getLogging()
-        {
+        function getLogging() {
             let url = base + '/json/logging'
             fetch(url)
-                .then(function (response) {
+                .then(function(response) {
                     if (response.ok)
                         return response.json();
                     throw new Error('network err')
                 })
-                .then(function (data) {
+                .then(function(data) {
 
-                    var logLevel=document.getElementById("loggingLevel");
-                    var logType=document.getElementById("loggingType");
+                    var logLevel = document.getElementById("loggingLevel");
+                    var logType = document.getElementById("loggingType");
 
-                    var configDiv=document.getElementById("implConfig")
+                    var configDiv = document.getElementById("implConfig")
 
-                    logLevel.innerHTML=''
-                    logLevel.innerHTML=''
+                    logLevel.innerHTML = ''
+                    logLevel.innerHTML = ''
 
-                    for (var eachLevel in data["levels"]) 
-                    {
-                        if (data["levels"].hasOwnProperty(eachLevel))
-                        {
+                    for (var eachLevel in data["levels"]) {
+                        if (data["levels"].hasOwnProperty(eachLevel)) {
 
-                            var opt=document.createElement("option")
-                            opt.value=data["levels"][eachLevel]["value"]
-                            opt.innerText=data["levels"][eachLevel]["name"]
+                            var opt = document.createElement("option")
+                            opt.value = data["levels"][eachLevel]["value"]
+                            opt.innerText = data["levels"][eachLevel]["name"]
 
                             logLevel.appendChild(opt)
 
-                            if(opt.value==data["level"])
-                            {
-                                opt.setAttribute("selected","selected")
+                            if (opt.value == data["level"]) {
+                                opt.setAttribute("selected", "selected")
                             }
 
                         }
                     }
 
-                    for (var eachImpl in data["impls"]) 
-                    {
-                        if (data["impls"].hasOwnProperty(eachImpl))
-                        {
+                    for (var eachImpl in data["impls"]) {
+                        if (data["impls"].hasOwnProperty(eachImpl)) {
                             // get the internal config items
-                            var configItems=data["impls"][eachImpl]["config"]
-                            if(configItems.length)
-                            {
-                                addConfigItems(configDiv,data["impls"][eachImpl]["name"],configItems)
+                            var configItems = data["impls"][eachImpl]["config"]
+                            if (configItems.length) {
+                                addConfigItems(configDiv, data["impls"][eachImpl]["name"], configItems)
                             }
 
-                            var opt=document.createElement("option")
-                            opt.value=data["impls"][eachImpl]["value"]
-                            opt.innerText=data["impls"][eachImpl]["name"]
+                            var opt = document.createElement("option")
+                            opt.value = data["impls"][eachImpl]["value"]
+                            opt.innerText = data["impls"][eachImpl]["name"]
 
-                            if(opt.value==data["impl"])
-                            {
-                                opt.setAttribute("selected","selected")
+                            if (opt.value == data["impl"]) {
+                                opt.setAttribute("selected", "selected")
                             }
 
                             logType.appendChild(opt)
                         }
                     }
 
-                    showCorrectConfigTab()
+                    showCorrectConfigTabForLogging()
 
 
-                })            
+                })
         }
 
-        function getConfig()
-        {
+        function getConfig() {
             let url = base + '/json/config'
             fetch(url)
-                .then(function (response) {
+                .then(function(response) {
                     if (response.ok)
                         return response.json();
                     throw new Error('network err')
                 })
-                .then(function (data) {
+                .then(function(data) {
 
-                    var checkbox=document.getElementById("prerelease");
-                    if(data["prerelease"]==0)
-                    {
-                        checkbox.checked=false;
-                    }
-                    else
-                    {
-                        checkbox.checked=true;
+                    var checkbox = document.getElementById("prerelease");
+                    if (data["prerelease"] == 0) {
+                        checkbox.checked = false;
+                    } else {
+                        checkbox.checked = true;
                     }
 
-                    var fname=document.getElementById("friendlyname");
-                    fname.value=data["friendlyName"]
+                    var fname = document.getElementById("friendlyname");
+                    fname.value = data["friendlyName"]
 
                     // check for switches
-                    if(data["switchCount"]==0)
-                    {
-                        document.getElementById("upgradeWhenOffDiv").style.display= 'none' ;  
-                    }
-                    else
-                    {
-                        var upgradeOnlyWhenRelayOff=document.getElementById("upgradeOnlyWhenRelayOff")
-                        if(data["upgradeOnlyWhenRelayOff"]==0)
-                            upgradeOnlyWhenRelayOff.checked=false;
+                    if (data["switchCount"] == 0) {
+                        document.getElementById("upgradeWhenOffDiv").style.display = 'none';
+                    } else {
+                        var upgradeOnlyWhenRelayOff = document.getElementById("upgradeOnlyWhenRelayOff")
+                        if (data["upgradeOnlyWhenRelayOff"] == 0)
+                            upgradeOnlyWhenRelayOff.checked = false;
                         else
-                            upgradeOnlyWhenRelayOff.checked=true;
+                            upgradeOnlyWhenRelayOff.checked = true;
                     }
 
-                    if("developer" in data)
-                    {
-                        document.getElementById("rebootButton").hidden=false   
+                    if ("developer" in data) {
+                        document.getElementById("rebootButton").hidden = false
                     }
 
                 })
         }
 
-        function setConfig(config)
-        {
+        function setConfig(config) {
             let url = base + '/json/config'
-            postSetting(config,url)
+            postSetting(config, url)
         }
 
-        function setName()
-        {
-            var jsonData={}
-            var fname=document.getElementById("friendlyname");
-            jsonData["friendlyName"]=fname.value;
+        function setName() {
+            var jsonData = {}
+            var fname = document.getElementById("friendlyname");
+            jsonData["friendlyName"] = fname.value;
             setConfig(jsonData)
 
         }
 
-        function changePrelease()
-        {
-            var jsonData={}
-            var checkbox=document.getElementById("prerelease");
-            jsonData["prerelease"]=checkbox.checked?1:0;
+        function changePrelease() {
+            var jsonData = {}
+            var checkbox = document.getElementById("prerelease");
+            jsonData["prerelease"] = checkbox.checked ? 1 : 0;
             setConfig(jsonData)
 
         }
 
-        function changeUpgradeOnlyWhenRelayOff()
-        {
-            
-            var jsonData={}
-            var checkbox=document.getElementById("upgradeOnlyWhenRelayOff");
-            jsonData["upgradeOnlyWhenRelayOff"]=checkbox.checked?1:0;
+        function changeUpgradeOnlyWhenRelayOff() {
+
+            var jsonData = {}
+            var checkbox = document.getElementById("upgradeOnlyWhenRelayOff");
+            jsonData["upgradeOnlyWhenRelayOff"] = checkbox.checked ? 1 : 0;
             setConfig(jsonData)
         }
 
@@ -597,12 +544,12 @@
             let url = base + '/json/state'
 
             fetch(url)
-                .then(function (response) {
+                .then(function(response) {
                     if (response.ok)
                         return response.json();
                     throw new Error('network err')
                 })
-                .then(function (data) {
+                .then(function(data) {
 
                     // then work out the switch states
                     var switches = data['switchState']
@@ -620,11 +567,11 @@
                     if (clearTheList) {
                         tableSensors.innerHTML = "";
                         tableSwitches.innerHTML = "";
-                        tableCameras.innerHTML="";
+                        tableCameras.innerHTML = "";
                     }
 
                     // sensors can be removed
-                    tableSensorSet.hidden=true
+                    tableSensorSet.hidden = true
 
                     // get counts
                     if (data['switchCount'] != "0") {
@@ -685,8 +632,8 @@
                             name.innerText = sensors[eachState]["name"]
                             row.appendChild(name)
 
-                            var sensorList= document.createElement("div")
-                            sensorList.classList="verticalContainer"
+                            var sensorList = document.createElement("div")
+                            sensorList.classList = "verticalContainer"
                             row.appendChild(sensorList)
 
                             for (var key in sensors[eachState]) {
@@ -722,12 +669,12 @@
                             name.innerText = cameras[eachCamera]["name"]
                             row.appendChild(name)
 
-                            var cameragImgDiv= document.createElement("div")
+                            var cameragImgDiv = document.createElement("div")
                             row.appendChild(cameragImgDiv)
 
-                            var cameraImg=document.createElement("img")
-                            cameraImg.src=base+"/camera?cam="+cameras[eachCamera]["camera"]
-                            cameraImg.width=screen.width/3
+                            var cameraImg = document.createElement("img")
+                            cameraImg.src = base + "/camera?cam=" + cameras[eachCamera]["camera"]
+                            cameraImg.width = screen.width / 3
 
                             cameragImgDiv.appendChild(cameraImg)
 
@@ -742,7 +689,7 @@
 
 
 
-                }).catch(function (error) {
+                }).catch(function(error) {
 
                     alert(error.message)
 
@@ -760,7 +707,9 @@
             xhr.open("POST", url, true);
             xhr.setRequestHeader("Content-type", "text/plain");
 
-            xhr.onloadend = function () { PopulateSwSenCamList(true) }
+            xhr.onloadend = function() {
+                PopulateSwSenCamList(true)
+            }
             xhr.send();
 
 
@@ -770,8 +719,10 @@
             // then get the ver of that peer
             var peerUrl = peer + "json/config"
             fetch(peerUrl)
-                .then(function (response) { return response.json(); })
-                .then(function (data) {
+                .then(function(response) {
+                    return response.json();
+                })
+                .then(function(data) {
                     divToUse.innerText = data["version"]
                 })
 
@@ -782,11 +733,13 @@
             let url = base + '/json/peers'
             var numPages = 0;
             fetch(url)
-                .then(function (response) { return response.json(); })
-                .then(function (data) {
+                .then(function(response) {
+                    return response.json();
+                })
+                .then(function(data) {
                     // populate the peers
                     var peers = document.getElementById('peers')
-                    // clear the list
+                        // clear the list
                     peers.innerHTML = ""
                     if (data["peerCount"] > 0) {
                         var peerArray = data["peers"]
@@ -841,7 +794,7 @@
 
         function ResetWIFI() {
 
-            if(confirm("Are you sure you wish to reset wifi?")==false)
+            if (confirm("Are you sure you wish to reset wifi?") == false)
                 return
 
             let url = base + '/resetWIFI'
@@ -891,15 +844,14 @@
 
 
                 // then wait on a response
-                xhr.onloadend = function () {
+                xhr.onloadend = function() {
                     // done
                     // parse it
                     var jsonResponse = JSON.parse(xhr.responseText);
                     // HTTP_UPDATE_OK
                     if (jsonResponse['result'] != 2) {
                         alert(jsonResponse['Details']['espNarrative'])
-                    }
-                    else {
+                    } else {
                         // reload the whole site?
                         window.location.reload(true)
                     }
@@ -907,12 +859,9 @@
 
                 xhr.send(JSON.stringify(jsonData));
 
-            }
-            else
+            } else
                 alert('values cannot be empty')
         }
-
-
     </script>
 
 </BODY>
