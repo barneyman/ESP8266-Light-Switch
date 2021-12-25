@@ -114,7 +114,7 @@
                 <legend>Available</legend>
                 <div class="horizontalContainer">
                     <select id="additionaDevicesSelect" onchange="showCorrectDeviceConfig()"></select>
-                    <button onclick="addConfig()">Add</button>
+                    <button onclick="addDeviceAndConfig()">Add</button>
                 </div>
                 <div class="verticalContainer" id="deviceConfigDiv"></div>
             </fieldset>
@@ -169,14 +169,20 @@
             getConfig()
             getLogging()
                 //clearStatus();
-            getDevices()
+            populateConfiguredDevices()
         }
 
         function postSetting(config, url) {
-            var xhr = new XMLHttpRequest();
-            xhr.open("POST", url, true);
-            xhr.setRequestHeader("Content-type", "text/plain");
-            xhr.send(JSON.stringify(config));
+
+            const options = {
+                method: 'post',
+                headers: {
+                    'Content-type': 'text/json'
+                },
+                body: JSON.stringify(config)
+            }
+
+            return fetch(url, options)
 
         }
 
@@ -251,30 +257,10 @@
 
         }
 
-        function getDeviceConfigsFieldset() {
-            var configDiv = document.getElementById("deviceConfigDiv")
-            var configs = configDiv.getElementsByTagName("fieldset")
-            return configs
-        }
 
 
-        function showCorrectDeviceConfig() {
-            // get the impl that's selected, and unhide that tab
-            var configs = getDeviceConfigsFieldset()
-            var selector = document.getElementById("additionaDevicesSelect");
-            var selected = selector.options[selector.selectedIndex].innerText
 
-            for (var loop = 0; loop < configs.length; loop++) {
-                item = configs.item(loop)
-
-                if (item.getElementsByTagName("legend")[0].innerText == selected)
-                    item.hidden = false
-                else
-                    item.hidden = true
-            }
-        }
-
-        function addConfig() {
+        function addDeviceAndConfig() {
             // get id and stringify the options
             var jsonData = {}
             var devType = document.getElementById("additionaDevicesSelect");
@@ -325,7 +311,10 @@
             }
 
             let url = base + '/json/devices/add'
-            postSetting(jsonData, url)
+            postSetting(jsonData, url).then(function(response) {
+                // then repop
+                populateConfiguredDevices()
+            })
 
 
 
@@ -339,77 +328,18 @@
                 jsonData["config"] = config;
                 jsonData["instance"] = instance;
                 let url = base + '/json/devices/del'
-                postSetting(jsonData, url)
-                getDevices()
-                PopulateSwSenCamList(true)
+                postSetting(jsonData, url).then(function(response) {
+                    populateConfiguredDevices()
+                    PopulateSwSenCamList(true)
+                })
+
+
             }
 
 
         }
 
-        function getDevices() {
-            let url = base + '/json/devices'
 
-            fetch(url)
-                .then(function(response) {
-                    if (response.ok)
-                        return response.json();
-                    throw new Error('network err')
-                })
-                .then(function(data) {
-
-                    var deviceShown = document.getElementById("additionaDevicesSelect")
-                    var deviceConfigDiv = document.getElementById("deviceConfigDiv")
-                    var deviceInstalledDiv = document.getElementById("deviceInstalledDiv")
-
-                    deviceShown.innerHTML = ''
-                    deviceInstalledDiv.innerHTML = ''
-                    deviceConfigDiv.innerHTML = ''
-
-                    for (var eachinstall in data["instances"]) {
-                        if (data["instances"].hasOwnProperty(eachinstall)) {
-                            var installDiv = document.createElement("div")
-                            installDiv.setAttribute("class", "horizontalContainer")
-
-                            var nameDiv = document.createElement("div")
-                            nameDiv.innerText = data["instances"][eachinstall]["name"]
-
-                            var delButton = document.createElement("button")
-                            delButton.innerText = "Remove"
-                            var quick = data["instances"][eachinstall]
-                            delButton.setAttribute("onclick", "removeDevice(" + quick["id"] + ",'" + quick["config"] + "'," + quick["instance"] + ",'" + quick["name"] + "')")
-
-                            installDiv.appendChild(nameDiv)
-                            installDiv.appendChild(delButton)
-
-                            deviceInstalledDiv.appendChild(installDiv)
-                        }
-                    }
-
-
-                    for (var eachDevice in data["options"]) {
-                        if (data["options"].hasOwnProperty(eachDevice)) {
-                            var opt = document.createElement("option")
-                            opt.value = data["options"][eachDevice]["id"]
-                            opt.innerText = data["options"][eachDevice]["name"]
-
-                            deviceShown.appendChild(opt)
-
-                            if (data["options"][eachDevice].hasOwnProperty("config")) {
-                                var deviceOptions = data["options"][eachDevice]["config"]
-
-                                if (deviceOptions.length) {
-                                    addConfigItems(deviceConfigDiv, data["options"][eachDevice]["name"], deviceOptions)
-
-                                }
-                            }
-
-                        }
-                    }
-                    showCorrectDeviceConfig()
-                })
-
-        }
 
         function getLogging() {
             let url = base + '/json/logging'
