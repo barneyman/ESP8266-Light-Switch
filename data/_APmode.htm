@@ -37,6 +37,24 @@
             </fieldset>
         </fieldset>
         <br>
+        <fieldset id="deviceConfig" hidden>
+            <legend>Devices</legend>
+            <fieldset>
+                <legend>Installed Devices</legend>
+                <div id="deviceInstalledDiv" class="verticalContainer" hidden=true>
+
+                </div>
+            </fieldset>
+            <fieldset>
+                <legend>Available</legend>
+                <div class="horizontalContainer">
+                    <select id="additionaDevicesSelect" onchange="showCorrectDeviceConfig()"></select>
+                    <button onclick="addDeviceAndConfig()">Add</button>
+                </div>
+                <div class="verticalContainer" id="deviceConfigDiv"></div>
+            </fieldset>
+
+        </fieldset>
         <fieldset id="deviceWifi" hidden>
             <legend>Wifi Details</legend>
             <fieldset>
@@ -117,6 +135,7 @@
         function next() {
             nameFields = document.getElementById("deviceName")
             wifiFields = document.getElementById("deviceWifi")
+            configFields = document.getElementById("deviceConfig")
             nextButton = document.getElementById("nextButton")
             prevButton = document.getElementById("prevButton")
 
@@ -129,9 +148,14 @@
 
                 // it's next !
                 nameFields.hidden = true
+                configFields.hidden = false
+                prevButton.disabled = false
+            } else if (configFields.hidden == false) {
+                configFields.hidden = true
                 wifiFields.hidden = false
                 nextButton.innerText = "Finish"
                 prevButton.disabled = false
+
             } else {
                 if (document.getElementById("pwd").value.length == 0) {
                     alert("need a password please")
@@ -142,19 +166,28 @@
             }
         }
 
+        // name config wifi
         function previous() {
             nameFields = document.getElementById("deviceName")
             wifiFields = document.getElementById("deviceWifi")
+            configFields = document.getElementById("deviceConfig")
             nextButton = document.getElementById("nextButton")
             prevButton = document.getElementById("prevButton")
 
+            if (configFields.hidden == false) {
+                nameFields.hidden = false
+                configFields.hidden = true
+                prevButton.disabled = true
+                return
+            }
 
+            if (wifiFields.hidden == false) {
+                wifiFields.hidden = true
+                configFields.hidden = false
+                nextButton.innerText = "Next"
+                return
+            }
 
-            // it's next !
-            nameFields.hidden = false
-            wifiFields.hidden = true
-            nextButton.innerText = "Next"
-            prevButton.disabled = true
         }
 
 
@@ -204,6 +237,7 @@
                     document.getElementById("prevButton").disabled = previousPrevState;
                 });
 
+            populateConfiguredDevices()
 
         }
 

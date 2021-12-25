@@ -1,7 +1,7 @@
 // when testing these web pages from the PC ... base should point to the esp mule
 // chrome --disable-web-security --user-data-dir="[some directory here]"
-let base = "http://192.168.4.1"
-    //let base = "."
+//let base = "http://192.168.4.1"
+let base = "."
 
 function headerLoaded() {
     let url = base + "/json/config";
@@ -92,6 +92,23 @@ function addConfigItems(container, name, configItems, hideit = true) {
 
 
 }
+
+// generic
+
+function postSettingReturnPromise(config, url) {
+
+    const options = {
+        method: 'post',
+        headers: {
+            'Content-type': 'text/json'
+        },
+        body: JSON.stringify(config)
+    }
+
+    return fetch(url, options)
+
+}
+
 
 
 // device config stuff - used on AP when onboarding, and STA probbaly never
@@ -186,5 +203,84 @@ function populateConfiguredDevices() {
             }
             showCorrectDeviceConfig()
         })
+
+}
+
+function addDeviceAndConfig() {
+    // get id and stringify the options
+    var jsonData = {}
+    var devType = document.getElementById("additionaDevicesSelect");
+    jsonData["id"] = devType.value;
+
+    var options = getDeviceConfigsFieldset()
+    var selector = devType
+    var selected = selector.options[selector.selectedIndex].innerText
+
+
+
+    for (var loop = 0; loop < options.length; loop++) {
+        var item = options[loop]
+
+        if (!item.hidden) {
+            var jsonConfig = {}
+
+            // <legend>
+            // each line is a <div><div><input|select></></>
+
+            var lineItems = item.children
+
+            // skip the legend
+            for (var eachChild = 1; eachChild < lineItems.length; eachChild++) {
+                console.log(lineItems[eachChild].children.length)
+
+                var optname = lineItems[eachChild].children[0].innerText;
+                var optValue = null
+                var valueHolder = lineItems[eachChild].children[1]
+
+                console.log(valueHolder.tagName)
+
+                switch (valueHolder.tagName) {
+                    case "SELECT":
+                        optValue = parseInt(valueHolder.options[valueHolder.selectedIndex].value)
+                        break;
+                }
+
+                jsonConfig[optname] = optValue
+            }
+
+
+
+            jsonData["config"] = jsonConfig
+
+            break
+        }
+    }
+
+    let url = base + '/json/devices/add'
+    postSettingReturnPromise(jsonData, url).then(function(response) {
+        // then repop
+        populateConfiguredDevices()
+    })
+
+
+
+}
+
+function removeDevice(id, config, instance, name) {
+
+    if (confirm("About to remove device '" + name + "'")) {
+        var jsonData = {}
+        jsonData["id"] = id;
+        jsonData["config"] = config;
+        jsonData["instance"] = instance;
+        let url = base + '/json/devices/del'
+        postSettingReturnPromise(jsonData, url).then(function(response) {
+            populateConfiguredDevices()
+
+        })
+
+
+    }
+
 
 }
