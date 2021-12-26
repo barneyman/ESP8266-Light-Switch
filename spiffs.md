@@ -17,6 +17,7 @@ Settings were gleaned from the `boards.txt` under the `hardware` directories
 
 
 ## Upload 
+### Pre-requisite
 `pip install esptool`
 
 ## Wemos D1 4M1M
