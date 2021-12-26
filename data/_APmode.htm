@@ -273,19 +273,9 @@
 
                 let url = base + '/json/wifi'
 
-                var xhr = new XMLHttpRequest();
-
-                xhr.open("GET", url, true);
-                xhr.setRequestHeader("Content-type", "text/plain");
-
-                xhr.onloadend = function() {
-                    // done
-                    // we should delay for a couple of seconds, then try to 
-                    // go to the .local domain again
+                postSettingReturnPromise(jsonData, url).then(function(response) {
                     window.location.reload(true)
-                };
-
-                xhr.send(JSON.stringify(jsonData));
+                })
 
             } else
                 alert('values cannot be empty')
