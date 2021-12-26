@@ -1,15 +1,17 @@
 <HTML>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <HEAD>
 
-<TITLE>ESP8266 Provisioning</TITLE>
+    <TITLE>ESP8266 Provisioning</TITLE>
     <link rel="stylesheet" type="text/css" href="switch.css">
 </HEAD>
+
 <BODY onload="OnLoad()">
-    
+
     <div class="verticalContainerFull">
 
-    <iframe src="HeaderFrame.htm" id="header" name="header" onload="headerLoaded()"></iframe>
+        <iframe src="HeaderFrame.htm" id="header" name="header" onload="headerLoaded()"></iframe>
 
         <fieldset>
             <legend>Logged onto WIFI</legend>
@@ -29,31 +31,28 @@
     <script src="common.js"></script>
 
     <script>
-
-
-        function OnLoad()
-        {
+        function OnLoad() {
             let url = base + '/json/wificonfig'
 
             fetch(url)
-                .then(function (response) {
+                .then(function(response) {
                     if (response.ok)
                         return response.json();
                     throw new Error('network err')
                 })
-                .then(function (data) {
+                .then(function(data) {
 
                     //document.getElementById("devicename").innerText = data["name"] + ".local"
                     document.getElementById("ssid").innerText = data["ssid"]
-                    var anchor=document.getElementById("ip")
+                    var anchor = document.getElementById("ip")
                     anchor.innerText = data["ip"]
-                    anchor.setAttribute("href", "http://"+data["ip"])
+                    anchor.setAttribute("href", "http://" + data["ip"])
 
 
 
                     //document.getElementById("rescan").disabled = false;
                     document.getElementById("stopAP").disabled = false;
-                }).catch(function (error) {
+                }).catch(function(error) {
                     wifis.innerText = "Error"
                 })
 
@@ -63,21 +62,15 @@
 
             let url = base + "/stopAP"
 
-            var xhr = new XMLHttpRequest();
+            postSettingReturnPromise({}, url).then(function(response) {
 
-            xhr.open("POST", url, true);
-            xhr.setRequestHeader("Content-type", "text/plain");
-
-            xhr.send();
-
-
+            })
 
 
         }
-
-
     </script>
 
 
 </BODY>
+
 </HTML>

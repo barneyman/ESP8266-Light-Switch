@@ -541,16 +541,9 @@
 
             let url = base + '/button?port=' + number + '&action=' + state
 
-            var xhr = new XMLHttpRequest();
-
-            xhr.open("POST", url, true);
-            xhr.setRequestHeader("Content-type", "text/plain");
-
-            xhr.onloadend = function() {
+            postSettingReturnPromise({}, url).then(function(response) {
                 PopulateSwSenCamList(true)
-            }
-            xhr.send();
-
+            })
 
         }
 
@@ -621,12 +614,10 @@
 
             let url = base + '/reboot'
 
-            var xhr = new XMLHttpRequest();
+            postSettingReturnPromise({}, url).then(function(response) {
+                Alert("Device Rebooted")
+            })
 
-            xhr.open("POST", url, true);
-            xhr.setRequestHeader("Content-type", "text/plain");
-
-            xhr.send();
 
         }
 
@@ -638,12 +629,10 @@
 
             let url = base + '/resetWIFI'
 
-            var xhr = new XMLHttpRequest();
+            postSettingReturnPromise({}, url).then(function(response) {
 
-            xhr.open("POST", url, true);
-            xhr.setRequestHeader("Content-type", "text/plain");
+            })
 
-            xhr.send();
 
         }
 
@@ -676,14 +665,17 @@
 
                 let url = base + '/json/upgrade'
 
-                var xhr = new XMLHttpRequest();
+                const options = {
+                    method: 'post',
+                    headers: {
+                        'Content-type': 'text/json'
+                    },
+                    body: JSON.stringify(jsonData)
+                }
 
-                xhr.open("POST", url, true);
-                xhr.setRequestHeader("Content-type", "text/plain");
-
-
-                // then wait on a response
-                xhr.onloadend = function() {
+                fetch(url, options).then(function(response) {
+                    return response.json();
+                }).then(function(jsonResponse) {
                     // done
                     // parse it
                     var jsonResponse = JSON.parse(xhr.responseText);
@@ -694,9 +686,9 @@
                         // reload the whole site?
                         window.location.reload(true)
                     }
-                };
 
-                xhr.send(JSON.stringify(jsonData));
+                })
+
 
             } else
                 alert('values cannot be empty')
