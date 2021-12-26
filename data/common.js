@@ -1,7 +1,6 @@
 // when testing these web pages from the PC ... base should point to the esp mule
 // chrome --disable-web-security --user-data-dir="[some directory here]"
 //let base = "http://192.168.4.1"
-let base = "."
 
 function headerLoaded() {
     let url = base + "/json/config";
@@ -231,13 +230,10 @@ function addDeviceAndConfig() {
 
             // skip the legend
             for (var eachChild = 1; eachChild < lineItems.length; eachChild++) {
-                console.log(lineItems[eachChild].children.length)
 
                 var optname = lineItems[eachChild].children[0].innerText;
                 var optValue = null
                 var valueHolder = lineItems[eachChild].children[1]
-
-                console.log(valueHolder.tagName)
 
                 switch (valueHolder.tagName) {
                     case "SELECT":
