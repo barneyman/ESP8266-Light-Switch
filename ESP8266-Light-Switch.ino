@@ -1040,17 +1040,12 @@ void setup(void)
 
 	SPIFFS.begin();
 
-// reading json could change the logger, so in prod do before we create the logger
-#ifndef _DEVELOPER_BUILD
 	ReadJSONconfig();
-#endif	
 
 	createLogger();
 	// ONLY AFTER HERE WILL THERE BE LOGGING!
+	// createLogger nulls dblog, so be aware of that
 
-#ifdef _DEVELOPER_BUILD
-	ReadJSONconfig();
-#endif	
 
 	// add the options
 	loadOptions();
