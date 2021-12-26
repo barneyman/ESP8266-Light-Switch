@@ -352,7 +352,7 @@ struct
 
 	// logging
 #ifdef _DEVELOPER_BUILD	
-	debug::dbLevel::dbVerbose,
+	debug::dbLevel::dbInfo,
 	//debug::dbLevel::dbImportant,
 	debug::dbImpl::dbSerial,
 #else
