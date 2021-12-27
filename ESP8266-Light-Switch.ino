@@ -2661,7 +2661,7 @@ void InstallWebServerHandlers()
 
 #ifdef _ESP_USE_ASYNC_WEB
 		AsyncWebServerResponse *response = request->beginResponse(200, "application/json", jsonText);
-		wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+		response->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
 		request->send(response);
 #else
 		wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
@@ -2783,7 +2783,7 @@ void InstallWebServerHandlers()
 
 #ifdef _ESP_USE_ASYNC_WEB
 		AsyncWebServerResponse *response = request->beginResponse(200, "application/json", jsonText);
-		wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+		response->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
 		request->send(response);
 #else
 		//wifiInstance.server.sendHeader("Cache-Control", "max-age=120");
