@@ -108,7 +108,7 @@
 #ifndef _VERSION_NUM_CLI
 
 //	#define _VERSION_NUM "v99.99.99.pr"
-	#define _VERSION_NUM "v0.0.1.pr"
+	#define _VERSION_NUM "v0.1.0.pr"
 	#define _DEVELOPER_BUILD
 
 #else
