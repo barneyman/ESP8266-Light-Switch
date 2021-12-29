@@ -27,7 +27,7 @@ Settings were gleaned from the `boards.txt` under the `hardware` directories
 ## Sonoff (reset before each step)
 ### clean
 `esptool.py --chip esp8266 --port COM5 erase_flash`
-### Both
+### Simultaneous
 `esptool.py --chip esp8266 --port COM5 write_flash -fs 1MB -fm dout 0x0 .\build\sonoffbasic.bin 0xDB000 ./sonoffbasic.img`
 
 ### binary image
