@@ -21,5 +21,17 @@ Settings were gleaned from the `boards.txt` under the `hardware` directories
 `pip install esptool`
 
 ## Wemos D1 4M1M
+### spiffs image
 `esptool.py --chip esp8266 --before default_reset --after hard_reset --baud 921600 --port <Serial Port> write_flash 0x300000 ./wemosd1.img`
+
+## Sonoff (reset before each step)
+### clean
+`esptool.py --chip esp8266 --port COM5 erase_flash`
+### Both
+`esptool.py --chip esp8266 --port COM5 write_flash -fs 1MB -fm dout 0x0 .\build\sonoffbasic.bin 0xDB000 ./sonoffbasic.img`
+
+### binary image
+~~`esptool.py --chip esp8266 --port COM5 write_flash -fs 1MB -fm dout 0x0 .\build\sonoffbasic.bin`~~
+### spiffs image
+~~`esptool.py --chip esp8266 --port COM5 write_flash -fm dout 0xDB000 ./sonoffbasic.img`~~
 
