@@ -1,7 +1,7 @@
 {
     "board": "esp32:esp32:esp32wrover",
     "port": "COM6",
-    "sketch": "lightswitch.ino",
+    "sketch": "ESP8266-Light-Switch.ino",
     "output": ".build",
     "configuration": "PartitionScheme=min_spiffs,FlashMode=qio,FlashFreq=80,UploadSpeed=115200,DebugLevel=none"
 }

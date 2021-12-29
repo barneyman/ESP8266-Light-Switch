@@ -1,7 +1,7 @@
 {
     "board": "esp32:esp32:esp32",
     "port": "COM6",
-    "sketch": "lightswitch.ino",
+    "sketch": "ESP8266-Light-Switch.ino",
     "output": ".build",
     "configuration": "PSRAM=disabled,PartitionScheme=min_spiffs,CPUFreq=240,FlashMode=qio,FlashFreq=80,FlashSize=4M,UploadSpeed=115200,DebugLevel=none"
 }
