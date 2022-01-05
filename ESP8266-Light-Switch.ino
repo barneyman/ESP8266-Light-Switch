@@ -1224,9 +1224,9 @@ void performUpdate(String url, String urlSpiffs)
 		{
 		case HTTP_UPDATE_FAILED:
 #ifdef ESP32
-			if(Details.dblog) Details.dblog->printf(debug::dbError, "HTTP_UPDATE_FAILED Error (%d): %s\r", httpUpdate.getLastError(), httpUpdate.getLastErrorString().c_str());
+			if(Details.dblog) Details.dblog->printf(debug::dbError, "%s HTTP_UPDATE_FAILED Error (%d): %s\r",(!updates?urlSpiffs.c_str():url.c_str()), httpUpdate.getLastError(), httpUpdate.getLastErrorString().c_str());
 #else
-			if(Details.dblog) Details.dblog->printf(debug::dbError, "HTTP_UPDATE_FAILED Error (%d): %s\r", ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
+			if(Details.dblog) Details.dblog->printf(debug::dbError, "%s HTTP_UPDATE_FAILED Error (%d): %s\r",(!updates?urlSpiffs.c_str():url.c_str()), ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
 #endif			
 			break;
 		case HTTP_UPDATE_NO_UPDATES:
