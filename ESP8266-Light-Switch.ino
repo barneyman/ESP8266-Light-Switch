@@ -1216,7 +1216,7 @@ void performUpdate(String url, String urlSpiffs)
 			result=httpUpdate.update(wifiInstance.m_wificlient, url+urlArgs, _MYVERSION);
 #else
 			ESPhttpUpdate.rebootOnUpdate(false);
-			result=ESPhttpUpdate.update(url+urlArgs, _MYVERSION);
+			result=ESPhttpUpdate.update(wifiInstance.m_wificlient,url+urlArgs, _MYVERSION);
 #endif			
 		}
 
@@ -1224,9 +1224,9 @@ void performUpdate(String url, String urlSpiffs)
 		{
 		case HTTP_UPDATE_FAILED:
 #ifdef ESP32
-			if(Details.dblog) Details.dblog->printf(debug::dbError, "HTTP_UPDATE_FAILED Error (%d): %s", httpUpdate.getLastError(), httpUpdate.getLastErrorString().c_str());
+			if(Details.dblog) Details.dblog->printf(debug::dbError, "HTTP_UPDATE_FAILED Error (%d): %s\r", httpUpdate.getLastError(), httpUpdate.getLastErrorString().c_str());
 #else
-			if(Details.dblog) Details.dblog->printf(debug::dbError, "HTTP_UPDATE_FAILED Error (%d): %s", ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
+			if(Details.dblog) Details.dblog->printf(debug::dbError, "HTTP_UPDATE_FAILED Error (%d): %s\r", ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
 #endif			
 			break;
 		case HTTP_UPDATE_NO_UPDATES:
