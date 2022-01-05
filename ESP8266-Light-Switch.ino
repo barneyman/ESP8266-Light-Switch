@@ -352,8 +352,7 @@ struct
 
 	// logging
 #ifdef _DEVELOPER_BUILD	
-	debug::dbLevel::dbInfo,
-	//debug::dbLevel::dbImportant,
+	debug::dbLevel::dbImportant,
 	debug::dbImpl::dbSerial,
 #else
 	debug::dbLevel::dbImportant,
@@ -994,7 +993,7 @@ void createLogger()
 				SerialDebug*newOne=new SerialDebug(Details.loggingLevel);
 				// Sonoff doesn't APPEAR to handle any faster
 #ifdef PLATFORM_SONOFF_SWITCH
-				newOne->begin(9600);
+				newOne->begin(57600);
 #else
 				newOne->begin(115200);
 #endif				
@@ -2587,7 +2586,7 @@ void InstallWebServerHandlers()
 	});
 
 
-#ifndef PLATFORM_SONOFF_SWITCH
+
 
 #ifdef _ESP_USE_ASYNC_WEB
 	wifiInstance.server.on("/json/devices", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -2669,7 +2668,6 @@ void InstallWebServerHandlers()
 #endif		
 	});
 
-#endif
 
 #ifdef _ESP_USE_ASYNC_WEB
 	wifiInstance.server.on("/json/config", HTTP_GET, [](AsyncWebServerRequest *request) {
@@ -2965,7 +2963,7 @@ void InstallWebServerHandlers()
 		String file = dir.fileName();
 #endif		
 
-#ifndef _DEVELOPER_BUILD
+#ifndef _DEVELOPER_BUILD_
 		// ensure it doesn't have a leading underscore - hidden flag for me
 		if (file.length() > 1 && file[1] == '_')
 		{
