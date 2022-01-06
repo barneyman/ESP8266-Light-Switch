@@ -130,6 +130,9 @@ function showCorrectDeviceConfig() {
     // get the impl that's selected, and unhide that tab
     var configs = getDeviceConfigsFieldset()
     var selector = document.getElementById("additionaDevicesSelect");
+    if (!selector.length)
+        return
+
     var selected = selector.options[selector.selectedIndex].innerText
 
     for (var loop = 0; loop < configs.length; loop++) {
