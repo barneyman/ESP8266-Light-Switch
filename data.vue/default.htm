@@ -1,0 +1,473 @@
+<html>
+
+<head>
+
+    <link rel="stylesheet" type="text/css" href="style.css">
+
+
+    <script src="vue.js">
+    </script>
+
+</head>
+
+
+
+
+<body>
+    <div id="app">
+        <app-head v-bind:config="config"></app-head>
+        <hr>
+        <app-nav v-bind:pages="pages" v-on:clicked="tabSelected"></app-nav>
+        <hr>
+        <app-content-home v-if="isTabSelected('Home')" v-bind:state="state" v-bind:config="config"></app-content-home>
+        <app-content-config v-if="isTabSelected('Config')" v-bind:state="state" v-bind:devices="devices"></app-content-config>
+        <app-content-admin v-if="isTabSelected('Admin')" v-bind:config="config" v-bind:peers="peers"></app-content-admin>
+        <app-content-logging v-if="isTabSelected('Logging')" v-bind:config="config"></app-content-logging>
+        <!-- <app-view>
+            <app-sidebar></app-sidebar>
+            <app-content></app-content>
+        </app-view> -->
+    </div>
+
+    <script>
+        let base = "http://192.168.51.110"
+
+
+
+
+        // navbar
+        Vue.component('app-nav', {
+            props: ['pages'],
+            template: '<ul class="main">\
+                            <li v-for="page in pages.pages" v-on:click="clicked(page.name)" >{{ page.name }}</li>\
+                        </ul>',
+            methods: {
+                clicked: function(pagename) {
+                    this.$emit('clicked', pagename)
+                }
+            }
+        })
+
+        // define the header
+        Vue.component('app-head', {
+            props: ["config"],
+            template: '<div v-if="config.populated" class="heading">\
+                            <div class="vertverticalContainer"></div>\
+                                <div class="horizontalContainer">\
+                                    <div >{{ config.name }}</div>\
+                                    <div v-for="ver in config.version.split(\'|\')">{{ ver }}</div>\
+                                </div>\
+                        </div>\
+                        <div v-else>Unavailable</div>'
+        })
+
+        Vue.component('switch-state', {
+            props: ["state"],
+            template: '<div><div class="horizontalContainer"><div>{{ state.name }} </div>\
+            <button v-on:click="switchPressed(state.switch, state.state?\'off\':\'on\')">\
+                <span v-if="state.state==0">Turn ON</span>\
+                <span v-else>Turn OFF</span>\
+            </button>\
+            </div><br></div>',
+            methods: {
+
+                switchPressed: function(id, newstate) {
+                    let url = base + '/button?port=' + id + '&action=' + newstate
+                    postSettingReturnPromise({}, url).then(function(response) {
+                        refreshData(false)
+                    })
+                }
+            }
+        })
+
+
+        Vue.component('sensor-state', {
+            props: ["item", "itemState"],
+            template: '<div><div class="horizontalContainer">\
+                            <div>{{ item.name }}</div>\
+                            <div class="verticalContainer">\
+                                    <div v-for="element in item.elements">{{ element.type }}: {{ itemState[element.type] }} {{ element.uom }}</div>\
+                            </div>\
+                        </div><br></div>'
+        })
+
+        Vue.component('app-content-home', {
+            props: ["state", "config"],
+            template: '<div id="home">\
+                            <fieldset v-if="state.switchCount"><legend>Switches</legend>\
+                                <div class="verticalContainer">\
+                                    <switch-state v-for="state in state.switchState" v-bind:state="state" v-bind:key="state.switch"></switch-state>\
+                                </div>\
+                            </fieldset>\
+                            <fieldset v-if="state.sensorCount"><legend>Sensors</legend>\
+                                <div class="verticalContainer">\
+                                    <sensor-state v-for="config in config.sensorConfig" v-bind:item="config" v-bind:itemState="state.sensorState[config.sensor]" v-bind:key="config.sensor"></sensor-state>\
+                                </div>\
+                            </fieldset>\
+                            <fieldset v-if="state.cameraCount"><legend>Cameras</legend>\
+                            </fieldset>\
+                        </div>'
+
+
+        })
+
+        Vue.component('app-content-config', {
+            props: ["state", "devices"],
+            template: '<div id="config">\
+                            <fieldset><legend>Devices</legend>\
+                                <fieldset><legend>Installed</legend>\
+                                    <div class="verticalContainer">\
+                                        <div v-for="instance in devices.instances">\
+                                            <div class="horizontalContainer">\
+                                                <div>{{ instance.name }} </div>\
+                                                <button class="button_red" v-on:click="removePressed(instance.id,instance.config,instance.instance,instance.name)">\
+                                                Remove\
+                                                </button>\
+                                            </div>\
+                                        <br>\
+                                        </div>\
+                                    </div>\
+                                </fieldset>\
+                                <fieldset><legend>Available</legend>\
+                                    <div class=horizontalContainer>\
+                                        <select>\
+                                            <option v-bind:value="option.id" v-for="option in devices.options" v-bind:key="option.id">{{option.name}}</option>\
+                                        </select>\
+                                        <fieldset><legend>IO Pins</legend></fieldset>\
+                                        <button>Add</button>\
+                                    </div>\
+                                </fieldset>\
+                            </fieldset>\
+                        </div>',
+            methods: {
+                removePressed: function(id, config, instance, name) {
+                    if (confirm("About to remove device '" + name + "'")) {
+                        var jsonData = {}
+                        jsonData["id"] = id;
+                        jsonData["config"] = config;
+                        jsonData["instance"] = instance;
+                        let url = base + '/json/devices/del'
+                        postSettingReturnPromise(jsonData, url).then(function(response) {
+                            refreshData(true)
+
+                        })
+                    }
+
+                }
+            }
+        })
+
+        Vue.component('app-content-admin', {
+            props: ["config", "peers"],
+            template: '<div id="admin">\
+                            <fieldset><legend>Name</legend>\
+                                <div class="horizontalContainer">\
+                                    <div>\
+                                        <input v-bind:value="config.friendlyName" type="text"></input>\
+                                    </div>\
+                                    <div>\
+                                        <button>Set</button>\
+                                    </div>\
+                                </div>\
+                            </fieldset>\
+                            <fieldset><legend>Options</legend>\
+                                <fieldset><legend>OTA</legend>\
+                                    <div class="vertalContainer">\
+                                        <div class="horizontalContainer">\
+                                            <span>Update while on?</span>\
+                                            <input type="checkbox"></input>\
+                                        </div>\
+                                        <div class="horizontalContainer">\
+                                            <span>Accept pre-releases?</span>\
+                                            <input type="checkbox"></input>\
+                                        </div>\
+                                    </div>\
+                                </fieldset>\
+                                <div class="vertalContainer">\
+                                    <div class="horizontalContainer">\
+                                        <button class="button_red">Reset Wifi Details</button>\
+                                        <button class="button_red">Reboot Device</button>\
+                                    </div>\
+                                </div>\
+                            </fieldset>\
+                            <fieldset><legend>Peers</legend>\
+                                <div class="verticalContainer">\
+                                    <div class="horizontalContainer" v-for="peer in peers.peers">\
+                                        <span> {{ peer.name }} </span>\
+                                    </div>\
+                                </div>\
+                            </fieldset>\
+                        </div>'
+
+        })
+
+        Vue.component('app-content-logging', {
+            props: ["config"],
+            template: '<div id="logging">\
+                            <fieldset><legend>Logging</legend>\
+                            </fieldset>\
+                        </div>'
+        })
+
+
+        var app = new Vue({
+            el: '#app',
+            methods: {
+                tabSelected: function(name) {
+                    this.pages.activePage = name
+                },
+                isTabSelected: function(name) {
+                    return this.pages.activePage == name
+                }
+            },
+            data: {
+                pages: {
+                    activePage: 'Home',
+                    pages: [{
+                        name: "Home",
+                        ordinal: 0
+                    }, {
+                        name: "Config",
+                        ordinal: 1
+                    }, {
+                        name: "Admin",
+                        ordinal: 2
+                    }, {
+                        name: "Logging",
+                        ordinal: 3
+                    }]
+                },
+                config: {
+                    "populated": true,
+                    "name": "esp_2dacf4",
+                    "version": "sonoff_basic|v0.1.7.pr",
+                    "ip": "192.168.51.110",
+                    "mac": "DC:4F:22:2D:AC:F4",
+                    "friendlyName": "upright",
+                    "prerelease": 0,
+                    "upgradeOnlyWhenRelayOff": 1,
+                    "switchCount": 1,
+                    "switchConfig": [{
+                        "switch": 0,
+                        "impl": "rest",
+                        "name": "Default"
+                    }],
+                    "sensorCount": 3,
+                    "sensorConfig": [{
+                        "sensor": 0,
+                        "elements": [{
+                            "type": "temperature",
+                            "uom": "°C",
+                            "round": "1"
+                        }],
+                        "name": "DS18B20"
+                    }, {
+                        "sensor": 1,
+                        "elements": [{
+                            "type": "temperature",
+                            "uom": "°C",
+                            "round": "1"
+                        }, {
+                            "type": "pressure",
+                            "uom": "hPa",
+                            "round": "1"
+                        }, {
+                            "type": "humidity",
+                            "uom": "%",
+                            "round": "0"
+                        }],
+                        "name": "BME280"
+                    }, {
+                        "sensor": 2,
+                        "elements": [{
+                            "type": "illuminance",
+                            "uom": "Lux",
+                            "round": "0"
+                        }],
+                        "name": "MAX44009"
+                    }]
+                },
+                state: {
+                    "name": "esp_2dacf4",
+                    "friendlyName": "upright",
+                    "ip": "192.168.51.110",
+                    "switchCount": 1,
+                    "switchState": [{
+                        "switch": 0,
+                        "state": 0,
+                        "stateChanges": 12,
+                        "type": "Momentary",
+                        "name": "Default"
+                    }],
+                    "sensorCount": 3,
+                    "sensorState": [{
+                        "sensor": 0,
+                        "temperature_error": "No DSs found",
+                        "name": "DS18B20"
+                    }, {
+                        "sensor": 1,
+                        "temperature": 25,
+                        "pressure": 1021.249,
+                        "humidity": 66.44434,
+                        "name": "BME280"
+                    }, {
+                        "sensor": 2,
+                        "illuminance": 414.72,
+                        "name": "MAX44009"
+                    }],
+                    "cameraCount": 0
+                },
+                devices: {
+                    "instances": [{
+                        "id": 256,
+                        "config": "{\"GPIO\":13}",
+                        "name": "Dallas Temperature Sensor",
+                        "instance": 1073684292
+                    }, {
+                        "id": 257,
+                        "config": "",
+                        "name": "BME280 Environment Sensor",
+                        "instance": 1073684612
+                    }, {
+                        "id": 258,
+                        "config": "",
+                        "name": "MAX44009 Lux Sensor",
+                        "instance": 1073684988
+                    }],
+                    "options": [{
+                        "name": "Dallas Temperature Sensor",
+                        "id": 256,
+                        "config": [{
+                            "name": "GPIO",
+                            "type": "select",
+                            "options": [{
+                                "name": "D0",
+                                "value": 16
+                            }, {
+                                "name": "D1",
+                                "value": 5
+                            }, {
+                                "name": "D2",
+                                "value": 4
+                            }, {
+                                "name": "D5",
+                                "value": 14
+                            }, {
+                                "name": "D6",
+                                "value": 12
+                            }, {
+                                "name": "D7",
+                                "value": 13
+                            }]
+                        }]
+                    }, {
+                        "name": "BME280 Environment Sensor",
+                        "id": 257
+                    }, {
+                        "name": "MAX44009 Lux Sensor",
+                        "id": 258
+                    }, {
+                        "name": "HC-SR501 PIR Sensor",
+                        "id": 259,
+                        "config": [{
+                            "name": "GPIO",
+                            "type": "select",
+                            "options": [{
+                                "name": "D0",
+                                "value": 16
+                            }, {
+                                "name": "D1",
+                                "value": 5
+                            }, {
+                                "name": "D2",
+                                "value": 4
+                            }, {
+                                "name": "D5",
+                                "value": 14
+                            }, {
+                                "name": "D6",
+                                "value": 12
+                            }, {
+                                "name": "D7",
+                                "value": 13
+                            }]
+                        }]
+                    }]
+                },
+                peers: {
+                    "name": "esp_b75c4f",
+                    "peerCount": 2,
+                    "ip": "192.168.51.144",
+                    "peers": [{
+                        "name": "esp_a799d7.local",
+                        "ip": "192.168.51.136"
+                    }, {
+                        "name": "esp_583f4e.local",
+                        "ip": "192.168.51.101"
+                    }]
+                },
+                logging: {
+                    "impl": 1,
+                    "level": 0,
+                    "impls": [{
+                        "value": 0,
+                        "name": "None",
+                        "config": []
+                    }, {
+                        "value": 1,
+                        "name": "Serial",
+                        "config": []
+                    }, {
+                        "value": 2,
+                        "name": "SysLog",
+                        "config": [{
+                            "name": "Host",
+                            "type": "text"
+                        }]
+                    }],
+                    "levels": [{
+                        "value": 0,
+                        "name": "Verbose"
+                    }, {
+                        "value": 1,
+                        "name": "Info"
+                    }, {
+                        "value": 2,
+                        "name": "Important"
+                    }, {
+                        "value": 3,
+                        "name": "Warning"
+                    }, {
+                        "value": 4,
+                        "name": "Error"
+                    }]
+                }
+
+            },
+
+        })
+    </script>
+
+    <script>
+        function refreshData(deep) {
+            // if deep, get the expensive stuff
+        }
+
+        function postSettingReturnPromise(config, url) {
+
+            const options = {
+                method: 'post',
+                headers: {
+                    'Content-type': 'text/json'
+                },
+                body: JSON.stringify(config)
+            }
+
+            return fetch(url, options)
+
+        }
+    </script>
+
+</body>
+
+</html>
