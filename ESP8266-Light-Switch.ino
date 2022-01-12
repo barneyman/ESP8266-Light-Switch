@@ -287,6 +287,10 @@ struct
 	bool updateAvailable;
 	String url, urlSpiffs;
 
+	// wifi joins / stops
+	bool wifiChangeRequested;
+	myWifiClass::wifiMode desiredMode;
+
 	// transient
 #ifdef _ALLOW_WIFI_RESET_AFTER_AP_JOIN_TIMEOUT
 	unsigned long runtimeWhenLastJoined;
@@ -363,6 +367,9 @@ struct
 
 	// update
 	false,"","",
+
+	// wifi change
+	false, myWifiClass::wifiMode::modeAP,
 
 
 	// transient
@@ -2185,17 +2192,8 @@ void InstallWebServerHandlers()
 			Details.wifi.netmask.fromString((const char*)root["netmask"]);
 		}
 
-		// force attempt
-		// if we succeedefd, send back success, then change to STA
-		if (wifiInstance.ConnectWifi(myWifiClass::wifiMode::modeSTAspeculative, Details.wifi) == myWifiClass::wifiMode::modeSTAandAP)
-		{
-			
-			Details.wifi.configured = true;
-		}
-		else
-		{
-			Details.wifi.configured = false;
-		}
+		Details.desiredMode=myWifiClass::wifiMode::modeSTAspeculative;
+		Details.wifiChangeRequested=true;
 
 		// and update json
 		WriteJSONconfig();
@@ -3063,6 +3061,23 @@ void loop(void)
 		Details.urlSpiffs.clear();
 	}
 
+	if(Details.wifiChangeRequested)
+	{
+		// Details.desiredMode
+		if (wifiInstance.ConnectWifi(Details.desiredMode, Details.wifi) == myWifiClass::wifiMode::modeSTAandAP)
+		{
+			
+			Details.wifi.configured = true;
+		}
+		else
+		{
+			Details.wifi.configured = false;
+		}
+
+		Details.wifiChangeRequested=false;
+		// and update json
+		WriteJSONconfig();
+	}
 
 #ifdef _ALLOW_WIFI_RESET
 	if (Details.resetWIFI)
