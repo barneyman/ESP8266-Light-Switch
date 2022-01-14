@@ -1124,7 +1124,7 @@ void setup(void)
 
 
 	// set up the callback handlers for the webserver
-	InstallWebServerHandlers();
+	InstallWebServerHandlers(true);
 
 	// reset the clock
 	Details.runtimeWhenLastJoined=millis();
@@ -1309,7 +1309,7 @@ void onPostBodyHandler(AsyncWebServerRequest *request, uint8_t *data, size_t len
 
 
 // set up all the handlers for the web server
-void InstallWebServerHandlers()
+void InstallWebServerHandlers(bool enableCORS)
 {
 	if(Details.dblog) Details.dblog->println(debug::dbVerbose, "InstallWebServerHandlers IN");
 
@@ -1318,6 +1318,8 @@ void InstallWebServerHandlers()
 	// all ON/OFF 
 	// switch ON/OFF
 	// revert
+
+	wifiInstance.server.enableCORS(enableCORS);
 
 
 
