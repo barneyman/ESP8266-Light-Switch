@@ -13,16 +13,16 @@
 
 
 
-<body>
+<body onload="OnLoad()">
     <div id="app">
         <app-head v-bind:config="config"></app-head>
         <hr>
         <app-nav v-bind:pages="pages" v-on:clicked="tabSelected"></app-nav>
         <hr>
         <app-content-home v-if="isTabSelected('Home')" v-bind:state="state" v-bind:config="config"></app-content-home>
-        <app-content-config v-if="isTabSelected('Config')" v-bind:state="state" v-bind:devices="devices"></app-content-config>
+        <app-content-config v-if="isTabSelected('Devices')" v-bind:state="state" v-bind:devices="devices"></app-content-config>
         <app-content-admin v-if="isTabSelected('Admin')" v-bind:config="config" v-bind:peers="peers"></app-content-admin>
-        <app-content-logging v-if="isTabSelected('Logging')" v-bind:config="config"></app-content-logging>
+        <app-content-logging v-if="isTabSelected('Logging')" v-bind:logging="logging"></app-content-logging>
         <!-- <app-view>
             <app-sidebar></app-sidebar>
             <app-content></app-content>
@@ -30,7 +30,8 @@
     </div>
 
     <script>
-        let base = "http://192.168.51.110"
+        //let base = "http://192.168.51.110"
+        let base = "http://192.168.51.144"
 
 
 
@@ -39,7 +40,7 @@
         Vue.component('app-nav', {
             props: ['pages'],
             template: '<ul class="main">\
-                            <li v-for="page in pages.pages" v-on:click="clicked(page.name)" >{{ page.name }}</li>\
+                            <li v-bind:class="{ activeTab: pages.activePage==page.name}"  v-for="page in pages.pages" v-on:click="clicked(page.name)" >{{ page.name }}</li>\
                         </ul>',
             methods: {
                 clicked: function(pagename) {
@@ -51,14 +52,14 @@
         // define the header
         Vue.component('app-head', {
             props: ["config"],
-            template: '<div v-if="config.populated" class="heading">\
+            template: '<div class="heading">\
                             <div class="vertverticalContainer"></div>\
                                 <div class="horizontalContainer">\
                                     <div >{{ config.name }}</div>\
                                     <div v-for="ver in config.version.split(\'|\')">{{ ver }}</div>\
                                 </div>\
-                        </div>\
-                        <div v-else>Unavailable</div>'
+                        </div>'
+
         })
 
         Vue.component('switch-state', {
@@ -115,7 +116,7 @@
             props: ["state", "devices"],
             template: '<div id="config">\
                             <fieldset><legend>Devices</legend>\
-                                <fieldset><legend>Installed</legend>\
+                                <fieldset v-if="devices.instances.length"><legend>Installed</legend>\
                                     <div class="verticalContainer">\
                                         <div v-for="instance in devices.instances">\
                                             <div class="horizontalContainer">\
@@ -130,10 +131,16 @@
                                 </fieldset>\
                                 <fieldset><legend>Available</legend>\
                                     <div class=horizontalContainer>\
-                                        <select>\
-                                            <option v-bind:value="option.id" v-for="option in devices.options" v-bind:key="option.id">{{option.name}}</option>\
+                                        <select v-on:change="deviceChanged($event)">\
+                                            <option v-bind:value="newdevice.id" v-for="(newdevice,index) in devices.options" v-bind:key="newdevice.id" v-bind:selected="index === 0"> {{newdevice.name}}</option>\
                                         </select>\
-                                        <fieldset><legend>IO Pins</legend></fieldset>\
+                                        <div v-if="deviceActive(newdevice.id)" v-for="newdevice in devices.options">\
+                                            <div v-for="opts in newdevice.config">{{opts.name}}\
+                                                <select v-if="opts.type==\'select\'">\
+                                                    <option v-bind:value="opt.value" v-for="opt in opts.options">{{ opt.name }}</option>\
+                                                </select>\
+                                            </div>\
+                                        </div>\
                                         <button>Add</button>\
                                     </div>\
                                 </fieldset>\
@@ -149,24 +156,79 @@
                         let url = base + '/json/devices/del'
                         postSettingReturnPromise(jsonData, url).then(function(response) {
                             refreshData(true)
-
                         })
                     }
+                },
+                deviceChanged: function(event) {
+                    console.log('deviceChanged ' + event.target.value)
+                    this.activeDevice = event.target.value
 
+                    console.log('setting ' + this.activeDevice)
+
+                },
+                deviceActive: function(id) {
+                    console.log('deviceActive ' + this.activeDevice)
+                    return id == this.activeDevice
+                }
+            },
+            data: function() {
+                return {
+                    activeDevice: 1
                 }
             }
         })
 
         Vue.component('app-content-admin', {
             props: ["config", "peers"],
+
+            methods: {
+                setFriendlyName: function(newfname) {
+                    this.sendConfig("friendlyName", newfname)
+                },
+                setPrerelease: function(prerel) {
+                    this.sendConfig("prerelease", prerel)
+                },
+                setUpgradeBehaviour: function(uponoff) {
+                    this.sendConfig("upgradeOnlyWhenRelayOff", uponoff)
+                },
+
+                sendConfig: function(prop, val) {
+                    var jsonData = {}
+                    jsonData[prop] = val;
+                    let url = base + '/json/config'
+                    postSettingReturnPromise(jsonData, url).then(function(response) {
+                        refreshData(true)
+                    })
+                },
+
+                resetWifi: function() {
+                    let url = base + '/resetWIFI'
+                    postSettingReturnPromise({}, url).then(function(response) {
+                        refreshData(true)
+                    })
+
+                },
+                rebootDevice: function() {
+                    let url = base + '/reboot'
+                    postSettingReturnPromise({}, url).then(function(response) {
+                        refreshData(true)
+                    })
+
+                }
+
+            },
+
+
+
+
             template: '<div id="admin">\
                             <fieldset><legend>Name</legend>\
                                 <div class="horizontalContainer">\
                                     <div>\
-                                        <input v-bind:value="config.friendlyName" type="text"></input>\
+                                        <input v-model="config.friendlyName" type="text"></input>\
                                     </div>\
                                     <div>\
-                                        <button>Set</button>\
+                                        <button v-on:click="setFriendlyName(config.friendlyName)">Set</button>\
                                     </div>\
                                 </div>\
                             </fieldset>\
@@ -175,25 +237,27 @@
                                     <div class="vertalContainer">\
                                         <div class="horizontalContainer">\
                                             <span>Update while on?</span>\
-                                            <input type="checkbox"></input>\
+                                            <input v-model="config.upgradeOnlyWhenRelayOff" v-on:change="setUpgradeBehaviour(config.upgradeOnlyWhenRelayOff)" type="checkbox"></input>\
                                         </div>\
                                         <div class="horizontalContainer">\
                                             <span>Accept pre-releases?</span>\
-                                            <input type="checkbox"></input>\
+                                            <input type="checkbox" v-model="config.prerelease" v-on:change="setPrerelease(config.prerelease)"></input>\
                                         </div>\
                                     </div>\
                                 </fieldset>\
                                 <div class="vertalContainer">\
                                     <div class="horizontalContainer">\
-                                        <button class="button_red">Reset Wifi Details</button>\
-                                        <button class="button_red">Reboot Device</button>\
+                                        <button class="button_red" v-on:click="resetWifi()">Reset Wifi Details</button>\
+                                        <button v-if="config.developer" class="button_red" v-on:click="rebootDevice()">Reboot Device</button>\
                                     </div>\
                                 </div>\
                             </fieldset>\
                             <fieldset><legend>Peers</legend>\
                                 <div class="verticalContainer">\
                                     <div class="horizontalContainer" v-for="peer in peers.peers">\
-                                        <span> {{ peer.name }} </span>\
+                                        <span>\
+                                            <a target="_blank" v-bind:href="\'http://\'+peer.ip">{{ peer.name }}</a>\
+                                        </span>\
                                     </div>\
                                 </div>\
                             </fieldset>\
@@ -202,11 +266,55 @@
         })
 
         Vue.component('app-content-logging', {
-            props: ["config"],
-            template: '<div id="logging">\
+            props: ["logging"],
+            template: '<div class="verticalContainer"> \
                             <fieldset><legend>Logging</legend>\
+                                <fieldset><legend>Level</legend>\
+                                    <div class="horizontalContainer">\
+                                        <select v-model="logging.level">\
+                                            <option v-bind:value="level.value" v-for="level in logging.levels">{{ level.name }}</option>\
+                                        </select>\
+                                        <button v-on:click="setLogLevel(logging.level)">Set</button>\
+                                    </div>\
+                                </fieldset>\
+                                <fieldset><legend>Implementation</legend>\
+                                    <div class="horizontalContainer">\
+                                        <select v-model="logging.impl">\
+                                            <option v-bind:value="impl.value" v-for="impl in logging.impls">{{ impl.name }}</option>\
+                                        </select>\
+                                        <button class="button_red" v-on:click="setLogImpl(logging.impl)">Set</button>\
+                                    </div>\
+                                </fieldset>\
                             </fieldset>\
-                        </div>'
+                        </div>',
+            methods: {
+                setLogLevel: function(level) {
+
+                    var jsonData = {}
+                    jsonData["level"] = level
+                    let url = base + '/json/logging'
+                    postSettingReturnPromise(jsonData, url).then(function(response) {
+                        refreshData(true)
+                    })
+
+
+                },
+
+                setLogImpl: function(impl) {
+                    if (confirm("About to change debug impl and reboot device - OK?")) {
+
+                        var jsonData = {}
+                        jsonData["impl"] = impl
+                        let url = base + '/json/logging'
+                        postSettingReturnPromise(jsonData, url).then(function(response) {
+                            refreshData(true)
+                        })
+                    }
+
+                }
+
+            }
+
         })
 
 
@@ -221,13 +329,16 @@
                 }
             },
             data: {
+                internal: {
+                    firstTimeFetch: true
+                },
                 pages: {
                     activePage: 'Home',
                     pages: [{
                         name: "Home",
                         ordinal: 0
                     }, {
-                        name: "Config",
+                        name: "Devices",
                         ordinal: 1
                     }, {
                         name: "Admin",
@@ -449,8 +560,62 @@
     </script>
 
     <script>
-        function refreshData(deep) {
-            // if deep, get the expensive stuff
+        function OnLoad() {
+
+            return
+
+            refreshData(app.internal.firstTimeFetch)
+
+            app.internal.firstTimeFetch = false;
+
+            setInterval(refreshData, 15 * 1000)
+
+        }
+
+        function refreshData(deep = false) {
+
+            genericFetchJSONReturnPromise(base + '/json/state')
+                .then(function(json) {
+                    app.state = json
+                }).then(function() {
+
+                    // if deep, get the expensive stuff
+                    if (deep) {
+                        // config
+                        genericFetchJSONReturnPromise(base + '/json/config')
+                            .then(function(json) {
+                                app.config = json
+                            }).then(function() {
+
+                                genericFetchJSONReturnPromise(base + '/json/devices')
+                                    .then(function(json) {
+                                        app.devices = json
+                                    }).then(function() {
+                                        genericFetchJSONReturnPromise(base + '/json/peers')
+                                            .then(function(json) {
+                                                app.peers = json
+                                            }).then(function(json) {
+                                                genericFetchJSONReturnPromise(base + '/json/logging')
+                                                    .then(function(json) {
+                                                        app.logging = json
+                                                    })
+                                            })
+                                    })
+                            })
+                    }
+                })
+        }
+
+        function genericFetchJSONReturnPromise(url) {
+            return fetch(url)
+                .then(function(response) {
+                    if (response.ok) {
+                        var json = response.json()
+                        return json;
+                    }
+
+                    throw new Error("fetch problem")
+                })
         }
 
         function postSettingReturnPromise(config, url) {

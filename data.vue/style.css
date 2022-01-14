@@ -29,7 +29,12 @@ ul.main {
 
 ul.main li {
     display: inline;
-    color: #fff
+    color: #ffffff
+}
+
+li.activeTab {
+    font-weight: bold;
+    background-color: #4b4bdf;
 }
 
 ul.main li a {
