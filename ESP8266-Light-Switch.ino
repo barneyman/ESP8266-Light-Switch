@@ -1335,8 +1335,11 @@ void InstallWebServerHandlers(bool enableCORS)
 	// switch ON/OFF
 	// revert
 
+#ifdef _ESP_USE_ASYNC_WEB
+	DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");
+#else
 	wifiInstance.server.enableCORS(enableCORS);
-
+#endif
 
 
 	// make all the relays reflect their switches
