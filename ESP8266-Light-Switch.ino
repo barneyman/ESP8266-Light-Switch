@@ -108,7 +108,7 @@
 #ifndef _VERSION_NUM_CLI
 
 //	#define _VERSION_NUM "v99.99.99.pr"
-	#define _VERSION_NUM "v0.1.0.pr"
+	#define _VERSION_NUM "v0.1.1.pr"
 	#define _DEVELOPER_BUILD
 
 #else
@@ -356,7 +356,8 @@ struct
 
 	// logging
 #ifdef _DEVELOPER_BUILD	
-	debug::dbLevel::dbImportant,
+	//debug::dbLevel::dbImportant,
+	debug::dbLevel::dbVerbose,
 	debug::dbImpl::dbSerial,
 #else
 	debug::dbLevel::dbImportant,
@@ -461,6 +462,16 @@ void DoRGBPaletteSwitch(bool on, unsigned rgbPalette)
 }
 
 #endif
+
+
+// never yield in32 (mostly because its using asyncweb which doesn't play well with yield)
+void yield2()	
+{
+#ifndef ESP32
+	yield();
+#endif
+	return;
+}
 
 
 // honour current switch state
@@ -1207,6 +1218,11 @@ void performUpdate(String url, String urlSpiffs)
 		if(!updates)
 		{
 			if(Details.dblog) Details.dblog->println(debug::dbImportant, "updating SPIFFS ...");
+			// before we do this. clean up spiffs
+			// bool gcret=SPIFFS.gc();
+			// if(Details.dblog) 
+			// 	Details.dblog->printf(debug::dbImportant, "SPIFFS garbage collect ... %s\r", (gcret?"true":"false"));
+
 #ifdef ESP32
 			result=httpUpdate.updateSpiffs(wifiInstance.m_wificlient ,urlSpiffs+urlArgs,_MYVERSION);
 #else			
@@ -2700,6 +2716,8 @@ void InstallWebServerHandlers(bool enableCORS)
 		root["prerelease"]=Details.prereleaseRequired?1:0;
 		root["upgradeOnlyWhenRelayOff"]=Details.upgradeOnlyWhenRelayOff?1:0;
 
+		root["wifiConfigured"]=Details.wifi.configured;
+
 #ifdef _AT_RGBSTRIP
 		root["ledCount"] = Details.rgbLedCount;
 #endif
@@ -2784,7 +2802,6 @@ void InstallWebServerHandlers(bool enableCORS)
 		response->addHeader("Cache-Control", "no-cache, no-store, must-revalidate");
 		request->send(response);
 #else
-		//wifiInstance.server.sendHeader("Cache-Control", "max-age=120");
 		wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
 		wifiInstance.server.send(200, "application/json", jsonText);
 #endif		
@@ -2972,8 +2989,20 @@ void InstallWebServerHandlers(bool enableCORS)
 		}
 #endif
 
-		// cache it for an hour
-		wifiInstance.server.serveStatic(file.c_str(), SPIFFS, file.c_str(),"Cache-Control: public, max-age=60");
+		// look for gzipd stuff
+		if(file.endsWith(".gz"))
+		{
+			// strip that *from the URI*
+			String uri=file;
+			uri.remove(file.length()-3,3);
+			// cache it for an hour, and flag as gzipped
+			wifiInstance.server.serveStatic(uri.c_str(), SPIFFS, file.c_str(),"Cache-Control: public, max-age=60\rContent-Encoding: gzip");
+		}
+		else
+		{
+			// cache it for an hour
+			wifiInstance.server.serveStatic(file.c_str(), SPIFFS, file.c_str(),"Cache-Control: public, max-age=60");
+		}
 
 		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Serving %s\r\n", file.c_str());
 

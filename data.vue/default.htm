@@ -17,12 +17,19 @@
     <div id="app">
         <app-head v-bind:config="config"></app-head>
         <hr>
-        <app-nav v-bind:pages="pages" v-on:clicked="tabSelected"></app-nav>
-        <hr>
-        <app-content-home v-if="isTabSelected('Home')" v-bind:state="state" v-bind:config="config"></app-content-home>
-        <app-content-config v-if="isTabSelected('Devices')" v-bind:state="state" v-bind:devices="devices"></app-content-config>
-        <app-content-admin v-if="isTabSelected('Admin')" v-bind:config="config" v-bind:peers="peers"></app-content-admin>
-        <app-content-logging v-if="isTabSelected('Logging')" v-bind:logging="logging"></app-content-logging>
+        <div v-if="config.wifiConfigured==0">
+            <app-nav v-bind:pages="pages" v-on:clicked="tabSelected"></app-nav>
+            <hr>
+            <app-content-home v-if="isTabSelected('Home')" v-bind:state="state" v-bind:config="config"></app-content-home>
+            <app-content-config v-if="isTabSelected('Devices')" v-bind:state="state" v-bind:devices="devices"></app-content-config>
+            <app-content-admin v-if="isTabSelected('Admin')" v-bind:config="config" v-bind:peers="peers"></app-content-admin>
+            <app-content-logging v-if="isTabSelected('Logging')" v-bind:logging="logging"></app-content-logging>
+        </div>
+        <div v-else>
+            <app-wizard-name v-bind:config="config"></app-wizard-name>
+            <app-wizard-device v-bind:devices="devices"></app-wizard-device>
+            <app-wizard-wifi v-bind:devices="wifi"></app-wizard-device>
+        </div>
         <!-- <app-view>
             <app-sidebar></app-sidebar>
             <app-content></app-content>
@@ -31,7 +38,8 @@
 
     <script>
         //let base = "http://192.168.51.110"
-        let base = "http://192.168.51.144"
+        //let base = "http://192.168.51.144"
+        let base = "http://192.168.51.101"
 
 
 
@@ -54,7 +62,7 @@
             props: ["config"],
             template: '<div class="heading">\
                             <div class="vertverticalContainer"></div>\
-                                <div class="horizontalContainer">\
+                                <div v-if="config.name" class="horizontalContainer">\
                                     <div >{{ config.name }}</div>\
                                     <div v-for="ver in config.version.split(\'|\')">{{ ver }}</div>\
                                 </div>\
@@ -160,14 +168,9 @@
                     }
                 },
                 deviceChanged: function(event) {
-                    console.log('deviceChanged ' + event.target.value)
                     this.activeDevice = event.target.value
-
-                    console.log('setting ' + this.activeDevice)
-
                 },
                 deviceActive: function(id) {
-                    console.log('deviceActive ' + this.activeDevice)
                     return id == this.activeDevice
                 }
             },
@@ -348,7 +351,8 @@
                         ordinal: 3
                     }]
                 },
-                config: {
+                config: {},
+                config2: {
                     "populated": true,
                     "name": "esp_2dacf4",
                     "version": "sonoff_basic|v0.1.7.pr",
@@ -398,7 +402,8 @@
                         "name": "MAX44009"
                     }]
                 },
-                state: {
+                state: {},
+                state2: {
                     "name": "esp_2dacf4",
                     "friendlyName": "upright",
                     "ip": "192.168.51.110",
@@ -428,7 +433,8 @@
                     }],
                     "cameraCount": 0
                 },
-                devices: {
+                devices: {},
+                devices2: {
                     "instances": [{
                         "id": 256,
                         "config": "{\"GPIO\":13}",
@@ -505,7 +511,8 @@
                         }]
                     }]
                 },
-                peers: {
+                peers: {},
+                peers2: {
                     "name": "esp_b75c4f",
                     "peerCount": 2,
                     "ip": "192.168.51.144",
@@ -517,7 +524,8 @@
                         "ip": "192.168.51.101"
                     }]
                 },
-                logging: {
+                logging: {},
+                logging2: {
                     "impl": 1,
                     "level": 0,
                     "impls": [{
@@ -562,13 +570,11 @@
     <script>
         function OnLoad() {
 
-            return
-
             refreshData(app.internal.firstTimeFetch)
 
             app.internal.firstTimeFetch = false;
 
-            setInterval(refreshData, 15 * 1000)
+            setInterval(refreshData, 60 * 1000)
 
         }
 
