@@ -17,7 +17,7 @@
     <div id="app">
         <app-head v-bind:config="config"></app-head>
         <hr>
-        <div v-if="config.wifiConfigured==0">
+        <div v-if="config.wifiConfigured">
             <app-nav v-bind:pages="pages" v-on:clicked="tabSelected"></app-nav>
             <hr>
             <app-content-home v-if="isTabSelected('Home')" v-bind:state="state" v-bind:config="config"></app-content-home>
@@ -26,9 +26,10 @@
             <app-content-logging v-if="isTabSelected('Logging')" v-bind:logging="logging"></app-content-logging>
         </div>
         <div v-else>
-            <app-wizard-name v-bind:config="config"></app-wizard-name>
-            <app-wizard-device v-bind:devices="devices"></app-wizard-device>
-            <app-wizard-wifi v-bind:devices="wifi"></app-wizard-device>
+            <app-wizard-name v-bind:config="config" v-if="isWizSelected(0)"></app-wizard-name>
+            <app-content-config v-bind:devices="devices" v-bind:state="state" v-if="isWizSelected(1)"></app-content-config>
+            <app-wizard-wifi v-bind:wifi="wifi" v-if="isWizSelected(2)"></app-wizard-wifi>
+            <app-wizard-nextprev v-bind:pages="wizardpages" v-bind:wifi="wifi" v-on:clicked="wizSelected"></app-wizard-nextprev>
         </div>
         <!-- <app-view>
             <app-sidebar></app-sidebar>
@@ -38,8 +39,8 @@
 
     <script>
         //let base = "http://192.168.51.110"
-        //let base = "http://192.168.51.144"
-        let base = "http://192.168.51.101"
+        let base = "http://192.168.51.144"
+            //let base = "http://192.168.51.139"
 
 
 
@@ -320,6 +321,103 @@
 
         })
 
+        // wizard
+
+        Vue.component('app-wizard-name', {
+            props: ["config"],
+            template: '<div>\
+                            <fieldset><legend>Name</legend>\
+                                <div class="horizontalContainer">\
+                                    <div>\
+                                        <input v-model="config.friendlyName" type="text"></input>\
+                                    </div>\
+                                    <div>\
+                                    </div>\
+                                </div>\
+                            </fieldset>\
+                         </div>'
+        })
+
+        Vue.component('app-wizard-nextprev', {
+            props: ["pages", "wifi"],
+            methods: {
+                clicked: function(pagenum) {
+                    this.$emit('clicked', pagenum)
+                },
+                finishEnabled: function() {
+
+                    if (this.pages.activePageNum != 2)
+                        return false
+
+                    if (this.wifi.static.active && (!this.wifi.static.ip || !this.wifi.static.gw || !this.wifi.static.netmask)) {
+                        return true
+                    }
+
+                    if (!this.wifi.password || !this.wifi.password.length)
+                        return true
+
+                    return false
+                }
+            },
+
+            template: '<div class="horizontalContainerRight">\
+                        <button v-bind:disabled="pages.activePageNum==0" v-on:click="clicked(-1)">Previous</button>\
+                        <button v-bind:disabled="finishEnabled()" v-on:click="clicked(+1)">{{ pages.activePageNum==2?\'Finish\':\'Next\' }}</button>\
+                        </div>'
+        })
+
+        Vue.component('app-wizard-wifi', {
+            props: ["wifi"],
+            template: '<div>\
+                            <fieldset v-if="wifi.ssids.length">\
+                            <legend>Wifi Details</legend>\
+                                <fieldset>\
+                                    <div>\
+                                        Configure network access for this device\
+                                    </div>\
+                                </fieldset>\
+                                <br>\
+                                <fieldset>\
+                                    <div class="horizontalContainer">\
+                                        <div>SSID</div>\
+                                        <div>\
+                                            <select>\
+                                                <option v-bind:value="wifi.index" v-for="(wifi,index) in wifi.ssids" v-bind:key="wifi.ssid" v-bind:selected="index === 0"> {{wifi.ssid}}</option>\
+                                            </select>\
+                                        </div>\
+                                    </div>\
+                                    <div class="horizontalContainer">\
+                                        <div>Password</div>\
+                                        <div><input name="pwd" size="15" type="password" v-model="wifi.password" /></div>\
+                                    </div>\
+                                    <div class="horizontalContainer">\
+                                        <div>Address Type</div>\
+                                        <div>\
+                                            <select id="dhcp" v-model="wifi.static.active">\
+                                            <option value=0>DHCP</option>\
+                                            <option value=1>Static</option>\
+                                        </select>\
+                                        </div>\
+                                    </div>\
+                                    <fieldset v-if="wifi.static.active==1">\
+                                        <legend>Static Details</legend>\
+                                        <div class="horizontalContainer">\
+                                            <div>IP:</div>\
+                                            <div><input type="text" v-model="wifi.static.ip"/></div>\
+                                        </div>\
+                                        <div class="horizontalContainer">\
+                                            <div>Gateway:</div>\
+                                            <div><input type="text" v-model="wifi.static.gw"/></div>\
+                                        </div>\
+                                        <div class="horizontalContainer">\
+                                            <div>Netmask:</div>\
+                                            <div><input type="text" value="255.255.255.0" v-model="wifi.static.netmask"></div>\
+                                        </div>\
+                                    </fieldset>\
+                                </fieldset>\
+                            </fieldset>\
+                        </div>'
+        })
 
         var app = new Vue({
             el: '#app',
@@ -329,11 +427,33 @@
                 },
                 isTabSelected: function(name) {
                     return this.pages.activePage == name
+                },
+
+                wizSelected: function(offset) {
+                    this.wizardpages.activePageNum += offset
+                },
+                isWizSelected: function(offset) {
+                    return this.wizardpages.activePageNum == offset
                 }
+
+
             },
             data: {
                 internal: {
                     firstTimeFetch: true
+                },
+                wizardpages: {
+                    activePageNum: 0,
+                    pages: [{
+                        name: "Name",
+                        ordinal: 0
+                    }, {
+                        name: "Devices",
+                        ordinal: 1
+                    }, {
+                        name: "Wifi",
+                        ordinal: 2
+                    }]
                 },
                 pages: {
                     activePage: 'Home',
@@ -351,216 +471,23 @@
                         ordinal: 3
                     }]
                 },
+                wifi: {
+                    "static": {
+                        "active": 0,
+                        "netmask": "255.255.255.0"
+                    },
+                    "ssids": []
+                },
                 config: {},
-                config2: {
-                    "populated": true,
-                    "name": "esp_2dacf4",
-                    "version": "sonoff_basic|v0.1.7.pr",
-                    "ip": "192.168.51.110",
-                    "mac": "DC:4F:22:2D:AC:F4",
-                    "friendlyName": "upright",
-                    "prerelease": 0,
-                    "upgradeOnlyWhenRelayOff": 1,
-                    "switchCount": 1,
-                    "switchConfig": [{
-                        "switch": 0,
-                        "impl": "rest",
-                        "name": "Default"
-                    }],
-                    "sensorCount": 3,
-                    "sensorConfig": [{
-                        "sensor": 0,
-                        "elements": [{
-                            "type": "temperature",
-                            "uom": "°C",
-                            "round": "1"
-                        }],
-                        "name": "DS18B20"
-                    }, {
-                        "sensor": 1,
-                        "elements": [{
-                            "type": "temperature",
-                            "uom": "°C",
-                            "round": "1"
-                        }, {
-                            "type": "pressure",
-                            "uom": "hPa",
-                            "round": "1"
-                        }, {
-                            "type": "humidity",
-                            "uom": "%",
-                            "round": "0"
-                        }],
-                        "name": "BME280"
-                    }, {
-                        "sensor": 2,
-                        "elements": [{
-                            "type": "illuminance",
-                            "uom": "Lux",
-                            "round": "0"
-                        }],
-                        "name": "MAX44009"
-                    }]
-                },
+
                 state: {},
-                state2: {
-                    "name": "esp_2dacf4",
-                    "friendlyName": "upright",
-                    "ip": "192.168.51.110",
-                    "switchCount": 1,
-                    "switchState": [{
-                        "switch": 0,
-                        "state": 0,
-                        "stateChanges": 12,
-                        "type": "Momentary",
-                        "name": "Default"
-                    }],
-                    "sensorCount": 3,
-                    "sensorState": [{
-                        "sensor": 0,
-                        "temperature_error": "No DSs found",
-                        "name": "DS18B20"
-                    }, {
-                        "sensor": 1,
-                        "temperature": 25,
-                        "pressure": 1021.249,
-                        "humidity": 66.44434,
-                        "name": "BME280"
-                    }, {
-                        "sensor": 2,
-                        "illuminance": 414.72,
-                        "name": "MAX44009"
-                    }],
-                    "cameraCount": 0
+
+                devices: {
+                    "instances": []
                 },
-                devices: {},
-                devices2: {
-                    "instances": [{
-                        "id": 256,
-                        "config": "{\"GPIO\":13}",
-                        "name": "Dallas Temperature Sensor",
-                        "instance": 1073684292
-                    }, {
-                        "id": 257,
-                        "config": "",
-                        "name": "BME280 Environment Sensor",
-                        "instance": 1073684612
-                    }, {
-                        "id": 258,
-                        "config": "",
-                        "name": "MAX44009 Lux Sensor",
-                        "instance": 1073684988
-                    }],
-                    "options": [{
-                        "name": "Dallas Temperature Sensor",
-                        "id": 256,
-                        "config": [{
-                            "name": "GPIO",
-                            "type": "select",
-                            "options": [{
-                                "name": "D0",
-                                "value": 16
-                            }, {
-                                "name": "D1",
-                                "value": 5
-                            }, {
-                                "name": "D2",
-                                "value": 4
-                            }, {
-                                "name": "D5",
-                                "value": 14
-                            }, {
-                                "name": "D6",
-                                "value": 12
-                            }, {
-                                "name": "D7",
-                                "value": 13
-                            }]
-                        }]
-                    }, {
-                        "name": "BME280 Environment Sensor",
-                        "id": 257
-                    }, {
-                        "name": "MAX44009 Lux Sensor",
-                        "id": 258
-                    }, {
-                        "name": "HC-SR501 PIR Sensor",
-                        "id": 259,
-                        "config": [{
-                            "name": "GPIO",
-                            "type": "select",
-                            "options": [{
-                                "name": "D0",
-                                "value": 16
-                            }, {
-                                "name": "D1",
-                                "value": 5
-                            }, {
-                                "name": "D2",
-                                "value": 4
-                            }, {
-                                "name": "D5",
-                                "value": 14
-                            }, {
-                                "name": "D6",
-                                "value": 12
-                            }, {
-                                "name": "D7",
-                                "value": 13
-                            }]
-                        }]
-                    }]
-                },
+
                 peers: {},
-                peers2: {
-                    "name": "esp_b75c4f",
-                    "peerCount": 2,
-                    "ip": "192.168.51.144",
-                    "peers": [{
-                        "name": "esp_a799d7.local",
-                        "ip": "192.168.51.136"
-                    }, {
-                        "name": "esp_583f4e.local",
-                        "ip": "192.168.51.101"
-                    }]
-                },
                 logging: {},
-                logging2: {
-                    "impl": 1,
-                    "level": 0,
-                    "impls": [{
-                        "value": 0,
-                        "name": "None",
-                        "config": []
-                    }, {
-                        "value": 1,
-                        "name": "Serial",
-                        "config": []
-                    }, {
-                        "value": 2,
-                        "name": "SysLog",
-                        "config": [{
-                            "name": "Host",
-                            "type": "text"
-                        }]
-                    }],
-                    "levels": [{
-                        "value": 0,
-                        "name": "Verbose"
-                    }, {
-                        "value": 1,
-                        "name": "Info"
-                    }, {
-                        "value": 2,
-                        "name": "Important"
-                    }, {
-                        "value": 3,
-                        "name": "Warning"
-                    }, {
-                        "value": 4,
-                        "name": "Error"
-                    }]
-                }
 
             },
 
@@ -592,7 +519,6 @@
                             .then(function(json) {
                                 app.config = json
                             }).then(function() {
-
                                 genericFetchJSONReturnPromise(base + '/json/devices')
                                     .then(function(json) {
                                         app.devices = json
@@ -600,10 +526,20 @@
                                         genericFetchJSONReturnPromise(base + '/json/peers')
                                             .then(function(json) {
                                                 app.peers = json
-                                            }).then(function(json) {
+                                            }).then(function() {
                                                 genericFetchJSONReturnPromise(base + '/json/logging')
                                                     .then(function(json) {
                                                         app.logging = json
+                                                    }).then(function() {
+                                                        genericFetchJSONReturnPromise(base + '/json/wificonfig')
+                                                            .then(function(json) {
+                                                                //app.wifi = json
+                                                            }).then(function() {
+                                                                genericFetchJSONReturnPromise(base + '/json/wifi')
+                                                                    .then(function(json) {
+                                                                        app.wifi.ssids = json.wifi
+                                                                    })
+                                                            })
                                                     })
                                             })
                                     })
