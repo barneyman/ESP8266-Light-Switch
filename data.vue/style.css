@@ -118,6 +118,13 @@ button:disabled {
     justify-content: flex-end
 }
 
+.horizontalContainerMid {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    width: 100vh;
+}
+
 .horizontalContainerleft {
     display: flex;
     flex-direction: row;

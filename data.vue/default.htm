@@ -21,20 +21,20 @@
             <app-nav v-bind:pages="pages" v-on:clicked="tabSelected"></app-nav>
             <hr>
             <app-content-home v-if="isTabSelected('Home')" v-bind:state="state" v-bind:config="config"></app-content-home>
-            <app-content-config v-if="isTabSelected('Devices')" v-bind:state="state" v-bind:devices="devices"></app-content-config>
+            <app-content-devices v-if="isTabSelected('Devices')" v-bind:state="state" v-bind:devices="devices"></app-content-devices>
             <app-content-admin v-if="isTabSelected('Admin')" v-bind:config="config" v-bind:peers="peers"></app-content-admin>
             <app-content-logging v-if="isTabSelected('Logging')" v-bind:logging="logging"></app-content-logging>
         </div>
         <div v-else>
-            <app-wizard-name v-bind:config="config" v-if="isWizSelected(0)"></app-wizard-name>
-            <app-content-config v-bind:devices="devices" v-bind:state="state" v-if="isWizSelected(1)"></app-content-config>
-            <app-wizard-wifi v-bind:wifi="wifi" v-if="isWizSelected(2)"></app-wizard-wifi>
-            <app-wizard-nextprev v-bind:pages="wizardpages" v-bind:wifi="wifi" v-on:clicked="wizSelected"></app-wizard-nextprev>
+            <div style="height: 66%;">
+                <app-wizard-name v-bind:config="config" v-if="isWizSelected(0)"></app-wizard-name>
+                <app-content-devices v-bind:devices="devices" v-bind:state="state" v-if="isWizSelected(1)"></app-content-devices>
+                <app-wizard-wifi v-bind:wifi="wifi" v-if="isWizSelected(2)"></app-wizard-wifi>
+            </div>
+            <div>
+                <app-wizard-nextprev v-bind:pages="wizardpages" v-bind:wifi="wifi" v-on:clicked="wizSelected"></app-wizard-nextprev>
+            </div>
         </div>
-        <!-- <app-view>
-            <app-sidebar></app-sidebar>
-            <app-content></app-content>
-        </app-view> -->
     </div>
 
     <script>
@@ -121,7 +121,7 @@
 
         })
 
-        Vue.component('app-content-config', {
+        Vue.component('app-content-devices', {
             props: ["state", "devices"],
             template: '<div id="config">\
                             <fieldset><legend>Devices</legend>\
@@ -130,6 +130,7 @@
                                         <div v-for="instance in devices.instances">\
                                             <div class="horizontalContainer">\
                                                 <div>{{ instance.name }} </div>\
+                                                <div>{{ instance.config }} </div>\
                                                 <button class="button_red" v-on:click="removePressed(instance.id,instance.config,instance.instance,instance.name)">\
                                                 Remove\
                                                 </button>\
@@ -342,11 +343,24 @@
             props: ["pages", "wifi"],
             methods: {
                 clicked: function(pagenum) {
-                    this.$emit('clicked', pagenum)
+
+                    if (this.onFinishWiz() && pagenum == 1)
+                        this.$emit('clicked', 0)
+                    else
+                        this.$emit('clicked', pagenum)
                 },
+
+                onFinishWiz: function() {
+                    if (this.pages.activePageNum == 2)
+                        return true
+
+                    return false
+
+                },
+
                 finishEnabled: function() {
 
-                    if (this.pages.activePageNum != 2)
+                    if (!this.onFinishWiz())
                         return false
 
                     if (this.wifi.static.active && (!this.wifi.static.ip || !this.wifi.static.gw || !this.wifi.static.netmask)) {
@@ -360,7 +374,7 @@
                 }
             },
 
-            template: '<div class="horizontalContainerRight">\
+            template: '<div class="horizontalContainerMid">\
                         <button v-bind:disabled="pages.activePageNum==0" v-on:click="clicked(-1)">Previous</button>\
                         <button v-bind:disabled="finishEnabled()" v-on:click="clicked(+1)">{{ pages.activePageNum==2?\'Finish\':\'Next\' }}</button>\
                         </div>'
@@ -381,8 +395,8 @@
                                     <div class="horizontalContainer">\
                                         <div>SSID</div>\
                                         <div>\
-                                            <select>\
-                                                <option v-bind:value="wifi.index" v-for="(wifi,index) in wifi.ssids" v-bind:key="wifi.ssid" v-bind:selected="index === 0"> {{wifi.ssid}}</option>\
+                                            <select v-model="wifi.ssid">\
+                                                <option v-bind:value="wifi.ssid" v-for="(wifi,index) in wifi.ssids" v-bind:key="wifi.ssid" v-bind:selected="index === 0"> {{wifi.ssid}}</option>\
                                             </select>\
                                         </div>\
                                     </div>\
@@ -430,6 +444,30 @@
                 },
 
                 wizSelected: function(offset) {
+
+                    if (!offset) {
+                        // it's finish!
+                        var jsonData = {}
+                        jsonData["ssid"] = this.wifi.ssid;
+                        jsonData["pwd"] = this.wifi.password;
+                        jsonData["friendlyName"] = this.config.friendlyName
+                        jsonData["dhcp"] = this.wifi.static.active;
+
+                        if (this.wifi.static.active) {
+                            jsonData["ip"] = this.wifi.static.ip
+                            jsonData["gateway"] = this.wifi.static.gw
+                            jsonData["netmask"] = this.wifi.static.netmask
+
+                        }
+
+                        let url = base + '/json/wifi'
+                        postSettingReturnPromise(jsonData, url).then(function(response) {
+                            refreshData(true)
+                        })
+
+                        return
+                    }
+
                     this.wizardpages.activePageNum += offset
                 },
                 isWizSelected: function(offset) {
