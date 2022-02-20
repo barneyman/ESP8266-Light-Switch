@@ -2984,10 +2984,10 @@ void InstallWebServerHandlers(bool enableCORS)
 #endif		
 
 #ifndef _DEVELOPER_BUILD_
-		// ensure it doesn't have a leading underscore - hidden flag for me
+		// ensure it doesn't have a leading underscore - 'hidden' flag for me
 		if (file.length() > 1 && file[1] == '_')
 		{
-			if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Skipping %s\n\r", file.c_str());
+			if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Hiding %s\n\r", file.c_str());
 			continue;
 		}
 #endif
@@ -3032,25 +3032,7 @@ void SendServerPage()
 {
 	// given the current state of the device, send the appropriate page back
 	
-	String toOpen("/_Error.htm");
-	switch (wifiInstance.currentMode)
-	{
-	case myWifiClass::wifiMode::modeSTAandAP:
-		toOpen="/_STAAPmode.htm";
-		break;
-	case myWifiClass::wifiMode::modeSTA_unjoinedAndAP:
-	case myWifiClass::wifiMode::modeAP:
-		toOpen = "/_APmode.htm";
-		break;
-	case myWifiClass::wifiMode::modeSTA:
-		toOpen = "/_STAmode.htm";
-		break;
-	case myWifiClass::wifiMode::modeUnknown:
-	default:
-		toOpen = "/_Error.htm";
-		break;
-
-	}
+	String toOpen("/default.htm");
 
 	if(SPIFFS.exists(toOpen))
 	{
