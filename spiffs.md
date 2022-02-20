@@ -94,11 +94,11 @@ docker run --rm -v F:\dev\esp8266\lightswitch\lightswitch\data.vue:/in -v F:\dev
 ### Wemos D1 4M1M
 #### create spiffs - proven
 ```
-docker run --rm -v F:\dev\esp8266\lightswitch\lightswitch\data.vue:/in -v F:\dev\esp8266\lightswitch\lightswitch\images:/out esptools:latest ./mkspiffs+esp8266 -c /in -b 8192 -p 256 -s 0xFA000 /out/wemosd1.img
+docker run --rm -v F:\dev\esp8266\lightswitch\lightswitch\data.vue:/in -v F:\dev\esp8266\lightswitch\lightswitch\images:/out esptools:latest ./mkspiffs_esp8266 -c /in -b 8192 -p 256 -s 0xFA000 /out/wemosd1.img
 ```
 
 #### upload spiffs **and** image
-#### upload spiffs **only**
+#### upload spiffs **only** - windows makes this 'difficult'
 ```
 docker run --rm --device=COM3:/dev/ttyUSB0 -v F:\dev\esp8266\lightswitch\lightswitch\images:/in esptools:latest esptool.py --chip esp8266 --before default_reset --after hard_reset --baud 921600 --port /dev/ttyUSB0 write_flash 0x300000 /in/wemosd1.img
 ```
