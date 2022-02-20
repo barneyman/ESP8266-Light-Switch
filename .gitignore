@@ -74,3 +74,5 @@ Debug
 /MQTT
 .build
 *.img
+
+/data.vue/vue.js
