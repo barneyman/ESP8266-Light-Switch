@@ -30,8 +30,6 @@ Settings were gleaned from the `boards.txt` under the `hardware` directories
 
 
 ## ESP32Cam (Minimal SPIFFS)
-### clean
-`esptool.py --chip esp32 --port COM5 erase_flash`
 
 #### nb
 ESP32 puts down a bootloader and an OTA file so you may need to do this the first time you burn to one
