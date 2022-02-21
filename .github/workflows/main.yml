@@ -115,16 +115,19 @@ jobs:
             platform_options: "esp32:esp32:esp32wrover:PartitionScheme=min_spiffs,FlashMode=qio,FlashFreq=80,UploadSpeed=115200,DebugLevel=none"
             friendly: "esp32_cam"
             spiffsCmdLine: -p 256 -b 4096 -s 0x3D0000
+            spiffsCmd: mkspiffs_esp32
           - platform: "sonoff"
             # have to use generic, because the sonoff board doesn't SDA & others defined
             # platform_options: "esp8266:esp8266:sonoff:BoardModel=sonoffBasic,xtal=80,vt=flash,exception=legacy,ssl=all,eesz=1M256,ip=lm2f,dbg=Disabled"
             platform_options: "esp8266:esp8266:generic:xtal=80,vt=iram,exception=legacy,ssl=all,ResetMethod=ck,CrystalFreq=26,FlashFreq=40,FlashMode=dout,eesz=1M128,led=13,sdk=nonosdk_190703,ip=lm2f,dbg=Disabled,lvl=None____"
             friendly: "sonoff_basic"
             spiffsCmdLine: -p 256 -b 4096 -s 0x20000
+            spiffsCmd: mkspiffs_esp8266
           - platform: "d1_mini"
             platform_options: "esp8266:esp8266:d1_mini:xtal=80,vt=iram,exception=legacy,ssl=all,eesz=4M1M,ip=lm2f,dbg=Disabled"
             friendly: "wemosD1"        
             spiffsCmdLine: -p 256 -b 8192 -s 0xFA000
+            spiffsCmd: mkspiffs_esp8266
             # 1028096:  
 
     # The type of runner that the job will run on
@@ -201,14 +204,19 @@ jobs:
         # no need if a push build
         if: ${{ github.event_name == 'create' }}
         run: |
-          wget https://github.com/igrr/mkspiffs/releases/download/0.2.0/mkspiffs-0.2.0-no_magic_length-linux64.tar.gz
-          tar -xvf mkspiffs-0.2.0-no_magic_length-linux64.tar.gz
-          echo "MKSPIFFS_DIR=./mkspiffs-0.2.0-no_magic_length-linux64" >> $GITHUB_ENV
+          # ESP32 ver
+          wget https://github.com/igrr/mkspiffs/releases/download/0.2.3/mkspiffs-0.2.3-arduino-esp32-linux64.tar.gz
+          tar -xvf mkspiffs-0.2.3-arduino-esp32-linux64.tar.gz --strip-components 1
+          mv mkspiffs mkspiffs_esp32
+          # ESP8266 ver
+          wget https://github.com/igrr/mkspiffs/releases/download/0.2.3/mkspiffs-0.2.3-arduino-esp8266-linux64.tar.gz
+          tar -xvf mkspiffs-0.2.3-arduino-esp8266-linux64.tar.gz --strip-components 1
+          mv mkspiffs mkspiffs_esp8266
 
       - name: Create SPIFFS
         # no need if a push build
         if: ${{ github.event_name == 'create' }}
-        run: ${{ env.MKSPIFFS_DIR }}/mkspiffs -c ./data ${{ matrix.spiffsCmdLine }} ${{ matrix.friendly }}_${GITHUB_RUN_ID}.spiffs
+        run: ./${{ matrix.spiffsCmd }} -c ./data.vue ${{ matrix.spiffsCmdLine }} ${{ matrix.friendly }}_${GITHUB_RUN_ID}.spiffs
 
       # compress deliverables
       - name: Compress output
