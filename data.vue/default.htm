@@ -142,7 +142,8 @@
                                 <fieldset><legend>Available</legend>\
                                     <div class=horizontalContainer>\
                                         <select v-on:change="deviceChanged($event)">\
-                                            <option v-bind:value="newdevice.id" v-for="(newdevice,index) in devices.options" v-bind:key="newdevice.id" v-bind:selected="index === 0"> {{newdevice.name}}</option>\
+                                            <option value="">Select Device ...</option>\
+                                            <option v-bind:value="newdevice.id" v-for="(newdevice,index) in devices.options" v-bind:key="newdevice.id" > {{newdevice.name}}</option>\
                                         </select>\
                                         <div v-if="deviceActive(newdevice.id)" v-for="newdevice in devices.options">\
                                             <div v-for="opts in newdevice.config">{{opts.name}}\
@@ -151,7 +152,7 @@
                                                 </select>\
                                             </div>\
                                         </div>\
-                                        <button>Add</button>\
+                                        <button v-if="!deviceActive(0)" v-on:click="addPressed()">Add Device</button>\
                                     </div>\
                                 </fieldset>\
                             </fieldset>\
@@ -178,7 +179,7 @@
             },
             data: function() {
                 return {
-                    activeDevice: 1
+                    activeDevice: 0
                 }
             }
         })
