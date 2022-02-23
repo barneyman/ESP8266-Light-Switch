@@ -2200,13 +2200,15 @@ void InstallWebServerHandlers(bool enableCORS)
 		Details.wifi.password = pwd;
 		Details.friendlyName=friendly;
 
-		// dhcp or static?
-		if (root["dhcp"] == 1)
+		// dhcp or static? (DHCP is 0, static is 1)
+		if (!root["dhcp"].as<int>())
 		{
+			if(Details.dblog) Details.dblog->println(debug::dbInfo, "DHCP");
 			Details.wifi.dhcp = true;
 		}
 		else
 		{
+			if(Details.dblog) Details.dblog->println(debug::dbInfo, "STATIC");
 			Details.wifi.dhcp = false;
 			Details.wifi.ip.fromString( (const char*)root["ip"] );
 			Details.wifi.gateway.fromString((const char*)root["gateway"]);
