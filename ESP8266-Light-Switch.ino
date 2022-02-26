@@ -291,7 +291,7 @@ struct
 	bool wifiChangeRequested;
 	myWifiClass::wifiMode desiredMode;
 
-	// transient
+	// transient - set in readJSON and not persisted
 #ifdef _ALLOW_WIFI_RESET_AFTER_AP_JOIN_TIMEOUT
 	unsigned long runtimeWhenLastJoined;
 #endif
@@ -1198,6 +1198,7 @@ void FindPeers()
 
 }
 
+// called from loop
 void performUpdate(String url, String urlSpiffs)
 {
 	if(Details.dblog) Details.dblog->println(debug::dbImportant,"performing update");
@@ -1764,7 +1765,8 @@ void InstallWebServerHandlers(bool enableCORS)
 
 		if(root.containsKey("config"))
 		{
-			root["config"].printTo(newInstanceConfig);
+			root["config"].as<JsonObject>().printTo(newInstanceConfig);
+			if(Details.dblog) Details.dblog->println(debug::dbInfo, newInstanceConfig.c_str());
 		}
 
 		// check it's not already there
@@ -1788,6 +1790,7 @@ void InstallWebServerHandlers(bool enableCORS)
 
 		if(add)
 		{
+			if(Details.dblog) Details.dblog->println(debug::dbInfo, "adding device");
 			Details.sensors.push_back(std::tuple<unsigned,String,baseSensor*>(id,newInstanceConfig,NULL));
 			WriteJSONconfig();
 			AddDeviceInstance();
@@ -3085,6 +3088,7 @@ void loop(void)
 
 	if(Details.wifiChangeRequested)
 	{
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, wifiInstance.server.arg("wifi change"));
 		// Details.desiredMode
 		if (wifiInstance.ConnectWifi(Details.desiredMode, Details.wifi) == myWifiClass::wifiMode::modeSTAandAP)
 		{
