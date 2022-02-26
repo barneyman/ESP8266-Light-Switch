@@ -24,17 +24,19 @@ ul.main {
     margin: 0;
     padding: 0;
     list-style-type: none;
-    background-color: #00008b
+    background-color: #00008b;
 }
 
 ul.main li {
     display: inline;
-    color: #ffffff
+    color: #ffffff;
+    cursor: pointer;
 }
 
-li.activeTab {
+ul.main li.activeTab {
     font-weight: bold;
     background-color: #4b4bdf;
+    cursor: default;
 }
 
 ul.main li a {
