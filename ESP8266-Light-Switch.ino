@@ -1804,13 +1804,6 @@ void InstallWebServerHandlers(bool enableCORS)
 		wifiInstance.server.send(200,"text/html","<html/>");
 #endif		
 
-		// minimise heap fracture
-		if(reboot)
-		{
-			RebootMe(true);
-			if(Details.dblog) Details.dblog->println(debug::dbImportant, "rebooting");
-		}
-
 
 #ifdef _ESP_USE_ASYNC_WEB
 	}).onBody(onPostBodyHandler);
@@ -1872,9 +1865,6 @@ void InstallWebServerHandlers(bool enableCORS)
 		wifiInstance.server.send(200,"text/html","<html/>");
 #endif		
 
-		// minimise heap fracture
-		if(reboot)
-			RebootMe(true);
 
 #ifdef _ESP_USE_ASYNC_WEB
 	}).onBody(onPostBodyHandler);
