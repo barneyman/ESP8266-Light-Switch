@@ -120,6 +120,14 @@ button:disabled {
     justify-content: flex-end
 }
 
+.horizontalContainerWrap {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-evenly;
+    flex-wrap: wrap;
+}
+
+
 .horizontalContainerMid {
     display: flex;
     flex-direction: row;

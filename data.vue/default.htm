@@ -101,6 +101,19 @@
                         </div><br></div>'
         })
 
+        Vue.component('camera-state', {
+            props: ["item", "itemState"],
+            template: '<div><div class="verticalContainer">\
+                            <img v-bind:src="this.localbase+\'/camera?cam=\'+item.camera" width=200></img>\
+                            <div>{{ item.name }}</div>\
+                        </div><br></div>',
+            data: function(){
+                return { localbase: base }
+            }
+                        
+        })
+
+
         Vue.component('app-content-home', {
             props: ["state", "config"],
             template: '<div id="home">\
@@ -115,6 +128,9 @@
                                 </div>\
                             </fieldset>\
                             <fieldset v-if="state.cameraCount"><legend>Cameras</legend>\
+                                <div class="horizontalContainerWrap">\
+                                    <camera-state v-for="camera in config.cameraConfig" v-bind:item="camera" v-bind:itemState="state.cameraState[config.camera]" v-bind:key="config.camera"></camera-state>\
+                                </div>\
                             </fieldset>\
                         </div>'
 
