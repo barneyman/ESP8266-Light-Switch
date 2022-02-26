@@ -141,13 +141,14 @@
                                 </fieldset>\
                                 <fieldset><legend>Available</legend>\
                                     <div class=horizontalContainer>\
-                                        <select v-on:change="deviceChanged($event)">\
-                                            <option value="">Select Device ...</option>\
+                                        <select v-on:change="deviceChanged($event)" v-model="activeDevice">\
+                                            <option disabled value=0>Select Device ...</option>\
                                             <option v-bind:value="newdevice.id" v-for="(newdevice,index) in devices.options" v-bind:key="newdevice.id" > {{newdevice.name}}</option>\
                                         </select>\
                                         <div v-if="deviceActive(newdevice.id)" v-for="newdevice in devices.options">\
                                             <div v-for="opts in newdevice.config">{{opts.name}}\
-                                                <select v-if="opts.type==\'select\'">\
+                                                <select v-if="opts.type==\'select\'" v-model="activeConfig">\
+                                                    <option disabled value="">Select Config ...</option>\
                                                     <option v-bind:value="opt.value" v-for="opt in opts.options">{{ opt.name }}</option>\
                                                 </select>\
                                             </div>\
@@ -158,6 +159,21 @@
                             </fieldset>\
                         </div>',
             methods: {
+                addPressed: function() {
+
+                    var jsonData={"id": this.activeDevice }
+
+                    if (this.activeConfig != "")
+                    {
+                        jsonData["config"]={"GPIO":this.activeConfig}
+                    }
+
+                    let url = base + '/json/devices/add'
+                        postSettingReturnPromise(jsonData, url).then(function(response) {
+                            refreshData(true)
+                        })
+
+                },
                 removePressed: function(id, config, instance, name) {
                     if (confirm("About to remove device '" + name + "'")) {
                         var jsonData = {}
@@ -171,7 +187,7 @@
                     }
                 },
                 deviceChanged: function(event) {
-                    this.activeDevice = event.target.value
+                    this.activeConfig = ""
                 },
                 deviceActive: function(id) {
                     return id == this.activeDevice
@@ -179,7 +195,8 @@
             },
             data: function() {
                 return {
-                    activeDevice: 0
+                    activeDevice: 0,
+                    activeConfig: ""
                 }
             }
         })
@@ -452,7 +469,7 @@
                         jsonData["ssid"] = this.wifi.ssid;
                         jsonData["pwd"] = this.wifi.password;
                         jsonData["friendlyName"] = this.config.friendlyName
-                        jsonData["dhcp"] = this.wifi.static.active;
+                        jsonData["dhcp"] = this.wifi.static.active?false:true;
 
                         if (this.wifi.static.active) {
                             jsonData["ip"] = this.wifi.static.ip
@@ -540,7 +557,7 @@
 
             app.internal.firstTimeFetch = false;
 
-            setInterval(refreshData, 60 * 1000)
+            //setInterval(refreshData, 60 * 1000)
 
         }
 

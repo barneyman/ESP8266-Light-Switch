@@ -2198,8 +2198,8 @@ void InstallWebServerHandlers(bool enableCORS)
 		Details.wifi.password = pwd;
 		Details.friendlyName=friendly;
 
-		// dhcp or static? (DHCP is 0, static is 1)
-		if (!root["dhcp"].as<int>())
+		// dhcp or static? 
+		if (root["dhcp"])
 		{
 			if(Details.dblog) Details.dblog->println(debug::dbInfo, "DHCP");
 			Details.wifi.dhcp = true;
