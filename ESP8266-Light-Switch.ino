@@ -1453,9 +1453,12 @@ void InstallWebServerHandlers(bool enableCORS)
 		String url= root["url"];		
 
 */
-		Details.updateAvailable=true;
+		//Details.updateAvailable=true;
+
 		Details.url=root["url"].as<char*>();
 		Details.urlSpiffs=root["urlSpiffs"].as<char*>();
+
+		performUpdate(Details.url,Details.urlSpiffs);
 
 
 		// no point - core killed the IP stack during the update
