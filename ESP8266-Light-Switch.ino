@@ -231,7 +231,7 @@ public:
 		tohere["id"]=m_id;
 
 		if(m_dbg)
-			m_dbg->printf(debug::dbError,"getConfigOptionsJSON %s, %u\n\r",m_bigName.c_str(),m_id );
+			m_dbg->printf(debug::dbError,"getConfigOptionsJSON %s, %u\r",m_bigName.c_str(),m_id );
 
 		T::getConfigOptionsJSON(tohere);
 	}
@@ -492,11 +492,11 @@ void RevertAllSwitch()
 void DoAllSwitch(bool state, bool force)
 {
 
-	if(Details.dblog) Details.dblog->printf(debug::dbInfo, "DoAllSwitch: %s %s\r\n", state ? "ON" : "off", force ? "FORCE" : "");
+	if(Details.dblog) Details.dblog->printf(debug::dbInfo, "DoAllSwitch: %s %s\r", state ? "ON" : "off", force ? "FORCE" : "");
 
 	for(auto each=Details.switches.begin();each!=Details.switches.end();each++)
 	{
-		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Switch: %x\r\n", *each);
+		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Switch: %x\r", *each);
 		(*each)->DoRelay(state, force);
 		yield();
 	}
@@ -514,14 +514,14 @@ void DoAllSwitch(bool state, bool force)
 
 void WriteJSONconfig()
 {
-	if(Details.dblog) Details.dblog->printf(debug::dbInfo, "WriteJSONconfig\n\r");
+	if(Details.dblog) Details.dblog->printf(debug::dbInfo, "WriteJSONconfig\r");
 
 	// try to create it
 	fs::File json = SPIFFS.open(_JSON_CONFIG_FILE, "w");
 
 	if (!json)
 	{
-		if(Details.dblog) Details.dblog->printf(debug::dbError, "failed to create json\n\r");
+		if(Details.dblog) Details.dblog->printf(debug::dbError, "failed to create json\r");
 		return;
 	}
 
@@ -566,7 +566,7 @@ void WriteJSONconfig()
 	wifiInstance.WriteDetailsToJSON(root, Details.wifi);
 
 
-	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "jsonBuffer.size used : %d\n\r", jsonBuffer.size());
+	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "jsonBuffer.size used : %d\r", jsonBuffer.size());
 
 	///////////////////// written here
 
@@ -577,15 +577,15 @@ void WriteJSONconfig()
 	root.printTo(jsonText);
 #endif		
 
-	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "JSON : -- %s --\n\r", jsonText.c_str());
+	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "JSON : -- %s --\r", jsonText.c_str());
 
 	json.write((byte*)jsonText.c_str(), jsonText.length());
 
-	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "JSON : written\n\r");
+	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "JSON : written\r");
 
 	json.close();
 
-	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "JSON : closed\n\r");
+	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "JSON : closed\r");
 
 	Details.configDirty = false;
 
@@ -595,13 +595,13 @@ void WriteJSONconfig()
 
 void ReadJSONconfig()
 {
-	if(Details.dblog) Details.dblog->printf(debug::dbInfo, "ReadJSONconfig\n\r");
+	if(Details.dblog) Details.dblog->printf(debug::dbInfo, "ReadJSONconfig\r");
 
 #ifdef _ERASE_JSON_CONFIG
-	if(Details.dblog) Details.dblog->printf(debug::dbImportant, "erasing JSON file\n\r");
+	if(Details.dblog) Details.dblog->printf(debug::dbImportant, "erasing JSON file\r");
 	if(!SPIFFS.remove(_JSON_CONFIG_FILE))
 	{
-		if(Details.dblog) Details.dblog->printf(debug::dbError, "Failed to erase JSON file\n\r");
+		if(Details.dblog) Details.dblog->printf(debug::dbError, "Failed to erase JSON file\r");
 	}
 #endif
 
@@ -641,7 +641,7 @@ void ReadJSONconfig()
 
 	if (!SPIFFS.exists(_JSON_CONFIG_FILE))
 	{
-		if(Details.dblog) Details.dblog->printf(debug::dbImportant, "'%s' does not exist\n\r", _JSON_CONFIG_FILE);
+		if(Details.dblog) Details.dblog->printf(debug::dbImportant, "'%s' does not exist\r", _JSON_CONFIG_FILE);
 		// file does not exist
 		WriteJSONconfig();
 
@@ -655,7 +655,7 @@ void ReadJSONconfig()
 
 	json.close();
 
-	if(Details.dblog) Details.dblog->printf(debug::dbInfo, "JSON: (%d) -- %s --\n\r", jsonString.length(), jsonString.c_str());
+	if(Details.dblog) Details.dblog->printf(debug::dbInfo, "JSON: (%d) -- %s --\r", jsonString.length(), jsonString.c_str());
 
 	//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 	jsonBuffer.clear();
@@ -663,12 +663,12 @@ void ReadJSONconfig()
 
 	if (!root.success())
 	{
-		if(Details.dblog) Details.dblog->printf(debug::dbError, "JSON parse failed\n\r");
+		if(Details.dblog) Details.dblog->printf(debug::dbError, "JSON parse failed\r");
 
 		// kill it - and write it again
 		SPIFFS.remove(_JSON_CONFIG_FILE);
 
-		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "JSON file deleted\n\r");
+		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "JSON file deleted\r");
 
 		WriteJSONconfig();
 
@@ -677,7 +677,7 @@ void ReadJSONconfig()
 	}
 	else
 	{
-		if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "JSON parsed\n\r");
+		if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "JSON parsed\r");
 	}
 
 	Details.configDirty = false;
@@ -686,7 +686,7 @@ void ReadJSONconfig()
 	if(root.containsKey("rgbCount"))
 		Details.rgbLedCount=root["rgbCount"];
 
-	if(Details.dblog) Details.dblog->printf(debug::dbInfo,"Changing LED count to %d\n\r", Details.rgbLedCount);
+	if(Details.dblog) Details.dblog->printf(debug::dbInfo,"Changing LED count to %d\r", Details.rgbLedCount);
 
 	// tell the handler how big it is
 	rgbHandler.Clear();
@@ -698,12 +698,12 @@ void ReadJSONconfig()
 	// check for schemaVersion
 	if(!root.containsKey("schemaVersion") || root["schemaVersion"]<CURRENT_SCHEMA_VER)
 	{
-		if(Details.dblog) Details.dblog->printf(debug::dbError, "JSON parsed OLD file\n\r");
+		if(Details.dblog) Details.dblog->printf(debug::dbError, "JSON parsed OLD file\r");
 
 		// kill it - and write it again
 		SPIFFS.remove(_JSON_CONFIG_FILE);
 
-		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "JSON file deleted\n\r");
+		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "JSON file deleted\r");
 
 		WriteJSONconfig();
 
@@ -800,7 +800,7 @@ bool AddDeviceInstance()
 			yield();
 			if(*(*each)==std::get<0>(*eachInstance))
 			{
-				if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "creating '%s' instance\n\r", (*each)->Name());
+				if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "creating '%s' instance\r", (*each)->Name());
 				// found it ... create one
 				baseSensor *newOne=(*each)->createOne(std::get<1>(*eachInstance).c_str());
 				std::get<2>(*eachInstance)=newOne;
@@ -844,7 +844,7 @@ void PreserveState()
 	root.printTo(jsonText);
 #endif		
 
-	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "JSON : -- %s --\n\r", jsonText.c_str());
+	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "JSON : -- %s --\r", jsonText.c_str());
 
 	json.write((byte*)jsonText.c_str(), jsonText.length());
 
@@ -878,7 +878,7 @@ bool RestoreState()
 			int state=root["states"][count]["state"];
 			int switchNum=root["states"][count]["switch"];
 
-			if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "switch %d state %d\n\r",switchNum,state);
+			if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "switch %d state %d\r",switchNum,state);
 
 			if(switchNum<Details.switches.size())
 			{
@@ -914,7 +914,7 @@ bool RestoreState()
 
 void RebootMe(bool preserve)
 {
-	if(Details.dblog) Details.dblog->printf(debug::dbImportant, "REBOOTING\n\r");
+	if(Details.dblog) Details.dblog->printf(debug::dbImportant, "REBOOTING\r");
 	delay(1000);
 	if(preserve)
 	{
@@ -930,7 +930,7 @@ void RebootMe(bool preserve)
 
 void ResetToAP()
 {
-	if(Details.dblog) Details.dblog->printf(debug::dbImportant, "Resetting wifi to AP\n\r");
+	if(Details.dblog) Details.dblog->printf(debug::dbImportant, "Resetting wifi to AP\r");
 
 	Details.resetWIFI = false;
 	// clear the credentials
@@ -947,7 +947,7 @@ void ResetToAP()
 // sideload an AP so i can be configured
 void AddAPtoSTA()
 {
-	if(Details.dblog) Details.dblog->printf(debug::dbImportant, "AddAPtoSTA\n\r");
+	if(Details.dblog) Details.dblog->printf(debug::dbImportant, "AddAPtoSTA\r");
 
 	wifiInstance.ConnectWifi(myWifiClass::wifiMode::modeSTAandAP,Details.wifi);
 
@@ -1069,12 +1069,12 @@ void setup(void)
 	// add the options
 	loadOptions();
 
-	if(Details.dblog) Details.dblog->printf(debug::dbInfo, "\r\n\n\n===========================================");
+	if(Details.dblog) Details.dblog->printf(debug::dbInfo, "\r\n\n===========================================");
 
 
 
-	if(Details.dblog) Details.dblog->printf(debug::dbImportant, "Running %s\n\r", _MYVERSION);
-	if(Details.dblog) Details.dblog->printf(debug::dbImportant, "Hostname %s\n\r", wifiInstance.m_hostName.c_str());
+	if(Details.dblog) Details.dblog->printf(debug::dbImportant, "Running %s\r", _MYVERSION);
+	if(Details.dblog) Details.dblog->printf(debug::dbImportant, "Hostname %s\r", wifiInstance.m_hostName.c_str());
 
 
 	if(Details.dblog) Details.dblog->println(debug::dbImportant, wifiInstance.m_hostName.c_str());
@@ -1177,17 +1177,17 @@ void FindPeers()
 	if(!doFind)
 		return;
 
-	if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Looking for '%s' siblings ...\n\r", mdsnNAME);
+	if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Looking for '%s' siblings ...\r", mdsnNAME);
 	
 	// get a list of what's out there
 	Details.services.clear();
 	if (wifiInstance.QueryServices(mdsnNAME, Details.services))
 	{
 		int found=(int)Details.services.size();
-		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Found %d sibling%c!!\n\r", found, found==1?' ':'s');
+		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Found %d sibling%c!!\r", found, found==1?' ':'s');
 		for (auto iterator = Details.services.begin(); iterator != Details.services.end(); iterator++)
 		{
-			if(Details.dblog) Details.dblog->printf(debug::dbInfo, "\t%s @ %s\n\r", iterator->hostName.c_str(), iterator->IP.toString().c_str());
+			if(Details.dblog) Details.dblog->printf(debug::dbInfo, "\t%s @ %s\r", iterator->hostName.c_str(), iterator->IP.toString().c_str());
 		}
 		
 	}
@@ -1314,7 +1314,7 @@ void performUpdate(String url, String urlSpiffs)
 void onPostBodyHandler(AsyncWebServerRequest *request, uint8_t *data, size_t len, size_t index, size_t total)
 {
 
-		if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "onPostBodyHandler %d\n\r", len);
+		if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "onPostBodyHandler %d\r", len);
 
 		request->_tempObject=malloc(len+1);
 		memcpy(request->_tempObject,data,len);
@@ -1514,7 +1514,7 @@ void InstallWebServerHandlers(bool enableCORS)
 			AsyncWebParameter* p = request->getParam(count);
 #endif			
 
-			if(Details.dblog) Details.dblog->printf(debug::dbInfo, "%d. %s = %s \n\r", 
+			if(Details.dblog) Details.dblog->printf(debug::dbInfo, "%d. %s = %s \r", 
 				count+1, 
 #ifdef _ESP_USE_ASYNC_WEB
 				p->name().c_str(), 
@@ -1561,7 +1561,7 @@ void InstallWebServerHandlers(bool enableCORS)
 				}
 				else
 				{
-					if(Details.dblog) Details.dblog->printf(debug::dbWarning, "asked to action %d - exceeds maximum %d\r\n", port,Details.switches.size()-1);
+					if(Details.dblog) Details.dblog->printf(debug::dbWarning, "asked to action %d - exceeds maximum %d\r", port,Details.switches.size()-1);
 				}
 			}
 			else
@@ -1601,7 +1601,7 @@ void InstallWebServerHandlers(bool enableCORS)
 			AsyncWebParameter* p = request->getParam(count);
 #endif
 
-			if(Details.dblog) Details.dblog->printf(debug::dbInfo, "%d. %s = %s \n\r", 
+			if(Details.dblog) Details.dblog->printf(debug::dbInfo, "%d. %s = %s \r", 
 				count+1, 
 #ifdef _ESP_USE_ASYNC_WEB
 				p->name().c_str(),
@@ -1646,7 +1646,7 @@ void InstallWebServerHandlers(bool enableCORS)
 				}
 				else
 				{
-					if(Details.dblog) Details.dblog->printf(debug::dbWarning, "asked to action %d - exceeds maximum %d\r\n", port,Details.switches.size()-1);
+					if(Details.dblog) Details.dblog->printf(debug::dbWarning, "asked to action %d - exceeds maximum %d\r", port,Details.switches.size()-1);
 				}
 			}
 			else
@@ -1702,7 +1702,7 @@ void InstallWebServerHandlers(bool enableCORS)
 			{
 				if(std::get<0>(*each)==id && std::get<1>(*each)==config)
 				{
-					if(Details.dblog) Details.dblog->printf(debug::dbImportant, "removing sensor %d - '%s'\n\r",std::get<0>(*each),std::get<2>(*each)->GetName().c_str());
+					if(Details.dblog) Details.dblog->printf(debug::dbImportant, "removing sensor %d - '%s'\r",std::get<0>(*each),std::get<2>(*each)->GetName().c_str());
 
 					// remove it
 					delete std::get<2>(*each);
@@ -1719,9 +1719,9 @@ void InstallWebServerHandlers(bool enableCORS)
 		{
 		
 #ifdef _ESP_USE_ASYNC_WEB
-			if(Details.dblog) Details.dblog->printf(debug::dbImportant, "malformed data '%s'\n\r",body.c_str());
+			if(Details.dblog) Details.dblog->printf(debug::dbImportant, "malformed data '%s'\r",body.c_str());
 #else		
-			if(Details.dblog) Details.dblog->printf(debug::dbError, "malformed data '%s'\n\r",wifiInstance.server.arg("plain").c_str());
+			if(Details.dblog) Details.dblog->printf(debug::dbError, "malformed data '%s'\r",wifiInstance.server.arg("plain").c_str());
 #endif
 		}
 
@@ -2043,7 +2043,7 @@ void InstallWebServerHandlers(bool enableCORS)
 		if (root.containsKey("ledCount"))
 		{
 			Details.rgbLedCount = root["ledCount"];
-			if(Details.dblog) Details.dblog->printf(debug::dbImportant, "Changing LED count to %d\n\r", Details.rgbLedCount);
+			if(Details.dblog) Details.dblog->printf(debug::dbImportant, "Changing LED count to %d\r", Details.rgbLedCount);
 			rgbHandler.Clear();
 			rgbHandler.SetSize(Details.rgbLedCount);
 			rgbHandler.DisplayAndWait(true);
@@ -2083,7 +2083,7 @@ void InstallWebServerHandlers(bool enableCORS)
 			wifiInstance.server.client().remoteIP();
 #endif		
 
-		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "json listen posted from %s\n\r",recipientAddr.toString().c_str());
+		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "json listen posted from %s\r",recipientAddr.toString().c_str());
 #ifdef _ESP_USE_ASYNC_WEB
 		String body((char*)request->_tempObject);
 		if(Details.dblog) Details.dblog->println(debug::dbImportant, body.c_str());
@@ -2111,7 +2111,7 @@ void InstallWebServerHandlers(bool enableCORS)
 
 			if(recipientSensor<Details.sensors.size())
 			{
-				if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Adding recipient %s:%d Sensor %d\n\r", recipientAddr.toString().c_str(), recipientPort, recipientSensor);
+				if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Adding recipient %s:%d Sensor %d\r", recipientAddr.toString().c_str(), recipientPort, recipientSensor);
 #ifdef _ESP_USE_ASYNC_WEB
 				String body((char*)request->_tempObject);
 				GETSENSOR(Details.sensors[recipientSensor])->AddAnnounceRecipient(recipientAddr,recipientPort,(body.c_str()));
@@ -2131,7 +2131,7 @@ void InstallWebServerHandlers(bool enableCORS)
 
 			if(recipientSwitch<Details.switches.size())
 			{
-				if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Adding recipient %s:%d Switch %d\n\r", recipientAddr.toString().c_str(), recipientPort, recipientSwitch);
+				if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Adding recipient %s:%d Switch %d\r", recipientAddr.toString().c_str(), recipientPort, recipientSwitch);
 #ifdef _ESP_USE_ASYNC_WEB
 				String body((char*)request->_tempObject);
 				Details.switches[recipientSwitch]->AddAnnounceRecipient(recipientAddr,recipientPort,body.c_str());
@@ -2276,7 +2276,7 @@ void InstallWebServerHandlers(bool enableCORS)
 						if(theCam->fetchFrame(&imgBytes,&imgSize))
 						{
 
-							if(dblog) dblog->printf(debug::dbVerbose, "json camera:%d - img %u size @ 0x%x\n\r",cam,imgSize,imgBytes);		
+							if(dblog) dblog->printf(debug::dbVerbose, "json camera:%d - img %u size @ 0x%x\r",cam,imgSize,imgBytes);		
 
 //#define _SEND_IMG_IMMEDIATE							
 
@@ -2285,12 +2285,12 @@ void InstallWebServerHandlers(bool enableCORS)
 #else								
 							AsyncWebServerResponse *response = request->beginResponse("image/jpeg", imgSize, [=](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
 #endif									
-									if(dblog) dblog->printf(debug::dbVerbose, "called with @ 0x%x %u %u\n\r",buffer,maxLen,index);
+									if(dblog) dblog->printf(debug::dbVerbose, "called with @ 0x%x %u %u\r",buffer,maxLen,index);
 
 									size_t sizeLeft=imgSize-index;
 									size_t sizeToSend=((sizeLeft>maxLen)?maxLen:sizeLeft);
 
-									if(dblog) dblog->printf(debug::dbVerbose, "sending %u bytes\n\r",sizeToSend);
+									if(dblog) dblog->printf(debug::dbVerbose, "sending %u bytes\r",sizeToSend);
 
 									memcpy(buffer, imgBytes+index, sizeToSend);
 
@@ -2340,7 +2340,7 @@ void InstallWebServerHandlers(bool enableCORS)
 					uint8_t *imgBytes=NULL;
 					if(Details.cameras[cam]->fetchFrame(&imgBytes,&imgSize))
 					{
-						if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "json camera %u size\n\r",imgSize);		
+						if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "json camera %u size\r",imgSize);		
 						wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
 						wifiInstance.server.send(200, "image/jpeg", imgBytes, imgSize);
 						free(imgBytes);
@@ -2880,7 +2880,7 @@ void InstallWebServerHandlers(bool enableCORS)
 		{
 			JsonObject &peer = peers.createNestedObject();
 
-			if(Details.dblog) Details.dblog->printf(debug::dbInfo, "%d '%s' %s\n\r", each + 1, Details.services[each].hostName.c_str(), Details.services[each].IP.toString().c_str());
+			if(Details.dblog) Details.dblog->printf(debug::dbInfo, "%d '%s' %s\r", each + 1, Details.services[each].hostName.c_str(), Details.services[each].IP.toString().c_str());
 			peer["name"]=Details.services[each].hostName;
 			peer["ip"]=Details.services[each].IP.toString();
 		}
@@ -2942,7 +2942,7 @@ void InstallWebServerHandlers(bool enableCORS)
 			wifi["ssid"] = allWifis[each].first;
 			wifi["sig"] = allWifis[each].second;
 
-			if(Details.dblog) Details.dblog->printf(debug::dbInfo, "%d '%s' %d \n\r", each + 1, allWifis[each].first.c_str(), allWifis[each].second);
+			if(Details.dblog) Details.dblog->printf(debug::dbInfo, "%d '%s' %d \r", each + 1, allWifis[each].first.c_str(), allWifis[each].second);
 
 		}
 		
@@ -2987,7 +2987,7 @@ void InstallWebServerHandlers(bool enableCORS)
 		// ensure it doesn't have a leading underscore - 'hidden' flag for me
 		if (file.length() > 1 && file[1] == '_')
 		{
-			if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Hiding %s\n\r", file.c_str());
+			if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Hiding %s\r", file.c_str());
 			continue;
 		}
 #endif
@@ -3006,7 +3006,7 @@ void InstallWebServerHandlers(bool enableCORS)
 
 		wifiInstance.server.serveStatic(uri.c_str(), SPIFFS, file.c_str(),uri_header.c_str());
 
-		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Serving %s as %s\r\n", file.c_str(), uri.c_str());
+		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Serving %s as %s\r", file.c_str(), uri.c_str());
 
 #ifdef _STORE_STATIC_FILES
 	#ifdef ESP32
@@ -3017,7 +3017,7 @@ void InstallWebServerHandlers(bool enableCORS)
 #endif
 	}
 
-	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "InstallWebServerHandlers OUT\n\r");
+	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "InstallWebServerHandlers OUT\r");
 
 }
 
@@ -3049,7 +3049,7 @@ void SendServerPage()
 	}
 	else
 	{
-		if(Details.dblog) Details.dblog->printf(debug::dbError,"SPIFFS error - %s does not exist\n\r", toOpen.c_str());
+		if(Details.dblog) Details.dblog->printf(debug::dbError,"SPIFFS error - %s does not exist\r", toOpen.c_str());
 	}
 
 }
@@ -3157,7 +3157,7 @@ void loop(void)
 	{
 		WiFiMode_t currentState = WiFi.getMode();
 
-		if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "================ WIFI %d\n\r", currentState);
+		if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "================ WIFI %d\r", currentState);
 
 		WiFi.printDiag(Serial);
 
