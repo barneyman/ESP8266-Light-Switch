@@ -768,6 +768,8 @@ void ReadJSONconfig()
 
 	Details.dblog=NULL;
 
+	Details.resetWIFI=false;
+	Details.updateAvailable=false;
 
 	wifiInstance.ReadDetailsFromJSON(root, Details.wifi);
 
