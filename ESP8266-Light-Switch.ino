@@ -2220,7 +2220,7 @@ void InstallWebServerHandlers(bool enableCORS)
 #else
 		wifiInstance.server.send(200, "text/html", "<html/>");
 #endif
-		if(Details.dblog) Details.dblog->println(debug::dbImportant, wifiInstance.server.arg("flagging wifi change"));
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, "flagging wifi change");
 
 		Details.desiredMode=myWifiClass::wifiMode::modeSTAspeculative;
 		Details.wifiChangeRequested=true;
@@ -2929,7 +2929,7 @@ void InstallWebServerHandlers(bool enableCORS)
 		
 		int found=wifiInstance.ScanNetworks(allWifis);
 
-		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "jScanNetworks found %d\r",found);
+		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "ScanNetworks found %d\r",found);
 
 		JsonArray &wifis = root.createNestedArray("wifi");
 
@@ -3078,7 +3078,7 @@ void loop(void)
 
 	if(Details.wifiChangeRequested)
 	{
-		if(Details.dblog) Details.dblog->println(debug::dbImportant, wifiInstance.server.arg("wifi change"));
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, "wifi change");
 		// Details.desiredMode
 		if (wifiInstance.ConnectWifi(Details.desiredMode, Details.wifi) == myWifiClass::wifiMode::modeSTAandAP)
 		{
