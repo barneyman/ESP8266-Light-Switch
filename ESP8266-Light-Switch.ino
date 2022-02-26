@@ -2213,17 +2213,17 @@ void InstallWebServerHandlers(bool enableCORS)
 			Details.wifi.netmask.fromString((const char*)root["netmask"]);
 		}
 
-		Details.desiredMode=myWifiClass::wifiMode::modeSTAspeculative;
-		Details.wifiChangeRequested=true;
 
-		// and update json
-		WriteJSONconfig();
 
 #ifdef _ESP_USE_ASYNC_WEB
 		request->send(200, "text/html", "<html/>");
 #else
 		wifiInstance.server.send(200, "text/html", "<html/>");
 #endif
+		if(Details.dblog) Details.dblog->println(debug::dbImportant, wifiInstance.server.arg("flagging wifi change"));
+
+		Details.desiredMode=myWifiClass::wifiMode::modeSTAspeculative;
+		Details.wifiChangeRequested=true;
 
 #ifdef _ESP_USE_ASYNC_WEB
 	}).onBody(onPostBodyHandler);
