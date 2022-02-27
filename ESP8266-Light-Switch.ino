@@ -1111,7 +1111,7 @@ void setup(void)
 
 #elif defined(PLATFORM_ESP32_CAMERA)
 
-#define _USE_FAKE_CAMERAS
+//#define _USE_FAKE_CAMERAS
 #ifdef _USE_FAKE_CAMERAS
 	AddCamera(new fakeCamera(Details.dblog));
 	AddCamera(new fakeCamera(Details.dblog));
