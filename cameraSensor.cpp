@@ -80,10 +80,10 @@ static camera_config_t camera_config = {
     .ledc_channel = LEDC_CHANNEL_0,
 
     .pixel_format = PIXFORMAT_JPEG,//YUV422,GRAYSCALE,RGB565,JPEG
-    .frame_size = FRAMESIZE_UXGA,//QQVGA-QXGA Do not use sizes above QVGA when not JPEG
-    //.frame_size = FRAMESIZE_VGA,//QQVGA-QXGA Do not use sizes above QVGA when not JPEG
+    //.frame_size = FRAMESIZE_UXGA,//QQVGA-QXGA Do not use sizes above QVGA when not JPEG
+    .frame_size = FRAMESIZE_VGA,//QQVGA-QXGA Do not use sizes above QVGA when not JPEG
 
-    .jpeg_quality = 50, //0-63 lower number means higher quality
+    .jpeg_quality = 25, //0-63 lower number means higher quality
     .fb_count = 1 //if more than one, i2s runs in continuous mode. Use only with JPEG
 };
 
@@ -150,12 +150,12 @@ bool esp32Cam::fetchFrame(uint8_t **toHere, size_t *len)
     *len=0;
 
     *toHere=(uint8_t *)malloc(m_frameBuffer->len);
-
     *len=m_frameBuffer->len;
 
     if(!(*toHere))
     {
-        if(m_dblog) m_dblog->println(debug::dbError,"image malloc failed!");
+        if(m_dblog) m_dblog->printf(debug::dbError,"image malloc of %ld failed!\r",m_frameBuffer->len);
+        releaseFrameBuffer();
         return false;
     }
 

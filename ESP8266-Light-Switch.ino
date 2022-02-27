@@ -2345,6 +2345,7 @@ void InstallWebServerHandlers(bool enableCORS)
 						if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "json camera %u size\r",imgSize);		
 						wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
 						wifiInstance.server.send_P(200, "image/jpeg", (char*)imgBytes, imgSize);
+						if(Details.dblog) Details.dblog->println(debug::dbVerbose, "image freed");		
 						free(imgBytes);
 
 						return;
