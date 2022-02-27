@@ -154,7 +154,10 @@ bool esp32Cam::fetchFrame(uint8_t **toHere, size_t *len)
     *len=m_frameBuffer->len;
 
     if(!(*toHere))
+    {
+        if(m_dblog) m_dblog->println(debug::dbError,"image malloc failed!");
         return false;
+    }
 
     memcpy(*toHere, m_frameBuffer->buf, m_frameBuffer->len);
 
