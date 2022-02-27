@@ -2264,7 +2264,8 @@ void InstallWebServerHandlers(bool enableCORS)
 				debugBaseClass *dblog=Details.dblog;
 
 
-				Details.cameras[cam]->AddWork([=](baseCamera *theCam)->void{
+//				Details.cameras[cam]->AddWork([=](baseCamera *theCam)->void{
+				baseCamera *theCam=Details.cameras[cam];
 
 					// get an image from that one
 					size_t imgSizeReq=theCam->requestFrame();
@@ -2279,25 +2280,27 @@ void InstallWebServerHandlers(bool enableCORS)
 							if(dblog) dblog->printf(debug::dbVerbose, "json camera:%d - img %u size @ 0x%x\r",cam,imgSize,imgBytes);		
 
 //#define _SEND_IMG_IMMEDIATE							
-
 #ifdef _SEND_IMG_IMMEDIATE
 							request->send("image/jpeg", imgSize, [=](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
 #else								
 							AsyncWebServerResponse *response = request->beginResponse("image/jpeg", imgSize, [=](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
 #endif									
-									if(dblog) dblog->printf(debug::dbVerbose, "called with @ 0x%x %u %u\r",buffer,maxLen,index);
+									if(dblog) dblog->printf(debug::dbVerbose, "called with buff 0x%x max %u startAt %u ... ",buffer,maxLen,index);
 
 									size_t sizeLeft=imgSize-index;
 									size_t sizeToSend=((sizeLeft>maxLen)?maxLen:sizeLeft);
 
-									if(dblog) dblog->printf(debug::dbVerbose, "sending %u bytes\r",sizeToSend);
+									sizeLeft-=sizeToSend;
+
+									if(dblog) dblog->printf(debug::dbVerbose, "sending %u bytes %u remain\r",sizeToSend,sizeLeft);
 
 									memcpy(buffer, imgBytes+index, sizeToSend);
 
-									if(!(sizeLeft-sizeToSend))
+									if(!(sizeLeft))
 									{
 										if(dblog) dblog->println(debug::dbVerbose, "Freeing image");
 										free(imgBytes);
+										if(dblog) dblog->println(debug::dbVerbose, "image sent");
 									}
 
 									return sizeToSend;
@@ -2310,7 +2313,6 @@ void InstallWebServerHandlers(bool enableCORS)
 							request->send(response);
 #endif
 
-							if(dblog) dblog->println(debug::dbVerbose, "image sent");
 
 						}
 						else
@@ -2325,7 +2327,7 @@ void InstallWebServerHandlers(bool enableCORS)
 
 
 
-				});
+//				});
 
 				return;
 
