@@ -465,7 +465,7 @@ void DoRGBPaletteSwitch(bool on, unsigned rgbPalette)
 
 
 // never yield in32 (mostly because its using asyncweb which doesn't play well with yield)
-void yield2()	
+void yield_safe()	
 {
 #ifndef ESP32
 	yield();
@@ -482,7 +482,7 @@ void RevertAllSwitch()
 	for(auto each=Details.switches.begin();each!=Details.switches.end();each++)
 	{
 		(*each)->HonourCurrentSwitch();
-		yield();
+		yield_safe();
 	}
 
 }
@@ -498,7 +498,7 @@ void DoAllSwitch(bool state, bool force)
 	{
 		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Switch: %x\r", *each);
 		(*each)->DoRelay(state, force);
-		yield();
+		yield_safe();
 	}
 
 	if(Details.dblog) Details.dblog->println(debug::dbInfo, "DoAllSwitch: Out");
@@ -589,7 +589,7 @@ void WriteJSONconfig()
 
 	Details.configDirty = false;
 
-	yield();
+	yield_safe();
 }
 
 
@@ -773,7 +773,7 @@ void ReadJSONconfig()
 
 	wifiInstance.ReadDetailsFromJSON(root, Details.wifi);
 
-	yield();
+	yield_safe();
 }
 
 #if !defined(PLATFORM_SONOFF_SWITCH)
@@ -797,7 +797,7 @@ bool AddDeviceInstance()
 		// walk thru
 		for(auto each=Details.options.begin();each!=Details.options.end();each++)
 		{
-			yield();
+			yield_safe();
 			if(*(*each)==std::get<0>(*eachInstance))
 			{
 				if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "creating '%s' instance\r", (*each)->Name());
@@ -2448,7 +2448,7 @@ void InstallWebServerHandlers(bool enableCORS)
 
 			switchRelay["name"] = (*each)->GetName();
 
-			yield();
+			yield_safe();
 
 		}
 
@@ -2463,7 +2463,7 @@ void InstallWebServerHandlers(bool enableCORS)
 			GETSENSOR(*each)->GetSensorValue(switchRelay);
 			switchRelay["name"] = GETSENSOR(*each)->GetName();
 
-			yield();
+			yield_safe();
 
 		}
 
@@ -2479,7 +2479,7 @@ void InstallWebServerHandlers(bool enableCORS)
 
 			camera["name"] = (*each)->GetName();
 
-			yield();
+			yield_safe();
 
 		}
 #else
@@ -2739,7 +2739,7 @@ void InstallWebServerHandlers(bool enableCORS)
 				GETSENSOR(*each)->GetSensorConfig(switchRelay);
 				switchRelay["name"] = GETSENSOR(*each)->GetName();
 
-				yield();
+				yield_safe();
 			}
 		}
 
@@ -2760,7 +2760,7 @@ void InstallWebServerHandlers(bool enableCORS)
 
 				switchRelay["name"] = (*each)->GetName();
 
-				yield();
+				yield_safe();
 
 			}
 		}
@@ -2784,7 +2784,7 @@ void InstallWebServerHandlers(bool enableCORS)
 
 				camera["name"] = (*each)->GetName();
 
-				yield();
+				yield_safe();
 
 			}
 		}
