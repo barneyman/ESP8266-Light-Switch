@@ -20,6 +20,7 @@ public:
     virtual bool InitialisedOk()=0;
     virtual int requestFrame()=0;
     virtual bool fetchFrame(uint8_t **toHere, size_t *len)=0;
+    virtual void releaseFrame()=0;
 
 
 
@@ -115,6 +116,15 @@ public:
     virtual int requestFrame();
     virtual bool fetchFrame(uint8_t **toHere, size_t *len);
 
+    void releaseFrame()
+    {
+        if(m_frameBuffer)
+        {
+            esp_camera_fb_return(m_frameBuffer);
+            m_frameBuffer=NULL;
+        }
+
+    }
 
 protected:
 
@@ -126,15 +136,6 @@ private:
 
     camera_fb_t *m_frameBuffer;
 
-    void releaseFrameBuffer()
-    {
-        if(m_frameBuffer)
-        {
-            esp_camera_fb_return(m_frameBuffer);
-            m_frameBuffer=NULL;
-        }
-
-    }
 
 };
 

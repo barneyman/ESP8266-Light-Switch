@@ -111,7 +111,7 @@ int esp32Cam::requestFrame()
     {
         if(m_dblog) m_dblog->println(debug::dbInfo,"previous framebuffer discarded");
         // let go of this first
-        releaseFrameBuffer();
+        releaseFrame();
     }
 
     esp_err_t res = ESP_OK;
@@ -124,7 +124,7 @@ int esp32Cam::requestFrame()
         return 0;
     }
 
-    if(m_dblog) m_dblog->printf(debug::dbInfo,"framebuffer size=%u (%u x %u) @ 0x%x\n\r", m_frameBuffer->len,m_frameBuffer->width,m_frameBuffer->height,m_frameBuffer->buf);
+    if(m_dblog) m_dblog->printf(debug::dbInfo,"framebuffer size=%u (%u x %u) @ 0x%x\r", m_frameBuffer->len,m_frameBuffer->width,m_frameBuffer->height,m_frameBuffer->buf);
 
 
     return m_frameBuffer->len;
@@ -144,32 +144,15 @@ bool esp32Cam::fetchFrame(uint8_t **toHere, size_t *len)
     if(!toHere || !len)
     {
         if(m_dblog) m_dblog->println(debug::dbError,"don't pass me NULLs!");
+        releaseFrame();
         return false;
 
     }
     *len=0;
 
-    *toHere=(uint8_t *)malloc(m_frameBuffer->len);
+    *toHere=m_frameBuffer->buf;
     *len=m_frameBuffer->len;
 
-    if(!(*toHere))
-    {
-        if(m_dblog) m_dblog->printf(debug::dbError,"image malloc of %ld failed!\r",m_frameBuffer->len);
-        releaseFrameBuffer();
-        return false;
-    }
-
-    memcpy(*toHere, m_frameBuffer->buf, m_frameBuffer->len);
-
-/*
-    if(!frame2jpg(m_frameBuffer,20,toHere,len))
-    {
-        if(m_dblog) m_dblog->println(debug::dbError,"error in frame2jpg");
-        return false;
-    }
-*/
-
-    releaseFrameBuffer();
 
     return true;
 
@@ -192,15 +175,12 @@ int fakeCamera::requestFrame()
 
 bool fakeCamera::fetchFrame(uint8_t **toHere, size_t *len)
 {
-    *toHere=(uint8_t*)malloc(sizeof(smallestJPEG));
 
     if(!(*toHere))
     {
         return false;
     }
 
-    memcpy(*toHere,smallestJPEG,*len=sizeof(smallestJPEG));
-    
 
     return true;
 }
