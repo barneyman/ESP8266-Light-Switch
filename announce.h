@@ -15,6 +15,7 @@
 
 #ifdef _USE_REST
 #ifdef ARDUINO_ARCH_ESP32
+#include <WiFiClient.h>
 #include <HTTPClient.h>
 #else // ARDUINO_ARCH_ESP8266??
 #include <ESP8266HTTPClient.h>
@@ -125,6 +126,7 @@ public:
 #elif defined(_USE_REST)
 
 		HTTPClient thisClient;
+		WiFiClient wfc;
 
 #else		
 #endif		
@@ -173,7 +175,13 @@ public:
 			if(m_dblog)
 				m_dblog->printf(debug::dbInfo,"Posting %s:%u%s\n\r", eachHA->m_addr.toString().c_str(), eachHA->m_port, endPoint.c_str());
 
-			if (thisClient.begin(eachHA->m_addr.toString(), eachHA->m_port, endPoint )) {  
+#ifdef ARDUINO_ARCH_ESP32
+			if (thisClient.begin(eachHA->m_addr.toString(), eachHA->m_port, endPoint )) 
+#else
+			if (thisClient.begin(wfc, eachHA->m_addr.toString(), eachHA->m_port, endPoint )) 
+#endif
+			{  
+
 
 				//thisClient.setAuthorization(restInfo["auth"]);
 				thisClient.addHeader("content-type", "application/json");

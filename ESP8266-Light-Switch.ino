@@ -1229,7 +1229,7 @@ void performUpdate(String url, String urlSpiffs)
 #ifdef ESP32
 			result=httpUpdate.updateSpiffs(wifiInstance.m_wificlient ,urlSpiffs+urlArgs,_MYVERSION);
 #else			
-			result=ESPhttpUpdate.updateSpiffs(wifiInstance.m_wificlient ,urlSpiffs+urlArgs,_MYVERSION);
+			result=ESPhttpUpdate.updateFS(wifiInstance.m_wificlient ,urlSpiffs+urlArgs,_MYVERSION);
 #endif			
 		}
 		else
