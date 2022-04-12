@@ -2995,7 +2995,7 @@ void InstallWebServerHandlers(bool enableCORS)
 
 		String uri=file;
 		// cache it for an hour
-		String uri_header("Cache-Control: public, max-age=60");
+		String uri_header("Cache-Control: public, max-age=60"), modifier("");
 		// look for gzipd stuff
 		if(file.endsWith(".gz"))
 		{
@@ -3003,11 +3003,12 @@ void InstallWebServerHandlers(bool enableCORS)
 			uri.remove(file.length()-3,3);
 			// flag as gzipped
 			uri_header+="\rContent-Encoding: gzip";
+			modifier="gzipped";
 		}
 
 		wifiInstance.server.serveStatic(uri.c_str(), SPIFFS, file.c_str(),uri_header.c_str());
 
-		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Serving %s as %s\r", file.c_str(), uri.c_str());
+		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Serving %s as %s %s\r", file.c_str(), uri.c_str(), modifier.c_str());
 
 #ifdef _STORE_STATIC_FILES
 	#ifdef ESP32
