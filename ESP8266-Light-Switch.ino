@@ -2299,7 +2299,6 @@ void InstallWebServerHandlers(bool enableCORS)
 									if(!(sizeLeft))
 									{
 										if(dblog) dblog->println(debug::dbVerbose, "Freeing image");
-										free(imgBytes);
 										if(dblog) dblog->println(debug::dbVerbose, "image sent");
 									}
 
@@ -2346,7 +2345,6 @@ void InstallWebServerHandlers(bool enableCORS)
 						wifiInstance.server.sendHeader("Cache-Control", "no-cache, no-store, must-revalidate");
 						wifiInstance.server.send_P(200, "image/jpeg", (char*)imgBytes, imgSize);
 						if(Details.dblog) Details.dblog->println(debug::dbVerbose, "image freed");		
-						free(imgBytes);
 
 						return;
 					}
