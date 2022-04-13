@@ -2263,9 +2263,12 @@ void InstallWebServerHandlers(bool enableCORS)
 				//baseCamera *theCam=Details.cameras[cam];
 				debugBaseClass *dblog=Details.dblog;
 
-
-//				Details.cameras[cam]->AddWork([=](baseCamera *theCam)->void{
 				baseCamera *theCam=Details.cameras[cam];
+
+#define _DO_IMAGE_VIA_WORK // essentially provide sequential access to the camera
+#ifdef _DO_IMAGE_VIA_WORK
+				Details.cameras[cam]->AddWork([=](baseCamera *theCam)->void{
+#endif	
 
 					// get an image from that one
 					size_t imgSizeReq=theCam->requestFrame();
@@ -2326,8 +2329,9 @@ void InstallWebServerHandlers(bool enableCORS)
 					}
 
 
-
-//				});
+#ifdef _DO_IMAGE_VIA_WORK
+				});
+#endif
 
 				return;
 
