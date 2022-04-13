@@ -2285,20 +2285,21 @@ void InstallWebServerHandlers(bool enableCORS)
 #else								
 							AsyncWebServerResponse *response = request->beginResponse("image/jpeg", imgSize, [=](uint8_t *buffer, size_t maxLen, size_t index) -> size_t {
 #endif									
-									if(dblog) dblog->printf(debug::dbVerbose, "called with buff 0x%x max %u startAt %u ... ",buffer,maxLen,index);
+									//if(dblog) dblog->printf(debug::dbVerbose, "called with buff 0x%x max %u startAt %u ... ",buffer,maxLen,index);
 
 									size_t sizeLeft=imgSize-index;
 									size_t sizeToSend=((sizeLeft>maxLen)?maxLen:sizeLeft);
 
 									sizeLeft-=sizeToSend;
 
-									if(dblog) dblog->printf(debug::dbVerbose, "sending %u bytes %u remain\r",sizeToSend,sizeLeft);
+									//if(dblog) dblog->printf(debug::dbVerbose, "sending %u bytes %u remain\r",sizeToSend,sizeLeft);
+									if(dblog) dblog->printf(debug::dbVerbose, "#",sizeToSend,sizeLeft);
 
 									memcpy(buffer, imgBytes+index, sizeToSend);
 
 									if(!(sizeLeft))
 									{
-										if(dblog) dblog->println(debug::dbVerbose, "Freeing image");
+										if(dblog) dblog->println(debug::dbVerbose, "\rFreeing image");
 										if(dblog) dblog->println(debug::dbVerbose, "image sent");
 									}
 
