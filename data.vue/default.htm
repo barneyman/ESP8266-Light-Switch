@@ -107,8 +107,10 @@
                             <img v-bind:src="this.localbase+\'/camera?cam=\'+item.camera" width=200></img>\
                             <div>{{ item.name }}</div>\
                         </div><br></div>',
-            data: function(){
-                return { localbase: base }
+            data: function() {
+                return {
+                    localbase: base
+                }
             }
                         
         })
@@ -177,11 +179,14 @@
             methods: {
                 addPressed: function() {
 
-                    var jsonData={"id": this.activeDevice }
+                    var jsonData = {
+                        "id": this.activeDevice
+                    }
 
-                    if (this.activeConfig != "")
-                    {
-                        jsonData["config"]={"GPIO":this.activeConfig}
+                    if (this.activeConfig != "") {
+                        jsonData["config"] = {
+                            "GPIO": this.activeConfig
+                        }
                     }
 
                     let url = base + '/json/devices/add'
@@ -486,7 +491,7 @@
                         jsonData["ssid"] = this.wifi.ssid;
                         jsonData["pwd"] = this.wifi.password;
                         jsonData["friendlyName"] = this.config.friendlyName
-                        jsonData["dhcp"] = this.wifi.static.active?false:true;
+                        jsonData["dhcp"] = this.wifi.static.active ? false : true;
 
                         if (this.wifi.static.active) {
                             jsonData["ip"] = this.wifi.static.ip
