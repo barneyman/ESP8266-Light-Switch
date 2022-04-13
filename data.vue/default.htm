@@ -428,6 +428,7 @@
                                 <fieldset>\
                                     <div class="horizontalContainer">\
                                         <div>SSID</div>\
+                                        <div><button onclick="refreshWifi()">scan</button></div>\
                                         <div>\
                                             <select v-model="wifi.ssid">\
                                                 <option v-bind:value="wifi.ssid" v-for="(wifi,index) in wifi.ssids" v-bind:key="wifi.ssid" v-bind:selected="index === 0"> {{wifi.ssid}}</option>\
@@ -604,20 +605,24 @@
                                                         app.logging = json
                                                     }).then(function() {
                                                         genericFetchJSONReturnPromise(base + '/json/wificonfig')
-                                                            .then(function(json) {
-                                                                //app.wifi = json
-                                                            }).then(function() {
-                                                                genericFetchJSONReturnPromise(base + '/json/wifi')
-                                                                    .then(function(json) {
-                                                                        app.wifi.ssids = json.wifi
+                                                            .then(function(json) {})
+                                                            .then(function() {
+                                                                refreshWifi()
                                                                     })
                                                             })
                                                     })
                                             })
                                     })
+                    }
                             })
                     }
+
+        function refreshWifi() {
+            genericFetchJSONReturnPromise(base + '/json/wifi')
+                .then(function(json) {
+                    app.wifi.ssids = json.wifi
                 })
+
         }
 
         function genericFetchJSONReturnPromise(url) {
