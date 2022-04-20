@@ -255,7 +255,7 @@
                 rebootDevice: function() {
                     let url = base + '/reboot'
                     postSettingReturnPromise({}, url).then(function(response) {
-                        refreshData(true)
+                        refreshData(false)
                     })
 
                 }
@@ -575,7 +575,7 @@
     <script>
         function OnLoad() {
 
-            refreshData(app.internal.firstTimeFetch)
+            refreshData(app.internal.firstTimeFetch, true)
 
             app.internal.firstTimeFetch = false;
 
@@ -583,7 +583,7 @@
 
         }
 
-        function refreshData(deep = false) {
+        function refreshData(deep = false, wifis = false) {
 
             genericFetchJSONReturnPromise(base + '/json/state')
                 .then(function(json) {
@@ -610,8 +610,8 @@
                                                         app.logging = json
                                                     }).then(function() {
                                                         genericFetchJSONReturnPromise(base + '/json/wificonfig')
-                                                            .then(function(json) {})
                                                             .then(function() {
+                                                                if (wifis)
                                                                 refreshWifi()
                                                                     })
                                                             })
