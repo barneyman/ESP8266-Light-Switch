@@ -518,8 +518,9 @@ void WriteJSONconfig()
 
 	// preserve some space
 	SPIFFS.remove(_JSON_CONFIG_FILE);
+#ifndef ESP32
 	SPIFFS.gc();
-
+#endif
 	// try to create it
 	fs::File json = SPIFFS.open(_JSON_CONFIG_FILE, "w");
 
