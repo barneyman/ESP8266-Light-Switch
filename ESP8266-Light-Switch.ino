@@ -518,7 +518,7 @@ void WriteJSONconfig()
 
 	// preserve some space
 	SPIFFS.remove(_JSON_CONFIG_FILE);
-	SPIGGS.gc();
+	SPIFFS.gc();
 
 	// try to create it
 	fs::File json = SPIFFS.open(_JSON_CONFIG_FILE, "w");
