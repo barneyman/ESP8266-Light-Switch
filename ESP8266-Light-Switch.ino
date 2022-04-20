@@ -516,6 +516,10 @@ void WriteJSONconfig()
 {
 	if(Details.dblog) Details.dblog->printf(debug::dbInfo, "WriteJSONconfig\r");
 
+	// preserve some space
+	SPIFFS.remove(_JSON_CONFIG_FILE);
+	SPIGGS.gc();
+
 	// try to create it
 	fs::File json = SPIFFS.open(_JSON_CONFIG_FILE, "w");
 
@@ -577,12 +581,14 @@ void WriteJSONconfig()
 	root.printTo(jsonText);
 #endif		
 
-	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "JSON : -- %s --\r", jsonText.c_str());
+	if(Details.dblog) Details.dblog->println(debug::dbVerbose, "JSON : -- ");
+	if(Details.dblog) Details.dblog->println(debug::dbVerbose,  jsonText.c_str());
 
-	json.write((byte*)jsonText.c_str(), jsonText.length());
+	size_t written=json.write((byte*)jsonText.c_str(), jsonText.length());
 
-	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "JSON : written\r");
+	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "\r -- JSON : written %ld\r", written);
 
+	json.flush();
 	json.close();
 
 	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "JSON : closed\r");
@@ -655,7 +661,8 @@ void ReadJSONconfig()
 
 	json.close();
 
-	if(Details.dblog) Details.dblog->printf(debug::dbInfo, "JSON: (%d) -- %s --\r", jsonString.length(), jsonString.c_str());
+	if(Details.dblog) Details.dblog->printf(debug::dbInfo, "JSON: (%d) \r", jsonString.length());
+	if(Details.dblog) Details.dblog->println(debug::dbInfo, jsonString.c_str());
 
 	//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 	jsonBuffer.clear();
@@ -2989,7 +2996,7 @@ void InstallWebServerHandlers(bool enableCORS)
 		String file = dir.fileName();
 #endif		
 
-#ifndef _DEVELOPER_BUILD_
+#ifndef _DEVELOPER_BUILD
 		// ensure it doesn't have a leading underscore - 'hidden' flag for me
 		if (file.length() > 1 && file[1] == '_')
 		{
