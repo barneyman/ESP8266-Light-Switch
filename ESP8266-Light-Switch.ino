@@ -512,7 +512,7 @@ void DoAllSwitch(bool state, bool force)
 
 
 
-void WriteJSONconfig()
+void WriteJSONconfig(bool writeServiceTexts)
 {
 	if(Details.dblog) Details.dblog->printf(debug::dbInfo, "WriteJSONconfig\r");
 
@@ -597,9 +597,9 @@ void WriteJSONconfig()
 	Details.configDirty = false;
 
 	// tell mdns
-	setServiceTexts();
+	if(writeServiceTexts)
+		setServiceTexts();
 
-	yield_safe();
 }
 
 
@@ -653,7 +653,7 @@ void ReadJSONconfig()
 	{
 		if(Details.dblog) Details.dblog->printf(debug::dbImportant, "'%s' does not exist\r", _JSON_CONFIG_FILE);
 		// file does not exist
-		WriteJSONconfig();
+		WriteJSONconfig(true);
 
 		return;
 
@@ -681,7 +681,7 @@ void ReadJSONconfig()
 
 		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "JSON file deleted\r");
 
-		WriteJSONconfig();
+		WriteJSONconfig(true);
 
 		return;
 
@@ -716,7 +716,7 @@ void ReadJSONconfig()
 
 		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "JSON file deleted\r");
 
-		WriteJSONconfig();
+		WriteJSONconfig(true);
 
 		return;
 
@@ -784,7 +784,6 @@ void ReadJSONconfig()
 
 	wifiInstance.ReadDetailsFromJSON(root, Details.wifi);
 
-	yield_safe();
 }
 
 #if !defined(PLATFORM_SONOFF_SWITCH)
@@ -948,7 +947,7 @@ void ResetToAP()
 	Details.wifi.configured = false;
 	Details.wifi.password = String();
 	Details.wifi.ssid = String();
-	WriteJSONconfig();
+	WriteJSONconfig(true);
 	// and reconnect as an AP
 	wifiInstance.ConnectWifi(myWifiClass::wifiMode::modeAP,Details.wifi);
 
@@ -1240,6 +1239,8 @@ void performUpdate(String url, String urlSpiffs)
 {
 	if(Details.dblog) Details.dblog->println(debug::dbImportant,"performing update");
 
+	wifiInstance.CloseServers();
+
 	StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer2;
 	JsonObject&replyroot = jsonBuffer2.createObject();
 	String bodyText;
@@ -1333,16 +1334,17 @@ void performUpdate(String url, String urlSpiffs)
 		if(!updates) // && (result==HTTP_UPDATE_OK))
 		{
 			if(Details.dblog) Details.dblog->println(debug::dbImportant, "preserving config");
-			WriteJSONconfig();
+			// we've stopped the service, so don't update it
+			// try restarting spiffs cos the underlying fs has changed
+			SPIFFS.end();
+			SPIFFS.begin();
+			WriteJSONconfig(false);
 		}
 
 	}
 
-	// preserve, reboot, if it worked
-	if(result==HTTP_UPDATE_OK)
-	{
-		RebootMe(true);
-	}
+	// we turned servers off, so reboot
+	RebootMe(true);
 
 }
 
@@ -1755,7 +1757,7 @@ void InstallWebServerHandlers(bool enableCORS)
 				}
 			}
 
-			WriteJSONconfig();
+			WriteJSONconfig(true);
 
 		}
 		else
@@ -1835,7 +1837,7 @@ void InstallWebServerHandlers(bool enableCORS)
 		{
 			if(Details.dblog) Details.dblog->println(debug::dbInfo, "adding device");
 			Details.sensors.push_back(std::tuple<unsigned,String,baseSensor*>(id,newInstanceConfig,NULL));
-			WriteJSONconfig();
+			WriteJSONconfig(true);
 			AddDeviceInstance();
 		}
 
@@ -1900,7 +1902,7 @@ void InstallWebServerHandlers(bool enableCORS)
 			root["config"].printTo(Details.loggingImplConfig);
 		}
 
-		WriteJSONconfig();
+		WriteJSONconfig(true);
 
 #ifdef _ESP_USE_ASYNC_WEB
 		request->send(200,"text/html","<html/>");
@@ -2098,7 +2100,7 @@ void InstallWebServerHandlers(bool enableCORS)
 		
 
 		// extract the details
-		WriteJSONconfig();
+		WriteJSONconfig(true);
 
 #ifdef _ESP_USE_ASYNC_WEB
 		request->send(200, "text/html", "<html/>");
@@ -3143,7 +3145,7 @@ void loop(void)
 
 		Details.wifiChangeRequested=false;
 		// and update json
-		WriteJSONconfig();
+		WriteJSONconfig(true);
 	}
 
 #ifdef _ALLOW_WIFI_RESET
@@ -3166,7 +3168,7 @@ void loop(void)
 #endif
 
 	if (Details.configDirty)
-		WriteJSONconfig();
+		WriteJSONconfig(true);
 
 	// let internals work
 	wifiInstance.serviceComponents();
