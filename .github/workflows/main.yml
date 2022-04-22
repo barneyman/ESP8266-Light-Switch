@@ -156,13 +156,19 @@ jobs:
           echo "NEW_TAG=v0.0.0" >> $GITHUB_ENV
           echo "NEW_HEAD=${GITHUB_REF#refs/heads/}" >> $GITHUB_ENV
 
-
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - name: Checking out tag ${{ github.ref }}
         uses: actions/checkout@master
         with:
           submodules: "true"
           ref: ${{ github.ref }}
+
+      - name: gzip web content
+        run: |
+          cd ./data.vue
+          gzip -v *.htm
+          gzip -v *.css
+          cd ..
 
       # esp32cam builder needs py
       # https://github.com/marketplace/actions/python-dependency-installation 
