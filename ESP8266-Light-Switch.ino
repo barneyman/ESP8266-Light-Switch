@@ -596,6 +596,9 @@ void WriteJSONconfig()
 
 	Details.configDirty = false;
 
+	// tell mdns
+	setServiceTexts();
+
 	yield_safe();
 }
 
@@ -1147,10 +1150,36 @@ void setup(void)
 	// set up the callback handlers for the webserver
 	InstallWebServerHandlers(true);
 
+	// mdns
+	setServiceTexts();
+
+
 	// reset the clock
 	Details.runtimeWhenLastJoined=millis();
 
 
+
+}
+
+void setServiceTexts()
+{
+	// set seom mdsn props
+	if(!wifiInstance.addServiceText("friendlyName",Details.friendlyName.c_str()))
+	{
+		if(Details.dblog) Details.dblog->println(debug::dbError, "Failed to add service text!");		
+	}
+
+	// HA platform types
+#if defined(PLATFORM_SONOFF_SWITCH)
+	if(!wifiInstance.addServiceText("platforms","light"))
+#elif defined(PLATFORM_ESP32_CAMERA)
+	if(!wifiInstance.addServiceText("platforms","camera"))
+#else
+	if(!wifiInstance.addServiceText("platforms","light,sensor"))
+#endif
+	{
+		if(Details.dblog) Details.dblog->println(debug::dbError, "Failed to add service text!");		
+	}
 
 }
 
