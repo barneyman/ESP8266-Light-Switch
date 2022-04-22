@@ -1491,12 +1491,18 @@ void InstallWebServerHandlers(bool enableCORS)
 		String url= root["url"];		
 
 */
-		//Details.updateAvailable=true;
 
 		Details.url=root["url"].as<char*>();
 		Details.urlSpiffs=root["urlSpiffs"].as<char*>();
 
+#ifdef _UPDATE_IN_WEBCALL
 		performUpdate(Details.url,Details.urlSpiffs);
+#else
+		Details.updateAvailable=true;
+#endif
+
+
+
 
 
 		// no point - core killed the IP stack during the update
@@ -3113,6 +3119,7 @@ void loop(void)
 
 	if(Details.updateAvailable)
 	{
+		delay(2000);
 		performUpdate(Details.url,Details.urlSpiffs);
 		// shouldn't get here, unless the update fails or there's nothing to do
 		Details.updateAvailable=false;
