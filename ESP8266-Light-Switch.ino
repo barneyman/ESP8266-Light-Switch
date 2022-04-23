@@ -2027,21 +2027,6 @@ void InstallWebServerHandlers(bool enableCORS)
 
 	});
 
-#ifdef _ESP_USE_ASYNC_WEB
-	wifiInstance.server.on("/default.htm",  [](AsyncWebServerRequest *request) {
-#else	
-	wifiInstance.server.on("/default.htm", []() {
-#endif
-
-		if(Details.dblog) Details.dblog->println(debug::dbInfo, "/default.htm");
-
-#ifdef _ESP_USE_ASYNC_WEB
-		SendServerPage(request);
-#else
-		SendServerPage();
-#endif		
-
-	});
 
 	// posted config
 #ifdef _ESP_USE_ASYNC_WEB
@@ -3081,28 +3066,17 @@ void SendServerPage(AsyncWebServerRequest *request)
 void SendServerPage()
 #endif
 {
-	// given the current state of the device, send the appropriate page back
-	
-	String toOpen("/default.htm");
-
-	if(SPIFFS.exists(toOpen))
-	{
+	// redirect
 #ifdef _ESP_USE_ASYNC_WEB
-		request->send(SPIFFS, toOpen);
+	request->sendHeader("Location","/default.htm");
+	request->send(301);
 
 #else
-		File f = SPIFFS.open(toOpen, "r");
-
-		// let's make sure it bloody exists !
-
-		wifiInstance.server.streamFile(f, "text/html");
-		f.close();
+	wifiInstance.server.sendHeader("Location","/default.htm");
+	wifiInstance.server.send(301);
+	return;
 #endif
-	}
-	else
-	{
-		if(Details.dblog) Details.dblog->printf(debug::dbError,"SPIFFS error - %s does not exist\r", toOpen.c_str());
-	}
+
 
 }
 
