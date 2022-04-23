@@ -1168,6 +1168,11 @@ void setServiceTexts()
 		if(Details.dblog) Details.dblog->println(debug::dbError, "Failed to add service text!");		
 	}
 
+	if(!wifiInstance.addServiceText("version",_MYVERSION))
+	{
+		if(Details.dblog) Details.dblog->println(debug::dbError, "Failed to add service text!");		
+	}
+
 	// HA platform types
 #if defined(PLATFORM_SONOFF_SWITCH)
 	if(!wifiInstance.addServiceText("platforms","light"))
