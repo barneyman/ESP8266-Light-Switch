@@ -3028,20 +3028,22 @@ void InstallWebServerHandlers(bool enableCORS)
 		}
 #endif
 
-		String uri=file;
 		// cache it for an hour
 		String uri_header("Cache-Control: public, max-age=60"), modifier("");
+		String uri=file;
 		// look for gzipd stuff
 		if(file.endsWith(".gz"))
 		{
 			// strip that *from the URI*
 			uri.remove(file.length()-3,3);
 			// flag as gzipped
-			uri_header+="\rContent-Encoding: gzip";
+			// webserver auto handles this - content-type and content-encoding
 			modifier="gzipped";
 		}
 
-		wifiInstance.server.serveStatic(uri.c_str(), SPIFFS, file.c_str(),uri_header.c_str());
+		// webserver automatically handles gz files - if i specify default.htm.gz as the path, it gets the content-type wrong
+		// which causes chrome (at least) to *download* the file, not render it ...
+		wifiInstance.server.serveStatic(uri.c_str(), SPIFFS, uri.c_str(),uri_header.c_str());
 
 		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Serving %s as %s %s\r", file.c_str(), uri.c_str(), modifier.c_str());
 
