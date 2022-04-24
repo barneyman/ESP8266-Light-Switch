@@ -2538,14 +2538,20 @@ void InstallWebServerHandlers(bool enableCORS)
 		root["cameraCount"] =0;
 #endif
 
+		JsonObject &spiffsState = root.createNestedObject("SPIFFS");
+
+#ifdef ARDUINO_ARCH_ESP32
+		spiffsState["usedBytes"]=SPIFFS.usedBytes();		
+		spiffsState["totalBytes"]=SPIFFS.totalBytes();		
+#else
 		// SPIFFS details
 		FSInfo spiffsinfo;
 		SPIFFS.info(spiffsinfo);
 
-		JsonObject &spiffsState = root.createNestedObject("SPIFFS");
 		spiffsState["usedBytes"]=spiffsinfo.usedBytes;		
 		spiffsState["totalBytes"]=spiffsinfo.totalBytes;		
 
+#endif
 
 		String jsonText;
 #ifdef _DEVELOPER_BUILD
