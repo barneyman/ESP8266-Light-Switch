@@ -38,9 +38,8 @@
     </div>
 
     <script>
-        //let base = "http://192.168.51.110"
+        //let base = "http://192.168.51.113"
         let base = ""
-        //let base = "http://192.168.51.139"
 
 
 
@@ -112,7 +111,7 @@
                     localbase: base
                 }
             }
-                        
+
         })
 
 
@@ -190,9 +189,9 @@
                     }
 
                     let url = base + '/json/devices/add'
-                        postSettingReturnPromise(jsonData, url).then(function(response) {
-                            refreshData(true)
-                        })
+                    postSettingReturnPromise(jsonData, url).then(function(response) {
+                        refreshData(true)
+                    })
 
                 },
                 removePressed: function(id, config, instance, name) {
@@ -280,7 +279,7 @@
                                 <fieldset><legend>OTA</legend>\
                                     <div class="vertalContainer">\
                                         <div class="horizontalContainer">\
-                                            <span>Update while on?</span>\
+                                            <span>Ignore update while switch is on?</span>\
                                             <input v-model="config.upgradeOnlyWhenRelayOff" v-on:change="setUpgradeBehaviour(config.upgradeOnlyWhenRelayOff)" type="checkbox"></input>\
                                         </div>\
                                         <div class="horizontalContainer">\
@@ -612,15 +611,15 @@
                                                         genericFetchJSONReturnPromise(base + '/json/wificonfig')
                                                             .then(function() {
                                                                 if (wifis)
-                                                                refreshWifi()
-                                                                    })
+                                                                    refreshWifi()
                                                             })
                                                     })
                                             })
                                     })
-                    }
                             })
                     }
+                })
+        }
 
         function refreshWifi() {
             genericFetchJSONReturnPromise(base + '/json/wifi')
