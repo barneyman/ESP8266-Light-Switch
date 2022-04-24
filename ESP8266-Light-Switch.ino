@@ -357,8 +357,9 @@ struct
 
 	// logging
 #ifdef _DEVELOPER_BUILD	
-	//debug::dbLevel::dbImportant,
-	debug::dbLevel::dbVerbose,
+	debug::dbLevel::dbImportant,
+	// try not to 'ship' this it screws with the OTA (i think)
+	//debug::dbLevel::dbVerbose,
 	debug::dbImpl::dbSerial,
 #else
 	debug::dbLevel::dbImportant,
@@ -1340,10 +1341,9 @@ void performUpdate(String url, String urlSpiffs)
 		if(!updates) // && (result==HTTP_UPDATE_OK))
 		{
 			if(Details.dblog) Details.dblog->println(debug::dbImportant, "preserving config");
-			// we've stopped the service, so don't update it
-			// try restarting spiffs cos the underlying fs has changed
-			SPIFFS.end();
-			SPIFFS.begin();
+
+			delay(2000);
+
 			WriteJSONconfig(false);
 		}
 
