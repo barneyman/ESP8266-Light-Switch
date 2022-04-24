@@ -127,7 +127,8 @@
 #endif
 
 
-#define _MYVERSION			_VERSION_FRIENDLY "|" _VERSION_NUM
+#define _MYVERSION_DEFINE			_VERSION_FRIENDLY "|" _VERSION_NUM
+String _MYVERSION(_MYVERSION_DEFINE);
 
 // set this to reset the file
 //#define _ERASE_JSON_CONFIG
@@ -1083,7 +1084,7 @@ void setup(void)
 
 
 
-	if(Details.dblog) Details.dblog->printf(debug::dbImportant, "Running %s\r", _MYVERSION);
+	if(Details.dblog) Details.dblog->printf(debug::dbImportant, "Running %s\r", _MYVERSION.c_str());
 	if(Details.dblog) Details.dblog->printf(debug::dbImportant, "Hostname %s\r", wifiInstance.m_hostName.c_str());
 
 
@@ -1168,7 +1169,7 @@ void setServiceTexts()
 		if(Details.dblog) Details.dblog->println(debug::dbError, "Failed to add service text!");		
 	}
 
-	if(!wifiInstance.addServiceText("version",_MYVERSION))
+	if(!wifiInstance.addServiceText("version",_MYVERSION.c_str()))
 	{
 		if(Details.dblog) Details.dblog->println(debug::dbError, "Failed to add service text!");		
 	}
@@ -2057,6 +2058,16 @@ void InstallWebServerHandlers(bool enableCORS)
 #else		
 			jsonBuffer.parseObject(wifiInstance.server.arg("plain"));
 #endif		
+
+		// ostensibly to force an update test
+		if (root.containsKey("version"))
+		{
+			// _VERSION_FRIENDLY is *very* important
+			_MYVERSION = _VERSION_FRIENDLY;
+			_MYVERSION += "|";
+			_MYVERSION += root["version"].as<char*>();
+			
+		}
 
 
 		if (root.containsKey("friendlyName"))
