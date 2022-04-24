@@ -232,7 +232,7 @@ public:
 		tohere["id"]=m_id;
 
 		if(m_dbg)
-			m_dbg->printf(debug::dbError,"getConfigOptionsJSON %s, %u\r",m_bigName.c_str(),m_id );
+			m_dbg->printf(debug::dbVerbose,"getConfigOptionsJSON %s, %u\r",m_bigName.c_str(),m_id );
 
 		T::getConfigOptionsJSON(tohere);
 	}
