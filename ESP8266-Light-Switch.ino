@@ -2527,6 +2527,14 @@ void InstallWebServerHandlers(bool enableCORS)
 		root["cameraCount"] =0;
 #endif
 
+		// SPIFFS details
+		FSInfo spiffsinfo;
+		SPIFFS.info(spiffsinfo);
+
+		JsonObject &spiffsState = root.createNestedObject("SPIFFS");
+		spiffsState["usedBytes"]=spiffsinfo.usedBytes;		
+		spiffsState["totalBytes"]=spiffsinfo.totalBytes;		
+
 
 		String jsonText;
 #ifdef _DEVELOPER_BUILD
