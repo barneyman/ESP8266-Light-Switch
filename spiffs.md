@@ -85,14 +85,14 @@ docker build -f Dockerfile.esptools -t esptools:latest .
 
 #### create spiffs - proven
 ```
-docker run --rm -v F:\dev\esp8266\lightswitch\lightswitch\data.vue:/in -v F:\dev\esp8266\lightswitch\lightswitch\images:/out esptools:latest ./mkspiffs_esp32 -c /in -p 256 -b 4096 -s 0x30000 /out/esp32cam.img
+docker run --rm -v F:\dev\esp8266\lightswitch\lightswitch\data:/in -v F:\dev\esp8266\lightswitch\lightswitch\images:/out esptools:latest ./mkspiffs_esp32 -c /in -p 256 -b 4096 -s 0x30000 /out/esp32cam.img
 ```
 
 
 ### Wemos D1 4M1M
 #### create spiffs - proven
 ```
-docker run --rm -v F:\dev\esp8266\lightswitch\lightswitch\data.vue:/in -v F:\dev\esp8266\lightswitch\lightswitch\images:/out esptools:latest ./mkspiffs_esp8266 -c /in -b 8192 -p 256 -s 0xFA000 /out/wemosd1.img
+docker run --rm -v F:\dev\esp8266\lightswitch\lightswitch\data:/in -v F:\dev\esp8266\lightswitch\lightswitch\images:/out esptools:latest ./mkspiffs_esp8266 -c /in -b 8192 -p 256 -s 0xFA000 /out/wemosd1.img
 ```
 
 #### upload spiffs **and** image
