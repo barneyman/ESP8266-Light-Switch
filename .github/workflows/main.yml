@@ -165,7 +165,7 @@ jobs:
 
       - name: gzip web content
         run: |
-          cd ./data.vue
+          cd ./data
           gzip -v *.htm
           gzip -v *.css
           cd ..
@@ -223,7 +223,7 @@ jobs:
       - name: Create SPIFFS
         # no need if a push build
         if: ${{ github.event_name == 'create' }}
-        run: ./${{ matrix.spiffsCmd }} -c ./data.vue ${{ matrix.spiffsCmdLine }} ${{ matrix.friendly }}_${GITHUB_RUN_ID}.spiffs
+        run: ./${{ matrix.spiffsCmd }} -c ./data ${{ matrix.spiffsCmdLine }} ${{ matrix.friendly }}_${GITHUB_RUN_ID}.spiffs
 
       # compress deliverables
       - name: Compress output
