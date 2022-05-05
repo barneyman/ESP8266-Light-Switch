@@ -187,7 +187,7 @@ public:
 				thisClient.addHeader("content-type", "application/json");
 
 				String bearerToken("Bearer ");
-				bearerToken+=(const char*)restInfo["auth"];
+				bearerToken+=restInfo["auth"].asString();
 				thisClient.addHeader("Authorization", bearerToken);
 
 				int postresult=thisClient.POST(bodyText);
