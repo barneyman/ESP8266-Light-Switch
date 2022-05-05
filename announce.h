@@ -189,6 +189,8 @@ public:
 				String bearerToken("Bearer ");
 				bearerToken+=restInfo["auth"].asString();
 				thisClient.addHeader("Authorization", bearerToken);
+				// possible fix for exception 9 on httpClient.end()
+				thisClient.setReuse(false);
 
 				int postresult=thisClient.POST(bodyText);
 				if(m_dblog)
