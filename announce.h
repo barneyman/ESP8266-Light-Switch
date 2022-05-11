@@ -192,9 +192,13 @@ public:
 				// possible fix for exception 9 on httpClient.end()
 				thisClient.setReuse(false);
 
+				// tell it we want the Date header back
+				const char *retHeaders[]={"Date", NULL};
+				thisClient.collectHeaders(retHeaders,1);
+
 				int postresult=thisClient.POST(bodyText);
 				if(m_dblog)
-					m_dblog->printf(debug::dbInfo,"POST %s returned %d\r",bodyText.c_str(), postresult);
+					m_dblog->printf(debug::dbInfo,"POST %s returned %d @ %s\r",bodyText.c_str(), postresult, thisClient.header((size_t)0).c_str());
 
 				thisClient.end();
 			}
