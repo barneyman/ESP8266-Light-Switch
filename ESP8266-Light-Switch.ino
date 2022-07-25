@@ -151,9 +151,9 @@ StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 #define mdsnNAME		"barneyman"
 
 #ifdef ESP32
-#define hostnameStem	"esp32_"
+#define hostnameStem	"esp32-"
 #else
-#define hostnameStem	"esp_"
+#define hostnameStem	"esp-"
 #endif
 myWifiClass wifiInstance(hostnameStem, NULL, mdsnNAME);
 
