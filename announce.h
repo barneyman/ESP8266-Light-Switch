@@ -174,7 +174,7 @@ public:
 				m_dblog->printf(debug::dbInfo,"Posting %s:%u%s\r", eachHA->m_addr.toString().c_str(), eachHA->m_port, eachHA->m_endpoint.c_str());
 
 #ifdef ARDUINO_ARCH_ESP32
-			if (thisClient.begin(eachHA->m_addr.toString(), eachHA->m_port, endPoint )) 
+			if (thisClient.begin(eachHA->m_addr.toString(), eachHA->m_port, eachHA->m_endpoint.c_str() )) 
 #else
 			if (thisClient.begin(wfc, eachHA->m_addr.toString(), eachHA->m_port, eachHA->m_endpoint.c_str() )) 
 #endif
