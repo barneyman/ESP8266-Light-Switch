@@ -419,7 +419,7 @@ public:
 
     virtual bool GetSensorValue(JsonObject &toHere)
     {
-		toHere["state"] = m_currentState;
+		toHere["state"] = m_currentState?"on":"off";
 
         return true;
     }
