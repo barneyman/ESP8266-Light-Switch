@@ -46,11 +46,11 @@ esptool.py --chip esp32 --port COM5 write_flash -fm qio 0x10000 .\build\sonoffba
 
 ### Individual
 ### binary image
-`esptool.py --chip esp32 --port COM5 write_flash -fm qio 0x10000 .\build\sonoffbasic.bin`
+`esptool.py --chip esp32 -b 921600 --before default_reset --after hard_reset --port COM5 write_flash -fm qio 0x10000 .\build\ESP8266-Light-Switch.ino.bin`
 ### spiffs image
-`esptool.py --chip esp32 --port COM5 write_flash -fm qio 0x3D0000 ./esp32cam.img`
+`esptool.py --chip esp32 -b 921600 --before default_reset --after hard_reset --port COM5 write_flash -fm qio 0x3D0000 ./esp32cam.img`
 ### partition
-`esptool.py --chip esp32 --port COM5 write_flash -fm qio 0x8000 .build\\partitions.bin`
+`esptool.py --chip esp32 -b 921600 --port COM5 write_flash -fm qio 0x8000 .build\\partitions.bin`
 
 
 
