@@ -7,13 +7,13 @@ Settings were gleaned from the `boards.txt` under the `hardware` directories
 ## Create spiffs images
 
 ## Wemos D1 4M1M
-`mkspiffs -c ./data -p 256 -b 8192 -s 0xFA000 wemosd1.img`
+`mkspiffs -c ./data.vue -p 256 -b 8192 -s 0xFA000 wemosd1.img`
 
 ## Sonoff Basic 128k SPIFFS
-`mkspiffs -c ./data -p 256 -b 4096 -s 0x20000 sonoffbasic.img`
+`mkspiffs -c ./data.vue -p 256 -b 4096 -s 0x20000 sonoffbasic.img`
 
 ## ESP32 Cam - Minimal SPIFFS
-`mkspiffs -c ./data -p 256 -b 4096 -s 0x30000 esp32cam.img`
+`mkspiffs -c ./data.vue -p 256 -b 4096 -s 0x30000 esp32cam.img`
 
 
 ## Upload 
@@ -46,7 +46,7 @@ esptool.py --chip esp32 --port COM5 write_flash -fm qio 0x10000 .\build\sonoffba
 
 ### Individual
 ### binary image
-`esptool.py --chip esp32 --port COM5 write_flash -fm qio 0x10000 .\build\sonoffbasic.bin`
+`esptool.py --chip esp32 --port COM5 write_flash -fm qio 0x10000 .\build\esp32.bin`
 ### spiffs image
 `esptool.py --chip esp32 --port COM5 write_flash -fm qio 0x3D0000 ./esp32cam.img`
 ### partition
