@@ -165,7 +165,7 @@ jobs:
 
       - name: gzip web content
         run: |
-          cd ./data.vue
+          cd ./data
           gzip -v *.htm
           gzip -v *.css
           cd ..
@@ -189,6 +189,8 @@ jobs:
       # configure the Arduino CLI on the system.
       - name: Setup Arduino CLI
         uses: arduino/setup-arduino-cli@v1.1.1
+        with:
+          version: "0.22.0"
       
       - name: Install platform
         run: |
@@ -199,7 +201,7 @@ jobs:
       # Finally, we compile the sketch, using the FQBN that was set
       # in the build matrix.
       - name: Compile Sketch Matrix
-        run: arduino-cli compile --fqbn ${{ matrix.platform_options }} --output-dir . --build-property compiler.cpp.extra_flags="-D_VERSION_FRIENDLY_CLI=${{ matrix.friendly }} -D_VERSION_NUM_CLI=${{ env.NEW_TAG }}"  --libraries ./libraries lightswitch
+        run: arduino-cli compile --fqbn ${{ matrix.platform_options }} --output-dir . --build-property compiler.cpp.extra_flags="-D_VERSION_FRIENDLY_CLI=${{ matrix.friendly }} -D_VERSION_NUM_CLI=${{ env.NEW_TAG }}"  --libraries ./libraries ESP8266-Light-Switch
 
       - name: rename output
         run: |
@@ -223,7 +225,7 @@ jobs:
       - name: Create SPIFFS
         # no need if a push build
         if: ${{ github.event_name == 'create' }}
-        run: ./${{ matrix.spiffsCmd }} -c ./data.vue ${{ matrix.spiffsCmdLine }} ${{ matrix.friendly }}_${GITHUB_RUN_ID}.spiffs
+        run: ./${{ matrix.spiffsCmd }} -c ./data ${{ matrix.spiffsCmdLine }} ${{ matrix.friendly }}_${GITHUB_RUN_ID}.spiffs
 
       # compress deliverables
       - name: Compress output

@@ -151,9 +151,9 @@ StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 #define mdsnNAME		"barneyman"
 
 #ifdef ESP32
-#define hostnameStem	"esp32_"
+#define hostnameStem	"esp32-"
 #else
-#define hostnameStem	"esp_"
+#define hostnameStem	"esp-"
 #endif
 myWifiClass wifiInstance(hostnameStem, NULL, mdsnNAME);
 
@@ -357,9 +357,9 @@ struct
 
 	// logging
 #ifdef _DEVELOPER_BUILD	
-	debug::dbLevel::dbImportant,
+	//debug::dbLevel::dbImportant,
 	// try not to 'ship' this it screws with the OTA (i think)
-	//debug::dbLevel::dbVerbose,
+	debug::dbLevel::dbVerbose,
 	debug::dbImpl::dbSerial,
 #else
 	debug::dbLevel::dbImportant,
@@ -3075,7 +3075,7 @@ void InstallWebServerHandlers(bool enableCORS)
 		// which causes chrome (at least) to *download* the file, not render it ...
 		wifiInstance.server.serveStatic(uri.c_str(), SPIFFS, uri.c_str(),uri_header.c_str());
 
-		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Serving %s as %s %s\r", file.c_str(), uri.c_str(), modifier.c_str());
+		if(Details.dblog) Details.dblog->printf(debug::dbImportant, "Serving %s as %s %s\r", file.c_str(), uri.c_str(), modifier.c_str());
 
 #ifdef _STORE_STATIC_FILES
 	#ifdef ESP32

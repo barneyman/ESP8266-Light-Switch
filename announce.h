@@ -31,22 +31,37 @@ protected:
 	class recipient
 	{
 		public:
-		recipient(IPAddress addr, unsigned port, String &extra):m_addr(addr),m_port(port),m_extra(extra)
+		recipient(IPAddress addr, unsigned port, String &extra):m_addr(addr),m_port(port)
 		{
+			DynamicJsonBuffer jsonRestInfoBuffer;
+			JsonObject& restInfo = jsonRestInfoBuffer.parseObject(extra);
 
+			m_endpoint=restInfo["endpoint"].as<String>();
+			m_auth=restInfo["auth"].as<String>();
+			if(restInfo.containsKey("instanceid"))
+				m_instanceid=restInfo["instanceid"].as<String>();
+			else
+				m_instanceid=m_addr.toString();
+			
 		}
 
 		// only checks host, deliberately
 		// this allows the HA server to reboot, change ports, and we'll spot it
 		bool operator==(const recipient &other)
 		{
-			return m_addr==other.m_addr;// && m_port==other.m_port;
+			return m_instanceid==other.m_instanceid;// && m_port==other.m_port;
 		}
 
+		void updateFrom(const recipient &other)
+		{
+			m_addr=other.m_addr;
+			m_endpoint=other.m_endpoint;
+			m_auth=other.m_auth;
+		}	
 
 		IPAddress m_addr;
 		unsigned m_port;
-		String m_extra;
+		String m_endpoint, m_auth, m_instanceid;
 	};
 
 	std::vector<recipient> m_HAhosts;
@@ -66,9 +81,9 @@ public:
 	// TODO - handle string extra implications
 	virtual void AddAnnounceRecipient(IPAddress addr, unsigned port, String extra=String()) 
 	{
-		if(m_dblog)
-			m_dblog->printf(debug::dbVerbose,"Adding recipient %s\r",addr.toString().c_str());
 		recipient potential(addr,port,extra);
+		if(m_dblog)
+			m_dblog->printf(debug::dbVerbose,"Adding recipient %s\r",potential.m_instanceid.c_str());
 		auto finder=std::find(m_HAhosts.begin(),m_HAhosts.end(),potential);
 		if(finder==m_HAhosts.end())
 		{
@@ -78,20 +93,8 @@ public:
 		}
 		else
 		{
-			// cater for auth change
-			// cater for port change
-			if(finder->m_port==port && finder->m_extra==extra)
-			{
-				if(m_dblog)
-					m_dblog->println(debug::dbVerbose,"already exists");
-			}
-			else
-			{
-				if(m_dblog)
-					m_dblog->println(debug::dbInfo,"port/extra has changed, re-mapping");
-				finder->m_port=port;
-				finder->m_extra=extra;
-			}
+			// cater for auth, port and endpoint change
+			finder->updateFrom(potential);
 
 		}
 	}
@@ -115,7 +118,8 @@ public:
 		// 
 		jsonBuffer.clear();
 		JsonObject& udproot = jsonBuffer.createObject();
-		udproot["state"]=state;//?"on":"off";
+		// on off for binarysensor
+		udproot["state"]=state?"on":"off";
 		String bodyText;
 		udproot.printTo(bodyText);
 
@@ -131,10 +135,10 @@ public:
 #else		
 #endif		
 		if(m_dblog)
-			m_dblog->println(debug::dbInfo,"Starting IP yell");
+			m_dblog->printf(debug::dbInfo,"Starting IP yell ");
 
 		if(m_dblog)
-			m_dblog->printf(debug::dbWarning,"%d to yell to\r",m_HAhosts.size());
+			m_dblog->printf(debug::dbInfo,"%d to yell to\r",m_HAhosts.size());
 
 		for(auto eachHA=m_HAhosts.begin();eachHA!=m_HAhosts.end();eachHA++)
 		{
@@ -166,19 +170,13 @@ public:
 			}
 #elif defined(_USE_REST)
 
-			// extra is json
-			//StaticJsonBuffer<500> jsonRestInfoBuffer;
-			DynamicJsonBuffer jsonRestInfoBuffer;
-			JsonObject& restInfo = jsonRestInfoBuffer.parseObject(eachHA->m_extra);
-			String endPoint=restInfo["endpoint"];
-
 			if(m_dblog)
-				m_dblog->printf(debug::dbInfo,"Posting %s:%u%s\n\r", eachHA->m_addr.toString().c_str(), eachHA->m_port, endPoint.c_str());
+				m_dblog->printf(debug::dbInfo,"Posting %s:%u%s\r", eachHA->m_addr.toString().c_str(), eachHA->m_port, eachHA->m_endpoint.c_str());
 
 #ifdef ARDUINO_ARCH_ESP32
-			if (thisClient.begin(eachHA->m_addr.toString(), eachHA->m_port, endPoint )) 
+			if (thisClient.begin(eachHA->m_addr.toString(), eachHA->m_port, eachHA->m_endpoint.c_str() )) 
 #else
-			if (thisClient.begin(wfc, eachHA->m_addr.toString(), eachHA->m_port, endPoint )) 
+			if (thisClient.begin(wfc, eachHA->m_addr.toString(), eachHA->m_port, eachHA->m_endpoint.c_str() )) 
 #endif
 			{  
 
@@ -187,12 +185,20 @@ public:
 				thisClient.addHeader("content-type", "application/json");
 
 				String bearerToken("Bearer ");
-				bearerToken+=(const char*)restInfo["auth"];
+				bearerToken+=eachHA->m_auth;
 				thisClient.addHeader("Authorization", bearerToken);
+				if(m_dblog)
+					m_dblog->printf(debug::dbInfo,"Authorization %s\r", bearerToken.c_str());
+				// possible fix for exception 9 on httpClient.end()
+				thisClient.setReuse(false);
+
+				// tell it we want the Date header back
+				const char *retHeaders[]={"Date", NULL};
+				thisClient.collectHeaders(retHeaders,1);
 
 				int postresult=thisClient.POST(bodyText);
 				if(m_dblog)
-					m_dblog->printf(debug::dbInfo,"POST %s returned %d\r",bodyText.c_str(), postresult);
+					m_dblog->printf(debug::dbInfo,"POST %s returned %d @ %s\r",bodyText.c_str(), postresult, thisClient.header((size_t)0).c_str());
 
 				thisClient.end();
 			}
@@ -200,7 +206,7 @@ public:
 			{
 				/* code */
 				if(m_dblog)
-					m_dblog->printf(debug::dbError,"httpbegin failed %s:%u:%s\r", eachHA->m_addr.toString().c_str(), eachHA->m_port,restInfo["endpoint"]);
+					m_dblog->printf(debug::dbError,"httpbegin failed %s:%u:%s\r", eachHA->m_addr.toString().c_str(), eachHA->m_port,eachHA->m_endpoint.c_str());
 			}
 			
 
