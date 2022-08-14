@@ -24,3 +24,8 @@ RUN rm -r ./mkspiffs_src
 
 # esptool
 RUN pip install esptool
+
+COPY build_images.sh .
+VOLUME /data
+
+CMD ["bash", "build_images.sh"]
