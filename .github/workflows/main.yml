@@ -21,7 +21,9 @@ on:
   push:
     branches: [ master ]
 
-  # pull_request:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
   #   branches: [ master ]
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
@@ -33,12 +35,14 @@ jobs:
     steps:
       # https://docs.github.com/en/actions/reference/context-and-expression-syntax-for-github-actions#contexts
       - name: Context
+        env:
+          GITHUB_CONTEXT: ${{ toJSON(github) }}
         run: |
           echo "github.event_name"
           echo "${{ github.event_name }}"
           echo "github.ref"
           echo "${{ github.ref }}"
-
+          echo "$GITHUB_CONTEXT"
 
   createRelease:
     runs-on: ubuntu-latest
