@@ -179,9 +179,9 @@ jobs:
       # esp32 esptool needs serial
       - name: install py
         if: ${{ matrix.friendly == 'esp32_cam' }}
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
-          python-version: '2.x'
+          python-version: '2.7.18'
 
       # esp32 needs serial around to build successfully
       - name: Install Python dependencies
