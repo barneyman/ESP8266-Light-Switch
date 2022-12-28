@@ -21,7 +21,9 @@ on:
   push:
     branches: [ master ]
 
-  # pull_request:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
   #   branches: [ master ]
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
@@ -33,12 +35,14 @@ jobs:
     steps:
       # https://docs.github.com/en/actions/reference/context-and-expression-syntax-for-github-actions#contexts
       - name: Context
+        env:
+          GITHUB_CONTEXT: ${{ toJSON(github) }}
         run: |
           echo "github.event_name"
           echo "${{ github.event_name }}"
           echo "github.ref"
           echo "${{ github.ref }}"
-
+          echo "$GITHUB_CONTEXT"
 
   createRelease:
     runs-on: ubuntu-latest
@@ -132,10 +136,15 @@ jobs:
             # 1028096:  
 
     # The type of runner that the job will run on
-    runs-on: ubuntu-latest
+    # to get py 2.7
+    runs-on: ubuntu-20.04
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
+      - name: Git Version
+        id: version
+        uses: codacy/git-version@2.7.1
+
       - name: EnvironmentForRelease
         if: ${{ github.event_name == 'create' }}
         # remove refs/tags/ from github-ref
@@ -153,7 +162,7 @@ jobs:
           echo "setting up env for push ..."
           echo ${GITHUB_REF}
           echo ${GITHUB_REPOSITORY}
-          echo "NEW_TAG=v0.0.0" >> $GITHUB_ENV
+          echo "NEW_TAG=${{ steps.version.outputs.version }}" >> $GITHUB_ENV
           echo "NEW_HEAD=${GITHUB_REF#refs/heads/}" >> $GITHUB_ENV
 
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
@@ -175,9 +184,9 @@ jobs:
       # esp32 esptool needs serial
       - name: install py
         if: ${{ matrix.friendly == 'esp32_cam' }}
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
-          python-version: '2.x'
+          python-version: '2.7.18'
 
       # esp32 needs serial around to build successfully
       - name: Install Python dependencies
