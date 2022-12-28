@@ -1275,6 +1275,7 @@ void performUpdate(String url, String urlSpiffs)
 			// if(Details.dblog) 
 			// 	Details.dblog->printf(debug::dbImportant, "SPIFFS garbage collect ... %s\r", (gcret?"true":"false"));
 
+			SPIFFS.end();
 #ifdef ESP32
 			result=httpUpdate.updateSpiffs(wifiInstance.m_wificlient ,urlSpiffs+urlArgs,_MYVERSION);
 #else			
