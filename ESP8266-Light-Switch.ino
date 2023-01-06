@@ -1345,6 +1345,7 @@ void performUpdate(String url, String urlSpiffs)
 		// first time round, save our config, always, even if it fails
 		if(!updates) // && (result==HTTP_UPDATE_OK))
 		{
+			SPIFFS.begin();
 			if(Details.dblog) Details.dblog->println(debug::dbImportant, "preserving config");
 
 			delay(2000);
