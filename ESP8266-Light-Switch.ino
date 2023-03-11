@@ -1185,7 +1185,7 @@ void setServiceTexts()
 #elif defined(PLATFORM_ESP32_CAMERA)
 	if(!wifiInstance.addServiceText("platforms","camera"))
 #else
-	if(!wifiInstance.addServiceText("platforms","light,sensor"))
+	if(!wifiInstance.addServiceText("platforms","sensor"))
 #endif
 	{
 		if(Details.dblog) Details.dblog->println(debug::dbError, "Failed to add service text!");		
