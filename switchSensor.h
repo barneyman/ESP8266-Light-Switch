@@ -369,7 +369,7 @@ public:
 	{
 		JsonObject &sensorElement = toHere.createNestedObject();
 		sensorElement["type"] = "illuminance";
-		sensorElement["uom"] = "Lux";
+		sensorElement["uom"] = "lx";
 		sensorElement["round"] = "0";
 	}
 
