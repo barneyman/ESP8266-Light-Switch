@@ -1275,10 +1275,13 @@ void performUpdate(String url, String urlSpiffs)
 			// if(Details.dblog) 
 			// 	Details.dblog->printf(debug::dbImportant, "SPIFFS garbage collect ... %s\r", (gcret?"true":"false"));
 
-			SPIFFS.end();
 #ifdef ESP32
+			httpUpdate.onStart([]() { SPIFFS.end(); });
+			httpUpdate.onEnd([]() { SPIFFS.begin(); });
 			result=httpUpdate.updateSpiffs(wifiInstance.m_wificlient ,urlSpiffs+urlArgs,_MYVERSION);
 #else			
+			ESPhttpUpdate.onStart([]() { SPIFFS.end(); });
+			ESPhttpUpdate.onEnd([]() { SPIFFS.begin(); });
 			result=ESPhttpUpdate.updateFS(wifiInstance.m_wificlient ,urlSpiffs+urlArgs,_MYVERSION);
 #endif			
 		}
@@ -1345,7 +1348,6 @@ void performUpdate(String url, String urlSpiffs)
 		// first time round, save our config, always, even if it fails
 		if(!updates) // && (result==HTTP_UPDATE_OK))
 		{
-			SPIFFS.begin();
 			if(Details.dblog) Details.dblog->println(debug::dbImportant, "preserving config");
 
 			delay(2000);
