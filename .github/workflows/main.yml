@@ -5,9 +5,6 @@ name: barneymanCI
 # Controls when the action will run. Triggers the workflow on push or pull request 
 # events but only for the master branch
 on:
-  # when a branch or tag is created - if the tag ends in 'pr' in it, it will be a pre-release 
-  # otherwise a full release
-  create:
 
 #  schedule:
 #    - cron:  '*/30 * * * *'    
@@ -20,6 +17,9 @@ on:
 
   push:
     branches: [ master ]
+    
+    tags:
+      - v*
 
   pull_request:
     types: [opened, synchronize, reopened]
