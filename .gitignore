@@ -76,3 +76,4 @@ Debug
 *.img
 
 /data.vue/vue.js
+*.map
