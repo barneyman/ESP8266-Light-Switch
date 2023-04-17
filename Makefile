@@ -46,7 +46,7 @@ esp32cam: esp32cam_spiffs
 
 esp32cam_spiffs:
 	- mkdir ./build
-	- mkdir ./build/wemosd1
+	- mkdir ./build/esp32cam
 	/spiffs/$(ESP32CAM_SPIFFS) -c ./data $(ESP32CAM_SPIFFS_OPTS) ./build/esp32cam/$(ESP32CAM_FRIENDLY).spiffs
 
 clean:
