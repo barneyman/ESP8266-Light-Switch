@@ -22,7 +22,7 @@ ESP32CAM_SPIFFS_OPTS=-p 256 -b 4096 -s 0x3D0000
 sonoff: sonoff_spiffs
 	- mkdir ./build
 	- mkdir ./build/sonoff
-	arduino-cli compile --fqbn $(SONOFF_FQBN) --output-dir ./build/sonoff --build-property compiler.cpp.extra_flags="-D_VERSION_FRIENDLY_CLI=$(SONOFF_FRIENDLY) -D_VERSION_NUM_CLI=1.1"  --libraries ./libraries ESP8266-Light-Switch
+	arduino-cli compile --fqbn $(SONOFF_FQBN) --output-dir ./build/sonoff --build-property compiler.cpp.extra_flags="-D_VERSION_FRIENDLY_CLI=$(SONOFF_FRIENDLY)"  --libraries ./libraries ESP8266-Light-Switch
 
 sonoff_spiffs:
 	- mkdir ./build
@@ -32,7 +32,7 @@ sonoff_spiffs:
 wemosd1: wemosd1_spiffs
 	- mkdir ./build
 	- mkdir ./build/wemosd1
-	arduino-cli compile --fqbn $(WEMOSD1_FQBN) --output-dir ./build/wemosd1 --build-property compiler.cpp.extra_flags="-D_VERSION_FRIENDLY_CLI=$(WEMOSD1_FRIENDLY) -D_VERSION_NUM_CLI=1.1"  --libraries ./libraries ESP8266-Light-Switch	
+	arduino-cli compile --fqbn $(WEMOSD1_FQBN) --output-dir ./build/wemosd1 --build-property compiler.cpp.extra_flags="-D_VERSION_FRIENDLY_CLI=$(WEMOSD1_FRIENDLY)"  --libraries ./libraries ESP8266-Light-Switch	
 
 wemosd1_spiffs:
 	- mkdir ./build
@@ -42,7 +42,7 @@ wemosd1_spiffs:
 esp32cam: esp32cam_spiffs
 	- mkdir ./build
 	- mkdir ./build/esp32cam
-	arduino-cli compile --fqbn $(ESP32CAM_FQBN) --output-dir ./build/esp32cam --build-property compiler.cpp.extra_flags="-D_VERSION_FRIENDLY_CLI=$(ESP32CAM_FRIENDLY) -D_VERSION_NUM_CLI=1.1"  --libraries ./libraries ESP8266-Light-Switch	
+	arduino-cli compile --fqbn $(ESP32CAM_FQBN) --output-dir ./build/esp32cam --build-property compiler.cpp.extra_flags="-D_VERSION_FRIENDLY_CLI=$(ESP32CAM_FRIENDLY)"  --libraries ./libraries ESP8266-Light-Switch	
 
 esp32cam_spiffs:
 	- mkdir ./build
@@ -52,7 +52,7 @@ esp32cam_spiffs:
 burn_wemosd1_spiffs: wemosd1_spiffs
 	esptool.py --chip esp8266 --before default_reset --after hard_reset --baud 921600 --port /dev/ttyUSB0 write_flash 0x300000 ./build/wemosd1/$(WEMOSD1_FRIENDLY).spiffs
 
-burn_wemosd1_bin: #wemosd1
+burn_wemosd1_bin: wemosd1
 	esptool.py --chip esp8266 --before default_reset --after hard_reset --baud 921600 --port /dev/ttyUSB0 write_flash 0 ./build/wemosd1/ESP8266-Light-Switch.ino.bin
 
 
