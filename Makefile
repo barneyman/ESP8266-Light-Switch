@@ -1,7 +1,7 @@
 
 
 all: sonoff wemosd1 esp32cam
-
+spiffs: sonoff_spiffs wemosd1_spiffs esp32cam_spiffs
 
 SONOFF_FQBN="esp8266:esp8266:generic:xtal=80,vt=iram,exception=disabled,stacksmash=disabled,ssl=all,mmu=3232,non32xfer=fast,ResetMethod=ck,CrystalFreq=26,FlashFreq=40,FlashMode=dout,eesz=1M128,led=13,sdk=nonosdk_190703,ip=lm2f,dbg=Disabled,lvl=None____,wipe=none,baud=115200"
 SONOFF_FRIENDLY=sonoff_basic
@@ -48,6 +48,13 @@ esp32cam_spiffs:
 	- mkdir ./build
 	- mkdir ./build/esp32cam
 	/spiffs/$(ESP32CAM_SPIFFS) -c ./data $(ESP32CAM_SPIFFS_OPTS) ./build/esp32cam/$(ESP32CAM_FRIENDLY).spiffs
+
+burn_wemosd1_spiffs: wemosd1_spiffs
+	esptool.py --chip esp8266 --before default_reset --after hard_reset --baud 921600 --port /dev/ttyUSB0 write_flash 0x300000 ./build/wemosd1/$(WEMOSD1_FRIENDLY).spiffs
+
+burn_wemosd1_bin: #wemosd1
+	esptool.py --chip esp8266 --before default_reset --after hard_reset --baud 921600 --port /dev/ttyUSB0 write_flash 0 ./build/wemosd1/ESP8266-Light-Switch.ino.bin
+
 
 clean:
 	rm -r ./build

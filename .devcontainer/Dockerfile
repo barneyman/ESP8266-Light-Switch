@@ -26,4 +26,8 @@ RUN wget https://github.com/igrr/mkspiffs/releases/download/0.2.3/mkspiffs-0.2.3
 
 RUN rm *.gz
 
+RUN pip3 install esptool
+
+RUN apt install -y udev
+
 WORKDIR /
