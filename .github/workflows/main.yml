@@ -5,9 +5,6 @@ name: barneymanCI
 # Controls when the action will run. Triggers the workflow on push or pull request 
 # events but only for the master branch
 on:
-  # when a branch or tag is created - if the tag ends in 'pr' in it, it will be a pre-release 
-  # otherwise a full release
-  create:
 
 #  schedule:
 #    - cron:  '*/30 * * * *'    
@@ -20,6 +17,9 @@ on:
 
   push:
     branches: [ master ]
+    
+    tags:
+      - v*
 
   pull_request:
     types: [opened, synchronize, reopened]
@@ -220,7 +220,7 @@ jobs:
       # then handle spiffs
       - name: Install mkspiffs
         # no need if a push build
-        if: ${{ github.event_name == 'create' }}
+        # if: ${{ github.event_name == 'create' }}
         run: |
           # ESP32 ver
           wget https://github.com/igrr/mkspiffs/releases/download/0.2.3/mkspiffs-0.2.3-arduino-esp32-linux64.tar.gz
@@ -233,13 +233,13 @@ jobs:
 
       - name: Create SPIFFS
         # no need if a push build
-        if: ${{ github.event_name == 'create' }}
+        # if: ${{ github.event_name == 'create' }}
         run: ./${{ matrix.spiffsCmd }} -c ./data ${{ matrix.spiffsCmdLine }} ${{ matrix.friendly }}_${GITHUB_RUN_ID}.spiffs
 
       # compress deliverables
       - name: Compress output
         # no need if a push build
-        if: ${{ github.event_name == 'create' }}
+        # if: ${{ github.event_name == 'create' }}
         run: tar -czvf ${{ matrix.friendly }}.tar.gz *.elf *.bin *.spiffs
         
       - name: Load Release URL File from release job
@@ -256,7 +256,14 @@ jobs:
         run: |
           value=`cat release_url/release_url.txt`
           echo ::set-output name=upload_url::$value
-        
+      
+      - name: Upload artifacts
+        if: ${{ github.event_name != 'create' }}
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.friendly }}
+          path: ${{ matrix.friendly }}.tar.gz
+
 
       - name: Upload Release Asset
         # no need if a push build
