@@ -52,6 +52,14 @@ esp32cam_spiffs:
 	- mkdir ./build/esp32cam
 	/spiffs/$(ESP32CAM_SPIFFS) -c ./data $(ESP32CAM_SPIFFS_OPTS) ./build/esp32cam/$(ESP32CAM_FRIENDLY).spiffs
 
+
+
+burn_sonoff_spiffs: sonoff_spiffs
+	esptool.py --chip esp8266 --port /dev/ttyUSB0 write_flash -fm dout 0xDB000 ./build/sonoff/$(SONOFF_FRIENDLY).spiffs
+
+burn_sonoff_bin: sonoff
+	esptool.py --chip esp8266 --port /dev/ttyUSB0 write_flash -fs 1MB -fm dout 0x0 ./build/sonoff/$(SONOFF_FRIENDLY).bin
+
 burn_wemosd1_spiffs: wemosd1_spiffs
 	esptool.py --chip esp8266 --before default_reset --after hard_reset --baud 921600 --port /dev/ttyUSB0 write_flash 0x300000 ./build/wemosd1/$(WEMOSD1_FRIENDLY).spiffs
 
