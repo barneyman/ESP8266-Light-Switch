@@ -595,9 +595,9 @@ void WriteJSONconfig(bool writeServiceTexts)
 
 	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "\r -- JSON : written %ld\r\n", written);
 
-	if(written!=jsonBuffer.size())
+	if(written<jsonBuffer.size())
 	{
-		if(Details.dblog) Details.dblog->printf(debug::dbError, "\r -- JSON : writen failed %ld written instead of %ld\r\n", written, jsonBuffer.size());
+		if(Details.dblog) Details.dblog->printf(debug::dbError, "\r -- JSON : write failed %ld written instead of %ld\r\n", written, jsonBuffer.size());
 	}
 
 	json.flush();
