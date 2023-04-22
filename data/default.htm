@@ -228,8 +228,8 @@
                 setFriendlyName: function(newfname) {
                     this.sendConfig("friendlyName", newfname)
                 },
-                setPrerelease: function(prerel) {
-                    this.sendConfig("prerelease", prerel)
+                setNightly: function(nightly) {
+                    this.sendConfig("nightly", nightly)
                 },
                 setUpgradeBehaviour: function(uponoff) {
                     this.sendConfig("upgradeOnlyWhenRelayOff", uponoff)
@@ -284,7 +284,7 @@
                                         </div>\
                                         <div class="horizontalContainer">\
                                             <span>Accept pre-releases?</span>\
-                                            <input type="checkbox" v-model="config.prerelease" v-on:change="setPrerelease(config.prerelease)"></input>\
+                                            <input type="checkbox" v-model="config.nightly" v-on:change="setNightly(config.nightly)"></input>\
                                         </div>\
                                     </div>\
                                 </fieldset>\
