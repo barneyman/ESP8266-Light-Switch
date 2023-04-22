@@ -1183,7 +1183,7 @@ void setServiceTexts()
 #elif defined(PLATFORM_ESP32_CAMERA)
 	if(!wifiInstance.addServiceText("platforms","camera"))
 #else
-	if(!wifiInstance.addServiceText("platforms","light,sensor"))
+	if(!wifiInstance.addServiceText("platforms","sensor"))
 #endif
 	{
 		if(Details.dblog) Details.dblog->println(debug::dbError, "Failed to add service text!");		
@@ -1273,6 +1273,7 @@ void performUpdate(String url, String urlSpiffs)
 			// if(Details.dblog) 
 			// 	Details.dblog->printf(debug::dbImportant, "SPIFFS garbage collect ... %s\r\n", (gcret?"true":"false"));
 
+			SPIFFS.end();
 #ifdef ESP32
 			result=httpUpdate.updateSpiffs(wifiInstance.m_wificlient ,urlSpiffs+urlArgs,_MYVERSION);
 #else			
@@ -1342,6 +1343,7 @@ void performUpdate(String url, String urlSpiffs)
 		// first time round, save our config, always, even if it fails
 		if(!updates) // && (result==HTTP_UPDATE_OK))
 		{
+			SPIFFS.begin();
 			if(Details.dblog) Details.dblog->println(debug::dbImportant, "preserving config");
 
 			delay(2000);
