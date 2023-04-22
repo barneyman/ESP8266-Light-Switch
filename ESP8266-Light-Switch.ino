@@ -3136,7 +3136,6 @@ void loop(void)
 
 	if(Details.updateAvailable)
 	{
-		delay(2000);
 		performUpdate(Details.url,Details.urlSpiffs);
 		// shouldn't get here, unless the update fails or there's nothing to do
 		Details.updateAvailable=false;
