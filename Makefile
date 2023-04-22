@@ -9,7 +9,7 @@ SONOFF_SPIFFS=mkspiffs_esp8266
 SONOFF_SPIFFS_OPTS=-p 256 -b 4096 -s 0x20000
 
 WEMOSD1_FQBN="esp8266:esp8266:d1_mini:xtal=80,vt=iram,exception=disabled,ssl=all,eesz=4M1M,ip=lm2f,dbg=Disabled"
-WEMOSD1_FRIENDLY=wemosD1
+WEMOSD1_FRIENDLY=wemosd1
 WEMOSD1_SPIFFS=mkspiffs_esp8266
 WEMOSD1_SPIFFS_OPTS=-p 256 -b 8192 -s 0xFA000
 
@@ -33,6 +33,7 @@ wemosd1: wemosd1_spiffs
 	- mkdir ./build
 	- mkdir ./build/wemosd1
 	arduino-cli compile --fqbn $(WEMOSD1_FQBN) --output-dir ./build/wemosd1 --build-property compiler.cpp.extra_flags="-D_VERSION_FRIENDLY_CLI=$(WEMOSD1_FRIENDLY)"  --libraries ./libraries ESP8266-Light-Switch	
+	mv ./build/wemosd1/ESP8266-Light-Switch.ino.bin ./build/wemosd1/$(WEMOSD1_FRIENDLY).bin
 
 wemosd1_spiffs:
 	- mkdir ./build
@@ -55,6 +56,7 @@ burn_wemosd1_spiffs: wemosd1_spiffs
 burn_wemosd1_bin: wemosd1
 	esptool.py --chip esp8266 --before default_reset --after hard_reset --baud 921600 --port /dev/ttyUSB0 write_flash 0 ./build/wemosd1/ESP8266-Light-Switch.ino.bin
 
+burn_wemosd1: burn_wemosd1_spiffs burn_wemosd1_bin
 
 clean:
 	rm -r ./build
