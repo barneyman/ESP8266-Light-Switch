@@ -1028,7 +1028,7 @@ void createLogger()
 			{
 				SerialDebug*newOne=new SerialDebug(Details.loggingLevel);
 				// Sonoff doesn't APPEAR to handle any faster
-				newOne->begin(9600);
+				newOne->begin(38400);
 				Details.dblog=newOne;
 			}
 			break;
