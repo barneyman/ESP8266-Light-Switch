@@ -108,7 +108,7 @@
 #ifndef _VERSION_NUM_CLI
 
 //	#define _VERSION_NUM "v99.99.99.pr"
-	#define _VERSION_NUM "v0.1.1.pr"
+	#define _VERSION_NUM "v0.1.1.sha"
 	#define _DEVELOPER_BUILD
 
 #else
@@ -272,8 +272,8 @@ struct
 	// TODO - change this to device friendly name
 	String friendlyName;
 
-	// do we want prereleases
-	bool prereleaseRequired;
+	// do we want nightly builds
+	bool nightlyRequired;
 
 	// do we only upgrade when the relay is off?
 	bool upgradeOnlyWhenRelayOff;
@@ -352,7 +352,7 @@ struct
 
 	"",	// friendly name
 
-	// prerel, upgradeWhileOff
+	// nightly, upgradeWhileOff
 	false, true,
 
 	// logging
@@ -550,7 +550,7 @@ void WriteJSONconfig(bool writeServiceTexts)
 
 	root["friendlyName"] = Details.friendlyName;
 
-	root["prerelease"]=Details.prereleaseRequired;
+	root["nightly"]=Details.nightlyRequired;
 
 	root["upgradeOnlyWhenRelayOff"]=Details.upgradeOnlyWhenRelayOff;
 
@@ -594,6 +594,11 @@ void WriteJSONconfig(bool writeServiceTexts)
 	size_t written=json.write((byte*)jsonText.c_str(), jsonText.length());
 
 	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "\r -- JSON : written %ld\r\n", written);
+
+	if(written!=jsonBuffer.size())
+	{
+		if(Details.dblog) Details.dblog->printf(debug::dbError, "\r -- JSON : writen failed %ld written instead of %ld\r\n", written, jsonBuffer.size());
+	}
 
 	json.flush();
 	json.close();
@@ -738,13 +743,13 @@ void ReadJSONconfig()
 			Details.friendlyName = interim;
 	}
 
-	if(root.containsKey("prerelease"))
+	if(root.containsKey("nightly"))
 	{
-		Details.prereleaseRequired=root["prerelease"];
+		Details.nightlyRequired=root["nightly"];
 	}
 	else
 	{
-		Details.prereleaseRequired=false;
+		Details.nightlyRequired=false;
 	}
 
 	if(root.containsKey("upgradeOnlyWhenRelayOff"))
@@ -1253,8 +1258,8 @@ void performUpdate(String url, String urlSpiffs)
 	for(int updates=0;(updates<2) && (result==HTTP_UPDATE_OK);updates++)
 	{
 
-		// augment the url with a prerelease parameter
-		String urlArgs="?prerelease="+String((Details.prereleaseRequired?"true":"false"));
+		// augment the url with a nightly parameter
+		String urlArgs="?nightly="+String((Details.nightlyRequired?"true":"false"));
 		if(Details.dblog) Details.dblog->println(debug::dbInfo,urlArgs.c_str());
 
 
@@ -2072,9 +2077,9 @@ void InstallWebServerHandlers(bool enableCORS)
 			Details.friendlyName = root["friendlyName"].as<char*>();
 		}
 
-		if (root.containsKey("prerelease"))
+		if (root.containsKey("nightly"))
 		{
-			Details.prereleaseRequired = root["prerelease"]?true:false;
+			Details.nightlyRequired = root["nightly"]?true:false;
 		}
 
 		if(root.containsKey("upgradeOnlyWhenRelayOff"))
@@ -2779,7 +2784,7 @@ void InstallWebServerHandlers(bool enableCORS)
 
 
 		root["friendlyName"] = Details.friendlyName;
-		root["prerelease"]=Details.prereleaseRequired?1:0;
+		root["nightly"]=Details.nightlyRequired?1:0;
 		root["upgradeOnlyWhenRelayOff"]=Details.upgradeOnlyWhenRelayOff?1:0;
 
 		root["wifiConfigured"]=Details.wifi.configured;
