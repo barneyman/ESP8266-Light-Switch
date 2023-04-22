@@ -3115,8 +3115,11 @@ unsigned long lastTested = 0;
 #define _TEST_WIFI_MILLIS	(15*60*1000)
 #endif
 
+#ifdef _DEVELOPER_BUILD
+#define _FETCH_PEERS_TIMEOUT_MS	(2*60*1000)	// 1 min
+#else
 #define _FETCH_PEERS_TIMEOUT_MS	(15*60*1000)	// 15 mins
-//#define _FETCH_PEERS_TIMEOUT_MS	(1*60*1000)	// 1 min
+#endif
 unsigned long lastCheckedForPeers = 0;
 
 void loop(void) 
