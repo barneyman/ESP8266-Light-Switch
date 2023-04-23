@@ -25,7 +25,7 @@ sonoff: sonoff_spiffs
 	- mkdir ./build
 	- mkdir ./build/$(SONOFF_FRIENDLY)
 	arduino-cli compile --fqbn $(SONOFF_FQBN) --output-dir ./build/$(SONOFF_FRIENDLY) --build-property compiler.cpp.extra_flags="-D_VERSION_FRIENDLY_CLI=$(SONOFF_FRIENDLY)"  --libraries ./libraries ESP8266-Light-Switch
-	mv ./build/sonoff/ESP8266-Light-Switch.ino.bin ./build/$(SONOFF_FRIENDLY)/$(SONOFF_FRIENDLY).bin
+	mv ./build/$(SONOFF_FRIENDLY)/ESP8266-Light-Switch.ino.bin ./build/$(SONOFF_FRIENDLY)/$(SONOFF_FRIENDLY).bin
 
 sonoff_spiffs:
 	- mkdir ./build
@@ -36,7 +36,7 @@ wemosd1: wemosd1_spiffs
 	- mkdir ./build
 	- mkdir ./build/$(WEMOSD1_FRIENDLY)
 	arduino-cli compile --fqbn $(WEMOSD1_FQBN) --output-dir ./build/$(WEMOSD1_FRIENDLY) --build-property compiler.cpp.extra_flags="-D_VERSION_FRIENDLY_CLI=$(WEMOSD1_FRIENDLY)"  --libraries ./libraries ESP8266-Light-Switch	
-	mv ./build/wemosd1/ESP8266-Light-Switch.ino.bin ./build/$(WEMOSD1_FRIENDLY)/$(WEMOSD1_FRIENDLY).bin
+	mv ./build/$(WEMOSD1_FRIENDLY)/ESP8266-Light-Switch.ino.bin ./build/$(WEMOSD1_FRIENDLY)/$(WEMOSD1_FRIENDLY).bin
 
 wemosd1_spiffs:
 	- mkdir ./build
@@ -47,7 +47,7 @@ esp32cam: esp32cam_spiffs
 	- mkdir ./build
 	- mkdir ./build/$(ESP32CAM_FRIENDLY)
 	arduino-cli compile --fqbn $(ESP32CAM_FQBN) --output-dir ./build/$(ESP32CAM_FRIENDLY) --build-property compiler.cpp.extra_flags="-D_VERSION_FRIENDLY_CLI=$(ESP32CAM_FRIENDLY)"  --libraries ./libraries ESP8266-Light-Switch	
-	mv ./build/esp32cam/ESP8266-Light-Switch.ino.bin ./build/$(ESP32CAM_FRIENDLY)/$(ESP32CAM_FRIENDLY).bin
+	mv ./build/$(ESP32CAM_FRIENDLY)/ESP8266-Light-Switch.ino.bin ./build/$(ESP32CAM_FRIENDLY)/$(ESP32CAM_FRIENDLY).bin
 
 esp32cam_spiffs:
 	- mkdir ./build
