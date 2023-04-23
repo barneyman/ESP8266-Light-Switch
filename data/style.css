@@ -1,5 +1,5 @@
 BODY {
-    font-family: Verdana;
+    font-family: Arial;
     font-size: small;
     background-color: #d3d3d3
 }
@@ -55,7 +55,7 @@ ul.main li+li:before {
 }
 
 .heading {
-    background-color: green;
+    background-color: rgb(19, 71, 19);
     color: #fff;
     text-align: right;
     font-weight: 700
