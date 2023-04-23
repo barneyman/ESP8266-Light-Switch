@@ -1,4 +1,4 @@
-FROM ubuntu:latest
+FROM ubuntu:latest as devcontainer
 
 RUN apt update && apt upgrade -y 
 
@@ -31,3 +31,10 @@ RUN pip3 install esptool
 RUN apt install -y udev
 
 WORKDIR /
+
+FROM devcontainer as interactive
+
+RUN apt install -y screen
+
+VOLUME /workspaces/ESP8266-Light-Switch
+WORKDIR /workspaces/ESP8266-Light-Switch
