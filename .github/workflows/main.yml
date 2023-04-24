@@ -57,11 +57,11 @@ jobs:
             v=$(echo ${{ github.ref }} | cut -d'/' -f3)
             echo "VERSION=${v}" >> "$GITHUB_OUTPUT"  
             echo "using ${v}"
-            echo "TAGGED='yes'" >> "$GITHUB_OUTPUT"  
+            echo "TAGGED=yes" >> "$GITHUB_OUTPUT"  
           else
             echo "VERSION=v0.3.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
             echo "using v0.3.${{ github.run_number }}"
-            echo "TAGGED='no'" >> "$GITHUB_OUTPUT"  
+            echo "TAGGED=no" >> "$GITHUB_OUTPUT"  
           fi
 
   # output some env vars, for later use :)
