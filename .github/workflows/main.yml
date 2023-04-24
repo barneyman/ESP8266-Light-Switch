@@ -87,6 +87,10 @@ jobs:
       asset_id: ${{ steps.create_release.outputs.id }}
     runs-on: ubuntu-latest
     steps:
+
+      - name: debug
+        run: echo "tagged = ${{ needs.determineVersion.outputs.tagged }}"
+
       - name: Create Release
         # no need if we're doing a build after push
         #if: ${{ github.event_name == 'create' }}
