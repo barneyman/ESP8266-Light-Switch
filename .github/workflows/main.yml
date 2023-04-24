@@ -234,7 +234,7 @@ jobs:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
             upload_url: ${{ needs.createRelease.outputs.asset_url }} 
-            asset_path: ./${{ matrix.friendly }}.tar.gz
+            asset_path: ./${{ matrix.friendly }}-${{ needs.determineVersion.outputs.version_number }}.tar.gz
             asset_name: ${{ matrix.friendly }}-${{ needs.determineVersion.outputs.version_number }}.tar.gz
             asset_content_type: application/tar+gzip            
         
