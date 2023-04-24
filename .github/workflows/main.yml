@@ -48,12 +48,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-      # create a change listing (from the previous release )
-      # - name: Changelog
-      #   if: ${{ github.event_name == 'create' }}
-      #   uses: scottbrenner/generate-changelog-action@master
-      #   id: Changelog
-
       - name: Create Release
         # no need if we're doing a build after push
         if: ${{ github.event_name == 'create' }}
