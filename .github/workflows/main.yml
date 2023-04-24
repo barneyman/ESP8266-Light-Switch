@@ -37,7 +37,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # https://docs.github.com/en/actions/reference/context-and-expression-syntax-for-github-actions#contexts
-      - name: Context
+      - name: Context         
+
         env:
           GITHUB_CONTEXT: ${{ toJSON(github) }}
         run: |
@@ -48,12 +49,15 @@ jobs:
           echo "$GITHUB_CONTEXT"
 
   createRelease:
+    if: ${{ github.event_name == 'create' }}
+    outputs:
+      asset_url: ${{ steps.create_release.outputs.upload_url }}
+      asset_id: ${{ steps.create_release.outputs.id }}
     runs-on: ubuntu-latest
     steps:
 
       - name: Create Release
         # no need if we're doing a build after push
-        if: ${{ github.event_name == 'create' }}
         id: create_release
         uses: actions/create-release@latest
         env:
@@ -70,37 +74,6 @@ jobs:
           # save it as draft until all assets are uploaded, then undraft it at the end
           draft: true
           prerelease: ${{endsWith(github.ref,'pr')}}
-  
-      - name: Output Release URL File
-        # no need if we're doing a build after push
-        if: ${{ github.event_name == 'create' }}
-        run: echo "${{ steps.create_release.outputs.upload_url }}" > release_url.txt
-        
-      - name: Save Release URL File for publish
-        # no need if we're doing a build after push
-        if: ${{ github.event_name == 'create' }}
-        uses: actions/upload-artifact@v1
-        with:
-          name: release_url
-          path: release_url.txt  
-
-      - name: Output Release ID File
-        # no need if we're doing a build after push
-        if: ${{ github.event_name == 'create' }}
-        run: echo "${{ steps.create_release.outputs.id }}" > release_id.txt
-
-      - name: Save Release ID File for publish
-        # no need if we're doing a build after push
-        if: ${{ github.event_name == 'create' }}
-        uses: actions/upload-artifact@v1
-        with:
-          name: release_id
-          path: release_id.txt  
-
-      - name: Null task
-        if: ${{ github.event_name == 'push' }}
-        run: echo "push build"
-
 
   # This workflow contains a single job called "build"
   builder:
@@ -206,22 +179,7 @@ jobs:
         # no need if a push build
         # if: ${{ github.event_name == 'create' }}
         run: tar -czvf ${{ matrix.friendly }}-${{ env.VERSION }}.tar.gz *.elf *.bin *.spiffs
-        
-      - name: Load Release URL File from release job
-        # no need if a push build
-        if: ${{ github.event_name == 'create' }}
-        uses: actions/download-artifact@v1
-        with:
-          name: release_url
 
-      - name: Get Release File Name & Upload URL
-        # no need if a push build
-        if: ${{ github.event_name == 'create' }}
-        id: get_release_info
-        run: |
-          value=`cat release_url/release_url.txt`
-          echo ::set-output name=upload_url::$value
-      
       - name: Upload artifacts
         if: ${{ github.event_name != 'create' }}
         uses: actions/upload-artifact@v3
@@ -238,7 +196,7 @@ jobs:
         env:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-            upload_url: ${{ steps.get_release_info.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
+            upload_url: ${{ needs.createRelease.outputs.asset_url }} 
             asset_path: ./${{ matrix.friendly }}.tar.gz
             asset_name: ${{ matrix.friendly }}-${{ env.VERSION }}.tar.gz
             asset_content_type: application/tar+gzip            
@@ -247,24 +205,14 @@ jobs:
     runs-on: ubuntu-latest
     # no need if a push build
     if: ${{ github.event_name == 'create' }}
-    needs: [builder]
+    needs: [builder, createRelease]
     steps:
-      - name: Load Release ID File from release job
-        uses: actions/download-artifact@v1
-        with:
-          name: release_id
-      - name: Get Release File Name & id
-        id: get_release_id
-        run: |
-          value=`cat release_id/release_id.txt`
-          echo ::set-output name=release_id::$value
-          
       - uses: octokit/request-action@v2.x
         id: changeDraft
         with:
           route: PATCH /repos/{repository}/releases/{id}
           repository: ${{ github.repository }}
-          id: ${{ steps.get_release_id.outputs.release_id }}
+          id: ${{ needs.createRelease.outputs.asset_id }}
           draft: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
