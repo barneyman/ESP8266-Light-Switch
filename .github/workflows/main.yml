@@ -25,8 +25,6 @@ on:
     types: [opened, synchronize, reopened]
 
   #   branches: [ master ]
-env:
-  VERSION: v0.3.${{ github.run_number }}
 
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
@@ -57,8 +55,10 @@ jobs:
           if [[ ${{ github.ref }} == *${ref}* ]]; then
             v=$(echo ${{ github.ref }} | cut -d'/' -f3)
             echo "VERSION=${v}" >> "$GITHUB_OUTPUT"  
+            echo "using ${v}"
           else
             echo "VERSION=${{ steps.calced-version.outputs.v-version }}" >> "$GITHUB_OUTPUT"
+            echo "using ${{ steps.calced-version.outputs.v-version }}"
           fi
 
   # output some env vars, for later use :)
@@ -105,7 +105,7 @@ jobs:
 
   # This workflow contains a single job called "build"
   builder:
-    needs: [createRelease]
+    needs: [createRelease, determineVersion]
 
     # create a matrix 
     # wemos d1 - esp8266:esp8266:d1
@@ -147,10 +147,9 @@ jobs:
 
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - name: Checking out tag ${{ github.ref }}
-        uses: actions/checkout@master
+        uses: actions/checkout@v3
         with:
           submodules: "true"
-          ref: ${{ github.ref }}
 
       - name: gzip web content
         run: |
@@ -190,30 +189,30 @@ jobs:
       # Finally, we compile the sketch, using the FQBN that was set
       # in the build matrix.
       - name: Compile Sketch Matrix
-        run: arduino-cli compile --fqbn ${{ matrix.platform_options }} --output-dir . --build-property compiler.cpp.extra_flags="-D_VERSION_FRIENDLY_CLI=${{ matrix.friendly }} -D_VERSION_NUM_CLI=${{ env.VERSION }}"  --libraries ./libraries ESP8266-Light-Switch
+        run: arduino-cli compile --fqbn ${{ matrix.platform_options }} --output-dir . --build-property compiler.cpp.extra_flags="-D_VERSION_FRIENDLY_CLI=${{ matrix.friendly }} -D_VERSION_NUM_CLI=${{ needs.determineVersion.outputs.version_number }}"  --libraries ./libraries ESP8266-Light-Switch
 
       - name: rename output
         run: |
-          mv ESP8266-Light-Switch.ino.elf ${{ matrix.friendly }}-${{ env.VERSION }}.elf
-          mv ESP8266-Light-Switch.ino.bin ${{ matrix.friendly }}-${{ env.VERSION }}.bin
+          mv ESP8266-Light-Switch.ino.elf ${{ matrix.friendly }}-${{ needs.determineVersion.outputs.version_number }}.elf
+          mv ESP8266-Light-Switch.ino.bin ${{ matrix.friendly }}-${{ needs.determineVersion.outputs.version_number }}.bin
 
       - name: Create SPIFFS
         # no need if a push build
         # if: ${{ github.event_name == 'create' }}
-        run: ${{ matrix.spiffsCmd }} -c ./data ${{ matrix.spiffsCmdLine }} ${{ matrix.friendly }}-${{ env.VERSION }}.spiffs
+        run: ${{ matrix.spiffsCmd }} -c ./data ${{ matrix.spiffsCmdLine }} ${{ matrix.friendly }}-${{ needs.determineVersion.outputs.version_number }}.spiffs
 
       # compress deliverables
       - name: Compress output
         # no need if a push build
         # if: ${{ github.event_name == 'create' }}
-        run: tar -czvf ${{ matrix.friendly }}-${{ env.VERSION }}.tar.gz *.elf *.bin *.spiffs
+        run: tar -czvf ${{ matrix.friendly }}-${{ needs.determineVersion.outputs.version_number }}.tar.gz *.elf *.bin *.spiffs
 
       - name: Upload artifacts
         if: ${{ github.event_name != 'create' }}
         uses: actions/upload-artifact@v3
         with:
-          name: ${{ matrix.friendly }}-${{ env.VERSION }}
-          path: ${{ matrix.friendly }}-${{ env.VERSION }}.tar.gz
+          name: ${{ matrix.friendly }}-${{ needs.determineVersion.outputs.version_number }}
+          path: ${{ matrix.friendly }}-${{ needs.determineVersion.outputs.version_number }}.tar.gz
 
 
       - name: Upload Release Asset
@@ -226,7 +225,7 @@ jobs:
         with:
             upload_url: ${{ needs.createRelease.outputs.asset_url }} 
             asset_path: ./${{ matrix.friendly }}.tar.gz
-            asset_name: ${{ matrix.friendly }}-${{ env.VERSION }}.tar.gz
+            asset_name: ${{ matrix.friendly }}-${{ needs.determineVersion.outputs.version_number }}.tar.gz
             asset_content_type: application/tar+gzip            
         
   undraft:
