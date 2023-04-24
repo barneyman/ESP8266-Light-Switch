@@ -141,29 +141,11 @@ jobs:
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
-      - name: Git Version
-        id: version
-        uses: codacy/git-version@2.7.1
-
-      - name: EnvironmentForRelease
-        if: ${{ github.event_name == 'create' }}
-        # remove refs/tags/ from github-ref
+      - name: Environment
         run: |
-          echo "setting up env for release ..."
+          echo "VERSION=v0.3.$${{ github.run_number }}" >> $GITHUB_ENV
           echo ${GITHUB_REF}
           echo ${GITHUB_REPOSITORY}
-          echo "NEW_TAG=${GITHUB_REF#refs/tags/}" >> $GITHUB_ENV
-          echo "NEW_HEAD=${GITHUB_REF#refs/heads/}" >> $GITHUB_ENV
-
-      - name: EnvironmentForPush
-        if: ${{ github.event_name == 'push' }}
-        # remove refs/tags/ from github-ref
-        run: |
-          echo "setting up env for push ..."
-          echo ${GITHUB_REF}
-          echo ${GITHUB_REPOSITORY}
-          echo "NEW_TAG=${{ steps.version.outputs.version }}" >> $GITHUB_ENV
-          echo "NEW_HEAD=${GITHUB_REF#refs/heads/}" >> $GITHUB_ENV
 
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - name: Checking out tag ${{ github.ref }}
@@ -210,12 +192,12 @@ jobs:
       # Finally, we compile the sketch, using the FQBN that was set
       # in the build matrix.
       - name: Compile Sketch Matrix
-        run: arduino-cli compile --fqbn ${{ matrix.platform_options }} --output-dir . --build-property compiler.cpp.extra_flags="-D_VERSION_FRIENDLY_CLI=${{ matrix.friendly }} -D_VERSION_NUM_CLI=${{ env.NEW_TAG }}"  --libraries ./libraries ESP8266-Light-Switch
+        run: arduino-cli compile --fqbn ${{ matrix.platform_options }} --output-dir . --build-property compiler.cpp.extra_flags="-D_VERSION_FRIENDLY_CLI=${{ matrix.friendly }} -D_VERSION_NUM_CLI=${{ env.VERSION }}"  --libraries ./libraries ESP8266-Light-Switch
 
       - name: rename output
         run: |
-          mv ESP8266-Light-Switch.ino.elf ${{ matrix.friendly }}_${GITHUB_RUN_ID}.elf
-          mv ESP8266-Light-Switch.ino.bin ${{ matrix.friendly }}_${GITHUB_RUN_ID}.bin
+          mv ESP8266-Light-Switch.ino.elf ${{ matrix.friendly }}-${{ env.VERSION }}.elf
+          mv ESP8266-Light-Switch.ino.bin ${{ matrix.friendly }}-${{ env.VERSION }}.bin
 
       # then handle spiffs
       - name: Install mkspiffs
@@ -234,13 +216,13 @@ jobs:
       - name: Create SPIFFS
         # no need if a push build
         # if: ${{ github.event_name == 'create' }}
-        run: ./${{ matrix.spiffsCmd }} -c ./data ${{ matrix.spiffsCmdLine }} ${{ matrix.friendly }}_${GITHUB_RUN_ID}.spiffs
+        run: ./${{ matrix.spiffsCmd }} -c ./data ${{ matrix.spiffsCmdLine }} ${{ matrix.friendly }}-${{ env.VERSION }}.spiffs
 
       # compress deliverables
       - name: Compress output
         # no need if a push build
         # if: ${{ github.event_name == 'create' }}
-        run: tar -czvf ${{ matrix.friendly }}.tar.gz *.elf *.bin *.spiffs
+        run: tar -czvf ${{ matrix.friendly }}-${{ env.VERSION }}.tar.gz *.elf *.bin *.spiffs
         
       - name: Load Release URL File from release job
         # no need if a push build
@@ -275,7 +257,7 @@ jobs:
         with:
             upload_url: ${{ steps.get_release_info.outputs.upload_url }} # This pulls from the CREATE RELEASE step above, referencing it's ID to get its outputs object, which include a `upload_url`. See this blog post for more info: https://jasonet.co/posts/new-features-of-github-actions/#passing-data-to-future-steps 
             asset_path: ./${{ matrix.friendly }}.tar.gz
-            asset_name: ${{ matrix.friendly }}_${{ env.NEW_TAG }}.tar.gz
+            asset_name: ${{ matrix.friendly }}-${{ env.VERSION }}.tar.gz
             asset_content_type: application/tar+gzip            
         
   undraft:
