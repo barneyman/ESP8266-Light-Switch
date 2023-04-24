@@ -33,7 +33,7 @@ jobs:
 
   determineVersion:
     outputs: 
-      version_number: ${{ steps.decide.outputs.VERSION }}
+      version_number: ${{ steps.realVersion.outputs.VERSION }}
     runs-on: ubuntu-latest
     steps:
 
