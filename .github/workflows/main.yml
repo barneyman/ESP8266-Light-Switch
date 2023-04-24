@@ -203,7 +203,7 @@ jobs:
       - name: Create SPIFFS
         # no need if a push build
         # if: ${{ github.event_name == 'create' }}
-        run: ./${{ matrix.spiffsCmd }} -c ./data ${{ matrix.spiffsCmdLine }} ${{ matrix.friendly }}-${{ env.VERSION }}.spiffs
+        run: ${{ matrix.spiffsCmd }} -c ./data ${{ matrix.spiffsCmdLine }} ${{ matrix.friendly }}-${{ env.VERSION }}.spiffs
 
       # compress deliverables
       - name: Compress output
