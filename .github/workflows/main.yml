@@ -41,9 +41,9 @@ jobs:
         with:
           fetch-depth: 0
       
-      - name: complex
-        uses: reecetech/version-increment@2023.3.1
-        id: calced-version
+      # - name: complex
+      #   uses: reecetech/version-increment@2023.3.1
+      #   id: calced-version
 
       - name: decide
         id: realVersion
@@ -56,8 +56,8 @@ jobs:
             echo "VERSION=${v}" >> "$GITHUB_OUTPUT"  
             echo "using ${v}"
           else
-            echo "VERSION=${{ steps.calced-version.outputs.v-version }}" >> "$GITHUB_OUTPUT"
-            echo "using ${{ steps.calced-version.outputs.v-version }}"
+            echo "VERSION=v0.3.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+            echo "using v0.3.${{ github.run_number }}"
           fi
 
   # output some env vars, for later use :)
