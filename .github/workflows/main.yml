@@ -32,6 +32,30 @@ env:
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   
+
+  determineVersion:
+    outputs: 
+      version_number: ${{ steps.decide.outputs.VERSION }}
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: complex
+        uses: reecetech/version-increment@2023.3.1
+        id: version
+
+      - name: decide
+        id: realVersion
+        run: |
+          echo ${{ github.ref }}
+          echo ${{ steps.complex.outputs.v-version }}
+          ref='refs/tags/v'
+          if [[ ${{ github.ref }} == *${ref}* ]]; then
+            v=$(echo ${{ github.ref }} | cut -d'/' -f3)
+            echo "VERSION=${v}" >> "$GITHUB_OUTPUT"  
+          else
+            echo "VERSION={{ ${{ steps.complex.outputs.v-version }} }}"
+          fi
+
   # output some env vars, for later use :)
   paintEnvs:
     runs-on: ubuntu-latest
