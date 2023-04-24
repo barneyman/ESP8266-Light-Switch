@@ -230,8 +230,8 @@ jobs:
         if: ${{ github.event_name != 'create' }}
         uses: actions/upload-artifact@v3
         with:
-          name: ${{ matrix.friendly }}
-          path: ${{ matrix.friendly }}.tar.gz
+          name: ${{ matrix.friendly }}-${{ env.VERSION }}
+          path: ${{ matrix.friendly }}-${{ env.VERSION }}.tar.gz
 
 
       - name: Upload Release Asset
