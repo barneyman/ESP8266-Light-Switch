@@ -25,6 +25,9 @@ on:
     types: [opened, synchronize, reopened]
 
   #   branches: [ master ]
+env:
+  VERSION: v0.3.${{ github.run_number }}
+
 
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
@@ -138,7 +141,6 @@ jobs:
     steps:
       - name: Environment
         run: |
-          echo "VERSION=v0.3.${{ github.run_number }}" >> $GITHUB_ENV
           echo ${GITHUB_REF}
           echo ${GITHUB_REPOSITORY}
 
