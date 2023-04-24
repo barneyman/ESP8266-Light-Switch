@@ -144,7 +144,7 @@ jobs:
     steps:
       - name: Environment
         run: |
-          echo "VERSION=v0.3.$${{ github.run_number }}" >> $GITHUB_ENV
+          echo "VERSION=v0.3.${{ github.run_number }}" >> $GITHUB_ENV
           echo ${GITHUB_REF}
           echo ${GITHUB_REPOSITORY}
 
