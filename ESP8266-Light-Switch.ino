@@ -107,8 +107,8 @@
 // similarly, set by the github action
 #ifndef _VERSION_NUM_CLI
 
-//	#define _VERSION_NUM "v99.99.99.pr"
-	#define _VERSION_NUM "v0.1.1-sha2"
+// stop it being updated underneath me
+	#define _VERSION_NUM "v99.99.99.pr"
 	#define _DEVELOPER_BUILD
 
 #else
