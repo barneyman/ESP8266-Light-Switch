@@ -108,7 +108,7 @@
 #ifndef _VERSION_NUM_CLI
 
 // stop it being updated underneath me
-	#define _VERSION_NUM "v99.99.99.pr"
+	#define _VERSION_NUM "v99.99.99-dev"
 	#define _DEVELOPER_BUILD
 
 #else
