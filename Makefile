@@ -9,7 +9,7 @@ SONOFF_SPIFFS=mkspiffs_esp8266
 SONOFF_SPIFFS_OPTS=-p 256 -b 4096 -s 0x20000
 
 WEMOSD1_FQBN="esp8266:esp8266:d1_mini:xtal=80,vt=iram,exception=disabled,ssl=all,eesz=4M1M,ip=lm2f,dbg=Disabled"
-WEMOSD1_FRIENDLY=wemosd1
+WEMOSD1_FRIENDLY=wemosD1
 WEMOSD1_SPIFFS=mkspiffs_esp8266
 WEMOSD1_SPIFFS_OPTS=-p 256 -b 8192 -s 0xFA000
 
