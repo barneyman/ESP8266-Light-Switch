@@ -57,16 +57,16 @@ esp32cam_spiffs:
 
 
 burn_sonoff_spiffs: sonoff_spiffs
-	esptool.py --chip esp8266 --port /dev/ttyUSB0 write_flash -fm dout 0xDB000 ./build/sonoff/$(SONOFF_FRIENDLY).spiffs
+	esptool.py --chip esp8266 --port /dev/ttyUSB0 write_flash -fm dout 0xDB000 ./build/$(SONOFF_FRIENDLY)/$(SONOFF_FRIENDLY).spiffs
 
 burn_sonoff_bin: sonoff
-	esptool.py --chip esp8266 --port /dev/ttyUSB0 write_flash -fs 1MB -fm dout 0x0 ./build/sonoff/$(SONOFF_FRIENDLY).bin
+	esptool.py --chip esp8266 --port /dev/ttyUSB0 write_flash -fs 1MB -fm dout 0x0 ./build/$(SONOFF_FRIENDLY)/$(SONOFF_FRIENDLY).bin
 
 burn_wemosd1_spiffs: wemosd1_spiffs
-	esptool.py --chip esp8266 --before default_reset --after hard_reset --baud 921600 --port /dev/ttyUSB0 write_flash 0x300000 ./build/wemosd1/$(WEMOSD1_FRIENDLY).spiffs
+	esptool.py --chip esp8266 --before default_reset --after hard_reset --baud 921600 --port /dev/ttyUSB0 write_flash 0x300000 ./build/$(WEMOSD1_FRIENDLY)/$(WEMOSD1_FRIENDLY).spiffs
 
 burn_wemosd1_bin: wemosd1
-	esptool.py --chip esp8266 --before default_reset --after hard_reset --baud 921600 --port /dev/ttyUSB0 write_flash 0 ./build/wemosd1/$(WEMOSD1_FRIENDLY).bin
+	esptool.py --chip esp8266 --before default_reset --after hard_reset --baud 921600 --port /dev/ttyUSB0 write_flash 0 ./build/$(WEMOSD1_FRIENDLY)/$(WEMOSD1_FRIENDLY).bin
 
 burn_wemosd1: burn_wemosd1_spiffs burn_wemosd1_bin
 
