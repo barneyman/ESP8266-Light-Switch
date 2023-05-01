@@ -936,14 +936,12 @@ bool RestoreState()
 void RebootMe(bool preserve)
 {
 	if(Details.dblog) Details.dblog->printf(debug::dbImportant, "REBOOTING\r\n");
-	delay(1000);
 	if(preserve)
 	{
 		PreserveState();
 	}
-
-	delay(2000);
-
+	// play nice
+	SPIFFS.end();
 	ESP.restart();
 }
 
@@ -1248,12 +1246,12 @@ void performUpdate(String url, String urlSpiffs)
 {
 	if(Details.dblog) Details.dblog->println(debug::dbImportant,"performing update");
 
-	wifiInstance.CloseServers();
-
 	StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer2;
 	JsonObject&replyroot = jsonBuffer2.createObject();
 	String bodyText;
 	enum HTTPUpdateResult result=HTTP_UPDATE_OK;
+
+	bool rebootOnFinish=false;
 
 	for(int updates=0;(updates<2) && (result==HTTP_UPDATE_OK);updates++)
 	{
@@ -1268,18 +1266,14 @@ void performUpdate(String url, String urlSpiffs)
 		if(!updates)
 		{
 			if(Details.dblog) Details.dblog->println(debug::dbImportant, "updating SPIFFS ...");
-			// before we do this. clean up spiffs
-			// bool gcret=SPIFFS.gc();
-			// if(Details.dblog) 
-			// 	Details.dblog->printf(debug::dbImportant, "SPIFFS garbage collect ... %s\r\n", (gcret?"true":"false"));
 
 #ifdef ESP32
-			httpUpdate.onStart([]() { SPIFFS.end(); });
-			httpUpdate.onEnd([]() { SPIFFS.begin(); });
+			httpUpdate.onStart([]() { wifiInstance.CloseServers(); SPIFFS.end(); });
+			httpUpdate.onEnd([]() { SPIFFS.begin(); WriteJSONconfig(false); });
 			result=httpUpdate.updateSpiffs(wifiInstance.m_wificlient ,urlSpiffs+urlArgs,_MYVERSION);
 #else			
-			ESPhttpUpdate.onStart([]() { SPIFFS.end(); });
-			ESPhttpUpdate.onEnd([]() { SPIFFS.begin(); });
+			ESPhttpUpdate.onStart([]() { wifiInstance.CloseServers(); SPIFFS.end(); });
+			ESPhttpUpdate.onEnd([]() { SPIFFS.begin(); WriteJSONconfig(false); });
 			result=ESPhttpUpdate.updateFS(wifiInstance.m_wificlient ,urlSpiffs+urlArgs,_MYVERSION);
 #endif			
 		}
@@ -1288,75 +1282,60 @@ void performUpdate(String url, String urlSpiffs)
 			if(Details.dblog) Details.dblog->println(debug::dbImportant, "updating BIN ...");
 			// we do some clean up so let me boot
 #ifdef ESP32
+			httpUpdate.onStart([]() {  });
+			httpUpdate.onEnd([]() {  });
 			httpUpdate.rebootOnUpdate(false);
 			result=httpUpdate.update(wifiInstance.m_wificlient, url+urlArgs, _MYVERSION);
 #else
+			ESPhttpUpdate.onStart([]() {  });
+			ESPhttpUpdate.onEnd([]() {  });
 			ESPhttpUpdate.rebootOnUpdate(false);
 			result=ESPhttpUpdate.update(wifiInstance.m_wificlient,url+urlArgs, _MYVERSION);
 #endif			
 		}
 
+		JsonObject &thisLoop=replyroot.createNestedObject((!updates)?"SPIFFS":"BIN");
+
+
 		switch (result)
 		{
 		case HTTP_UPDATE_FAILED:
-#ifdef ESP32
-			if(Details.dblog) Details.dblog->printf(debug::dbError, "%s HTTP_UPDATE_FAILED Error (%d): %s\r\n",(!updates?urlSpiffs.c_str():url.c_str()), httpUpdate.getLastError(), httpUpdate.getLastErrorString().c_str());
+			{
+				thisLoop["result"]="FAILED";
+				JsonObject &details = thisLoop.createNestedObject("Details");
+
+#ifdef ESP32			
+				details["espNarrative"] = httpUpdate.getLastErrorString();
+				details["espResult"] = httpUpdate.getLastError();
 #else
-			if(Details.dblog) Details.dblog->printf(debug::dbError, "%s HTTP_UPDATE_FAILED Error (%d): %s\r\n",(!updates?urlSpiffs.c_str():url.c_str()), ESPhttpUpdate.getLastError(), ESPhttpUpdate.getLastErrorString().c_str());
-#endif			
+				details["espNarrative"] = ESPhttpUpdate.getLastErrorString();
+				details["espResult"] = ESPhttpUpdate.getLastError();
+#endif
+			}
 			break;
 		case HTTP_UPDATE_NO_UPDATES:
-			if(Details.dblog) Details.dblog->println(debug::dbImportant, "no updates");
+			thisLoop["result"]="NO UPDATES";
+			// bail quick
+			updates+=2;
 			break;
 		case HTTP_UPDATE_OK:
-			if(Details.dblog) Details.dblog->println(debug::dbImportant, "update succeeded");
+			thisLoop["result"]="SUCCESS";
+			rebootOnFinish=true;
 			break;
-		}
-
-		JsonObject &thisLoop=replyroot.createNestedObject((!updates)?"SPIFFS":"BIN");
-
-		thisLoop["result"]=result;
-
-		if (result != HTTP_UPDATE_OK)
-		{
-			JsonObject &details = thisLoop.createNestedObject("Details");
-#ifdef ESP32			
-			details["espNarrative"] = httpUpdate.getLastErrorString();
-			details["espResult"] = httpUpdate.getLastError();
-#else
-			details["espNarrative"] = ESPhttpUpdate.getLastErrorString();
-			details["espResult"] = ESPhttpUpdate.getLastError();
-#endif			
-
-		}
-
-		bodyText=String();
-		replyroot.printTo(bodyText);
-
-		if (result != HTTP_UPDATE_OK)
-		{
-			if(Details.dblog) Details.dblog->println(debug::dbError, bodyText);
-			break;
-		}
-		else
-		{
-			if(Details.dblog) Details.dblog->println(debug::dbImportant, bodyText);
-		}
-
-		// first time round, save our config, always, even if it fails
-		if(!updates) // && (result==HTTP_UPDATE_OK))
-		{
-			if(Details.dblog) Details.dblog->println(debug::dbImportant, "preserving config");
-
-			delay(2000);
-
-			WriteJSONconfig(false);
 		}
 
 	}
 
+	bodyText=String();
+	replyroot.printTo(bodyText);
+
+	if(Details.dblog) Details.dblog->println(debug::dbImportant, bodyText);
+
 	// we turned servers off, so reboot
-	RebootMe(true);
+	if(rebootOnFinish)
+	{
+		RebootMe(true);
+	}
 
 }
 
