@@ -595,7 +595,7 @@ void WriteJSONconfig(bool writeServiceTexts)
 
 	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "\r -- JSON : written %ld\r\n", written);
 
-	if(written<jsonBuffer.size())
+	if(written!=jsonText.length())
 	{
 		if(Details.dblog) Details.dblog->printf(debug::dbError, "\r -- JSON : write failed %ld written instead of %ld\r\n", written, jsonBuffer.size());
 	}
@@ -1097,7 +1097,7 @@ void setup(void)
 	{
 		if(Details.dblog) Details.dblog->println(debug::dbInfo, "wifi credentials found");
 		if(Details.dblog) Details.dblog->println(debug::dbVerbose, Details.wifi.ssid);
-		if(Details.dblog) Details.dblog->println(debug::dbVerbose, Details.wifi.password);
+		//if(Details.dblog) Details.dblog->println(debug::dbVerbose, Details.wifi.password);
 		intent = myWifiClass::wifiMode::modeSTA;
 	}
 	else
