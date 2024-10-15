@@ -182,7 +182,7 @@ jobs:
       # We use the arduino/setup-arduino-cli action to install and
       # configure the Arduino CLI on the system.
       - name: Setup Arduino CLI
-        uses: arduino/setup-arduino-cli@v1.1.1
+        uses: arduino/setup-arduino-cli@v2
         with:
           version: "0.22.0"
       
@@ -214,7 +214,7 @@ jobs:
       - name: Upload artifacts
         #if: ${{ github.event_name != 'create' }}
         if: ${{ needs.determineVersion.outputs.tagged != 'yes' }}
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.friendly }}-${{ needs.determineVersion.outputs.version_number }}
           path: ${{ matrix.friendly }}-${{ needs.determineVersion.outputs.version_number }}.tar.gz
