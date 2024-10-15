@@ -118,12 +118,12 @@ jobs:
     strategy:
       matrix: 
         include:
-          # unproven!
-          - platform: "esp32cam"
-            platform_options: "esp32:esp32:esp32wrover:PartitionScheme=min_spiffs,FlashMode=qio,FlashFreq=80,UploadSpeed=115200,DebugLevel=none"
-            friendly: "esp32_cam"
-            spiffsCmdLine: -p 256 -b 4096 -s 0x3D0000
-            spiffsCmd: ~/.arduino15/packages/esp32/tools/mkspiffs/0.2.3/mkspiffs
+          # needs py 2.7 - no longer supported python version ...
+          # - platform: "esp32cam"
+          #   platform_options: "esp32:esp32:esp32wrover:PartitionScheme=min_spiffs,FlashMode=qio,FlashFreq=80,UploadSpeed=115200,DebugLevel=none"
+          #   friendly: "esp32_cam"
+          #   spiffsCmdLine: -p 256 -b 4096 -s 0x3D0000
+          #   spiffsCmd: ~/.arduino15/packages/esp32/tools/mkspiffs/0.2.3/mkspiffs
 
           - platform: "sonoff"
             # have to use generic, because the sonoff board doesn't SDA & others defined
