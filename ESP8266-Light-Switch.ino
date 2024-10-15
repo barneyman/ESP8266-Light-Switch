@@ -356,19 +356,9 @@ struct
 	false, true,
 
 	// logging
-#ifdef _DEVELOPER_BUILD	
 	//debug::dbLevel::dbImportant,
-	// try not to 'ship' this it screws with the OTA (i think)
-#if !defined(PLATFORM_SONOFF_SWITCH)
-	debug::dbLevel::dbVerbose,
-#else
-	debug::dbLevel::dbImportant,
-#endif	
+	debug::dbLevel::dbInfo,
 	debug::dbImpl::dbSerial,
-#else
-	debug::dbLevel::dbImportant,
-	debug::dbImpl::dbNone,
-#endif	
 	NULL,
 	"",
 
