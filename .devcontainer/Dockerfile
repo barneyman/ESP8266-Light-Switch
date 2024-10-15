@@ -1,4 +1,4 @@
-FROM ubuntu:latest as devcontainer
+FROM ubuntu:latest AS devcontainer
 
 RUN apt update && apt upgrade -y 
 
@@ -6,7 +6,7 @@ RUN apt install -y curl git make build-essential python3 pip wget
 
 # esp32 builds needs these
 RUN ln -s /usr/bin/python3 /usr/bin/python
-RUN pip install pyserial
+RUN pip install pyserial --break-system-packages
 
 # keep in sync with the action
 RUN curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh | sh -s 0.22.0
@@ -26,13 +26,13 @@ RUN arduino-cli core update-index --additional-urls https://arduino.esp8266.com/
 
 # RUN rm *.gz
 
-RUN pip3 install esptool
+RUN pip3 install esptool --break-system-packages
 
 RUN apt install -y udev
 
 WORKDIR /
 
-FROM devcontainer as interactive
+FROM devcontainer AS interactive
 
 RUN apt install -y screen
 
