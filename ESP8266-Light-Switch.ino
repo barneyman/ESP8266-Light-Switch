@@ -286,7 +286,7 @@ struct
 
 	// update stuff
 	bool updateAvailable;
-	String url, urlSpiffs;
+	String url;
 
 	// wifi joins / stops
 	bool wifiChangeRequested;
@@ -363,7 +363,7 @@ struct
 	"",
 
 	// update
-	false,"","",
+	false,"",
 
 	// wifi change
 	false, myWifiClass::wifiMode::modeAP,
@@ -931,6 +931,7 @@ void RebootMe(bool preserve)
 		PreserveState();
 	}
 	// play nice
+	if(Details.dblog) Details.dblog->printf(debug::dbImportant, "ending spiffs\r\n");
 	SPIFFS.end();
 	ESP.restart();
 }
@@ -1232,7 +1233,7 @@ void FindPeers()
 }
 
 // called from loop
-void performUpdate(String url, String urlSpiffs)
+void performUpdate(String url)
 {
 	if(Details.dblog) Details.dblog->println(debug::dbImportant,"performing update");
 
@@ -1258,14 +1259,40 @@ void performUpdate(String url, String urlSpiffs)
 			if(Details.dblog) Details.dblog->println(debug::dbImportant, "updating SPIFFS ...");
 
 #ifdef ESP32
-			httpUpdate.onStart([]() { wifiInstance.CloseServers(); SPIFFS.end(); });
-			httpUpdate.onEnd([]() { SPIFFS.begin(); WriteJSONconfig(false); });
-			result=httpUpdate.updateSpiffs(wifiInstance.m_wificlient ,urlSpiffs+urlArgs,_MYVERSION);
+			httpUpdate.onStart([]() { 
 #else			
-			ESPhttpUpdate.onStart([]() { wifiInstance.CloseServers(); SPIFFS.end(); });
-			ESPhttpUpdate.onEnd([]() { SPIFFS.begin(); WriteJSONconfig(false); });
-			result=ESPhttpUpdate.updateFS(wifiInstance.m_wificlient ,urlSpiffs+urlArgs,_MYVERSION);
+			ESPhttpUpdate.onStart([]() {
 #endif			
+				wifiInstance.CloseServers(); 
+				if(Details.dblog) Details.dblog->printf(debug::dbImportant, "ending spiffs\r\n");
+				SPIFFS.end(); 
+
+				});
+
+#ifdef ESP32
+			httpUpdate.onEnd([]() { 
+#else
+			ESPhttpUpdate.onEnd([]() {
+#endif				
+				if(Details.dblog) Details.dblog->printf(debug::dbImportant, "beginning spiffs\r\n");
+				SPIFFS.begin(); 
+
+#ifndef _DEVELOPER_BUILD
+				// reset prod logging
+				Details.loggingLevel=debug::dbLevel::dbImportant;
+				Details.loggingImpl=debug::dbImpl::dbNone;
+#endif
+
+				WriteJSONconfig(false);
+
+				});
+
+#ifdef ESP32
+			result=httpUpdate.updateSpiffs(wifiInstance.m_wificlient ,url+urlArgs,_MYVERSION);
+#else
+			result=ESPhttpUpdate.updateFS(wifiInstance.m_wificlient ,url+urlArgs,_MYVERSION);
+#endif			
+
 		}
 		else
 		{
@@ -1476,10 +1503,9 @@ void InstallWebServerHandlers(bool enableCORS)
 */
 
 		Details.url=root["url"].as<char*>();
-		Details.urlSpiffs=root["urlSpiffs"].as<char*>();
 
 #ifdef _UPDATE_IN_WEBCALL
-		performUpdate(Details.url,Details.urlSpiffs);
+		performUpdate(Details.url);
 #else
 		Details.updateAvailable=true;
 #endif
@@ -3105,11 +3131,10 @@ void loop(void)
 
 	if(Details.updateAvailable)
 	{
-		performUpdate(Details.url,Details.urlSpiffs);
+		performUpdate(Details.url);
 		// shouldn't get here, unless the update fails or there's nothing to do
 		Details.updateAvailable=false;
 		Details.url.clear();
-		Details.urlSpiffs.clear();
 	}
 
 	if(Details.wifiChangeRequested)
