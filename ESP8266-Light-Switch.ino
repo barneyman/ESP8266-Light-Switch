@@ -2131,11 +2131,14 @@ void InstallWebServerHandlers(bool enableCORS)
 #endif		
 
 		if(Details.dblog) Details.dblog->printf(debug::dbInfo, "json listen posted from %s\r\n",recipientAddr.toString().c_str());
+#ifdef _DEVELOPER_BUILD
+		// only leak auth in debug
 #ifdef _ESP_USE_ASYNC_WEB
 		String body((char*)request->_tempObject);
 		if(Details.dblog) Details.dblog->println(debug::dbImportant, body.c_str());
 #else
 		if(Details.dblog) Details.dblog->println(debug::dbImportant, wifiInstance.server.arg("plain"));
+#endif		
 #endif		
 
 		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
