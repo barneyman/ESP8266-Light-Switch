@@ -2,7 +2,7 @@
 #define _announce_h
 
 #include <Arduino.h>
-
+#include "const.h"
 //#define _USE_UDP
 //#define _USE_TCP
 #define _USE_REST
@@ -119,7 +119,7 @@ public:
 		jsonBuffer.clear();
 		JsonObject& udproot = jsonBuffer.createObject();
 		// on off for binarysensor
-		udproot["state"]=state?"on":"off";
+		udproot["state"]=state?ha_on:ha_off;
 		String bodyText;
 		udproot.printTo(bodyText);
 
