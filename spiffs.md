@@ -60,6 +60,8 @@ esptool.py --chip esp32 --port COM5 write_flash -fm qio 0x10000 .\build\sonoffba
 `esptool.py --chip esp8266 --port COM5 erase_flash`
 ### Simultaneous (proven)
 `esptool.py --chip esp8266 --port COM5 write_flash -fs 1MB -fm dout 0x0 .\build\sonoffbasic.bin 0xDB000 ./sonoffbasic.img`
+or
+`esptool.py --chip esp8266 --port /dev/ttyACM0 write_flash -fs 1MB -fm dout 0x0 <bin file> 0xDB000 <img file>`
 
 ### Individual
 ### binary image
