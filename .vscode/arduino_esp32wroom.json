@@ -1,0 +1,7 @@
+{
+    "board": "esp32:esp32:uPesy_wroom",
+    "port": "/dev/tty01",
+    "sketch": "ESP8266-Light-Switch.ino",
+    "output": ".build",
+    "configuration": "PartitionScheme=default,CPUFreq=240,UploadSpeed=921600,FlashMode=qio,FlashFreq=80,DebugLevel=none"
+}
