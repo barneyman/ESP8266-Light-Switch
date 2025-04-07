@@ -88,8 +88,10 @@
 		#define PLATFORM_SONOFF_SWITCH
 	#elif defined(ARDUINO_ESP8266_WEMOS_D1MINI)
 		#define PLATFORM_WEMOS_SENSOR
-	#elif defined(ESP32)
+	#elif defined(_ESP32CAM)
 		#define PLATFORM_ESP32_CAMERA
+	#elif defined(ESP32)
+		#define PLATFORM_ESP32
 	#endif
 #endif
 
@@ -99,6 +101,8 @@
 #pragma message "WEMOS BUILD"
 #elif defined(PLATFORM_ESP32_CAMERA)
 #pragma message "ESPCAM BUILD"
+#elif defined(PLATFORM_ESP32)
+#pragma message "ESP32 BUILD"
 #else
 #error "Platform not defined"
 #endif
@@ -1260,9 +1264,9 @@ void performUpdate(String url)
 
 #ifdef ESP32
 			httpUpdate.onStart([]() { 
-#else			
+#else
 			ESPhttpUpdate.onStart([]() {
-#endif			
+#endif				
 				wifiInstance.CloseServers(); 
 				if(Details.dblog) Details.dblog->printf(debug::dbImportant, "ending spiffs\r\n");
 				SPIFFS.end(); 
@@ -2139,7 +2143,7 @@ void InstallWebServerHandlers(bool enableCORS)
 #else
 		if(Details.dblog) Details.dblog->println(debug::dbImportant, wifiInstance.server.arg("plain"));
 #endif		
-#endif		
+#endif
 
 		//StaticJsonBuffer<JSON_STATIC_BUFSIZE> jsonBuffer;
 		jsonBuffer.clear();

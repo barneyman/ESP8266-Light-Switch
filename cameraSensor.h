@@ -26,7 +26,7 @@ public:
 
 };
 
-#ifdef ARDUINO_ARCH_ESP32
+#ifdef _ESP32CAM
 
 //#include <freertos/include/freertos/semphr.h>
 

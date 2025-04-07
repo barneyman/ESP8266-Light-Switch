@@ -57,10 +57,15 @@ public:
 		int gpioMap[]={ 14 };
 
 // this is CAM!!!!!!!
+#elif defined(_ESP32CAM)
+
+		// 
+		int gpioMap[]={ -1, 1, 2, 3, 4, -1,-1,-1,-1,-1,-1,-1, 12,13,14,15,16 };
+
 #elif defined(ARDUINO_ARCH_ESP32)
 
-		// the only spare pin
-		int gpioMap[]={ -1, 1, 2, 3, 4, -1,-1,-1,-1,-1,-1,-1, 12,13,14,15,16 };
+		// haven't looked at this yet
+		int gpioMap[]={  };
 
 #endif
 

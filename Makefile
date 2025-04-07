@@ -46,7 +46,7 @@ wemosd1_spiffs:
 esp32cam: esp32cam_spiffs
 	- mkdir ./build
 	- mkdir ./build/$(ESP32CAM_FRIENDLY)
-	arduino-cli compile --fqbn $(ESP32CAM_FQBN) --output-dir ./build/$(ESP32CAM_FRIENDLY) --build-property compiler.cpp.extra_flags="-D_VERSION_FRIENDLY_CLI=$(ESP32CAM_FRIENDLY)"  --libraries ./libraries ESP8266-Light-Switch	
+	arduino-cli compile --fqbn $(ESP32CAM_FQBN) --output-dir ./build/$(ESP32CAM_FRIENDLY) --build-property compiler.cpp.extra_flags="-D_VERSION_FRIENDLY_CLI=$(ESP32CAM_FRIENDLY) -D_ESP32CAM"  --libraries ./libraries ESP8266-Light-Switch	
 	mv ./build/$(ESP32CAM_FRIENDLY)/ESP8266-Light-Switch.ino.bin ./build/$(ESP32CAM_FRIENDLY)/$(ESP32CAM_FRIENDLY).bin
 
 esp32cam_spiffs:

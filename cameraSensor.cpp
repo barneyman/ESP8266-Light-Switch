@@ -1,7 +1,7 @@
 #include "cameraSensor.h"
 
 
-#ifdef ARDUINO_ARCH_ESP32
+#ifdef _ESP32CAM
 
 #ifdef WROVER_CAM
 
