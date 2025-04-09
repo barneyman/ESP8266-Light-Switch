@@ -13,15 +13,15 @@ WEMOSD1_FRIENDLY=wemosD1
 WEMOSD1_SPIFFS=mkspiffs_esp8266
 WEMOSD1_SPIFFS_OPTS=-p 256 -b 8192 -s 0xFA000
 
-ESP32CAM_FQBN="esp32:esp32:esp32wrover:PartitionScheme=min_spiffs,FlashMode=qio,FlashFreq=80,UploadSpeed=115200,DebugLevel=none"
+ESP32CAM_FQBN="esp32:esp32:esp32wrover:PartitionScheme=huge_app,FlashMode=qio,FlashFreq=40,UploadSpeed=115200,DebugLevel=none"
 ESP32CAM_FRIENDLY=esp32_cam
 ESP32CAM_SPIFFS=mkspiffs_esp32
-ESP32CAM_SPIFFS_OPTS=-p 256 -b 4096 -s 0x3D0000
+ESP32CAM_SPIFFS_OPTS=-p 256 -b 4096 -s 0xF0000 # REALLY important that the SPIFFS image is the same size as the partition
 
 ESP32WROOM_FQBN="esp32:esp32:uPesy_wroom:PartitionScheme=huge_app,CPUFreq=240,UploadSpeed=921600,FlashMode=qio,FlashFreq=40,DebugLevel=none"
 ESP32WROOM_FRIENDLY=esp32_wroom
 ESP32WROOM_SPIFFS=mkspiffs_esp32
-ESP32WROOM_SPIFFS_OPTS=-p 256 -b 4096 -s 0xE0000
+ESP32WROOM_SPIFFS_OPTS=-p 256 -b 4096 -s 0xF0000 # REALLY important that the SPIFFS image is the same size as the partition
 
 
 ESP8266MKSPFISS=~/.arduino15/packages/esp8266/tools/mkspiffs/3.0.4-gcc10.3-1757bed/mkspiffs
@@ -64,7 +64,9 @@ esp32cam_spiffs:
 esp32wroom: esp32wroom_spiffs
 	- mkdir ./build
 	- mkdir ./build/$(ESP32WROOM_FRIENDLY)
-	arduino-cli compile --fqbn $(ESP32WROOM_FQBN) --output-dir ./build/$(ESP32WROOM_FRIENDLY) --build-property compiler.cpp.extra_flags="-D_VERSION_FRIENDLY_CLI=$(ESP32WROOM_FRIENDLY)"  --libraries ./libraries ESP8266-Light-Switch	
+	arduino-cli compile --fqbn $(ESP32WROOM_FQBN) --output-dir ./build/$(ESP32WROOM_FRIENDLY) \
+		--build-property compiler.cpp.extra_flags="-D_VERSION_FRIENDLY_CLI=$(ESP32WROOM_FRIENDLY) -DCONFIG_LOG_DEFAULT_LEVEL=5" \
+		--libraries ./libraries ESP8266-Light-Switch	
 	mv ./build/$(ESP32WROOM_FRIENDLY)/ESP8266-Light-Switch.ino.bin ./build/$(ESP32WROOM_FRIENDLY)/$(ESP32WROOM_FRIENDLY).bin
 
 esp32wroom_spiffs:
@@ -123,10 +125,45 @@ burn_esp32wroom: esp32wroom
 		--port /dev/ttyUSB0 \
 		write_flash \
 		--flash_mode dio --flash_size 4MB --flash_freq 40m \
+		0x10000 ./build/$(ESP32WROOM_FRIENDLY)/esp32_wroom.bin 
+
+
+burn_esp32wroom_and_spiffs: esp32wroom
+	esptool.py --chip esp32 -b 460800 --before default_reset --after hard_reset \
+		--port /dev/ttyUSB0 \
+		write_flash \
+		--flash_mode dio --flash_size 4MB --flash_freq 40m \
 		0x10000 ./build/$(ESP32WROOM_FRIENDLY)/esp32_wroom.bin \
 		0x310000 ./build/$(ESP32WROOM_FRIENDLY)/esp32_wroom.spiffs 
 
 
+burn_esp32cam_cold: esp32cam
+	esptool.py --chip esp32 -b 460800\
+		--port /dev/ttyUSB0 \
+		write_flash \
+		--flash_mode dio --flash_size 4MB --flash_freq 40m \
+		0x1000 ./build/$(ESP32CAM_FRIENDLY)/ESP8266-Light-Switch.ino.bootloader.bin \
+		0x8000 ./build/$(ESP32CAM_FRIENDLY)/ESP8266-Light-Switch.ino.partitions.bin \
+		0x10000 ./build/$(ESP32CAM_FRIENDLY)/esp32_cam.bin \
+		0x310000 ./build/$(ESP32CAM_FRIENDLY)/esp32_cam.spiffs \
+		0xe000 ~/.arduino15/packages/esp32/hardware/esp32/2.0.2/tools/partitions/boot_app0.bin
+
+
+burn_esp32cam: esp32cam
+	esptool.py --chip esp32 -b 460800 \
+		--port /dev/ttyUSB0 \
+		write_flash \
+		--flash_mode dio --flash_size 4MB --flash_freq 40m \
+		0x10000 ./build/$(ESP32CAM_FRIENDLY)/esp32_cam.bin 
+
+
+burn_esp32cam_and_spiffs: esp32cam
+	esptool.py --chip esp32 -b 460800\
+		--port /dev/ttyUSB0 \
+		write_flash \
+		--flash_mode dio --flash_size 4MB --flash_freq 40m \
+		0x310000 ./build/$(ESP32CAM_FRIENDLY)/esp32_cam.spiffs \
+		0x10000 ./build/$(ESP32CAM_FRIENDLY)/esp32_cam.bin 
 
 
 clean:
