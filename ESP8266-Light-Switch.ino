@@ -3052,6 +3052,7 @@ void InstallWebServerHandlers(bool enableCORS)
 #endif		
 	{
 #ifdef ESP32
+		// the SPIFFS impl on esp8266 automatically adds the preceeding /, ESP32 does not!
 		String file="/"+String(dir.name());
 #else
 		String file = dir.fileName();
@@ -3094,9 +3095,10 @@ void InstallWebServerHandlers(bool enableCORS)
 	#endif		
 #endif
 
+#ifdef ESP32
 		// this requirement isn't really documented!!
 		dir.close();
-
+#endif
 	}
 
 	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "InstallWebServerHandlers OUT\r\n");
