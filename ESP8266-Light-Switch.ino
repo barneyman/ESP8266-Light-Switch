@@ -3062,6 +3062,7 @@ void InstallWebServerHandlers(bool enableCORS)
 		if (file.length() > 1 && file[1] == '_')
 		{
 			if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Hiding %s\r\n", file.c_str());
+			dir.close();
 			continue;
 		}
 #endif
@@ -3092,6 +3093,10 @@ void InstallWebServerHandlers(bool enableCORS)
 		Details.servedFiles.push_back(std::pair<String,size_t>(file, dir.fileSize()));
 	#endif		
 #endif
+
+		// this requirement isn't really documented!!
+		dir.close();
+
 	}
 
 	if(Details.dblog) Details.dblog->printf(debug::dbVerbose, "InstallWebServerHandlers OUT\r\n");
