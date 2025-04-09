@@ -64,8 +64,8 @@
 	#define _VERSION_FRIENDLY	"sonoff_basic"
 	#elif defined(ARDUINO_ESP8266_WEMOS_D1MINI)
 	#define _VERSION_FRIENDLY	"wemosD1"
-	#elif defined(ESP32)
-	#define _VERSION_FRIENDLY	"esp32dev"
+	#elif defined(ARDUINO_ARCH_ESP32)
+	#define _VERSION_FRIENDLY	"esp32"
 	#else
 	#define _VERSION_FRIENDLY	"unknown"
 	#endif
@@ -3052,7 +3052,7 @@ void InstallWebServerHandlers(bool enableCORS)
 #endif		
 	{
 #ifdef ESP32
-		String file=dir.name();
+		String file="/"+String(dir.name());
 #else
 		String file = dir.fileName();
 #endif		
