@@ -1430,7 +1430,7 @@ void InstallWebServerHandlers(bool enableCORS)
 #endif		
 		{
 #ifdef _ESP_USE_ASYNC_WEB
-			AsyncWebParameter* p = request->getParam(i);
+			const AsyncWebParameter* p = request->getParam(i);
 			if(p->name()=="action")
 			{
 				DoAllSwitch(p->value() == "on" ? true : false, true);
@@ -1567,7 +1567,7 @@ void InstallWebServerHandlers(bool enableCORS)
 #endif		
 		{
 #ifdef _ESP_USE_ASYNC_WEB			
-			AsyncWebParameter* p = request->getParam(count);
+			const AsyncWebParameter* p = request->getParam(count);
 #endif			
 
 			if(Details.dblog) Details.dblog->printf(debug::dbInfo, "%d. %s = %s \r\n", 
@@ -1591,7 +1591,7 @@ void InstallWebServerHandlers(bool enableCORS)
 #endif		
 		{
 #ifdef _ESP_USE_ASYNC_WEB			
-			AsyncWebParameter* p = request->getParam("action");
+			const AsyncWebParameter* p = request->getParam("action");
 			bool action = p->value() == "on" ? true : false;
 #else
 			bool action = wifiInstance.server.arg("action") == "on" ? true : false;
@@ -1605,7 +1605,7 @@ void InstallWebServerHandlers(bool enableCORS)
 #endif			
 			{
 #ifdef _ESP_USE_ASYNC_WEB			
-				AsyncWebParameter* p = request->getParam("port");
+				const AsyncWebParameter* p = request->getParam("port");
 				int port=p->value().toInt();
 #else
 				int port=wifiInstance.server.arg("port").toInt();
@@ -1654,7 +1654,7 @@ void InstallWebServerHandlers(bool enableCORS)
 #endif		
 		{
 #ifdef _ESP_USE_ASYNC_WEB
-			AsyncWebParameter* p = request->getParam(count);
+			const AsyncWebParameter* p = request->getParam(count);
 #endif
 
 			if(Details.dblog) Details.dblog->printf(debug::dbInfo, "%d. %s = %s \r\n", 
@@ -1678,7 +1678,7 @@ void InstallWebServerHandlers(bool enableCORS)
 #endif		
 		{
 #ifdef _ESP_USE_ASYNC_WEB
-			AsyncWebParameter* p = request->getParam("action");
+			const AsyncWebParameter* p = request->getParam("action");
 			bool action = p->value() == "on" ? true : false;
 #else
 			bool action = wifiInstance.server.arg("action") == "on" ? true : false;
@@ -1691,7 +1691,7 @@ void InstallWebServerHandlers(bool enableCORS)
 #endif			
 			{
 #ifdef _ESP_USE_ASYNC_WEB
-				AsyncWebParameter* p = request->getParam("port");
+				const AsyncWebParameter* p = request->getParam("port");
 				int port=p->value().toInt();
 #else				
 				int port=wifiInstance.server.arg("port").toInt();
@@ -2305,7 +2305,7 @@ void InstallWebServerHandlers(bool enableCORS)
 #endif		
 		{
 #ifdef _ESP_USE_ASYNC_WEB			
-			AsyncWebParameter* p = request->getParam("cam");
+			const AsyncWebParameter* p = request->getParam("cam");
 			int cam = p->value().toInt();
 #else
 			int cam = wifiInstance.server.arg("cam").toInt();
@@ -3115,8 +3115,9 @@ void SendServerPage()
 {
 	// redirect
 #ifdef _ESP_USE_ASYNC_WEB
-	request->sendHeader("Location","/default.htm");
-	request->send(301);
+	AsyncWebServerResponse *response = request->beginResponse(301, "text/plain", "Redirect");
+	response->addHeader("Location","/default.htm");
+	request->send(response);
 
 #else
 	wifiInstance.server.sendHeader("Location","/default.htm");
@@ -3190,7 +3191,9 @@ void loop(void)
 #endif
 
 	if (Details.configDirty)
+	{
 		WriteJSONconfig(true);
+	}
 
 	// let internals work
 	wifiInstance.serviceComponents();
