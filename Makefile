@@ -65,7 +65,7 @@ esp32wroom: esp32wroom_spiffs
 	- mkdir ./build
 	- mkdir ./build/$(ESP32WROOM_FRIENDLY)
 	arduino-cli compile --fqbn $(ESP32WROOM_FQBN) --output-dir ./build/$(ESP32WROOM_FRIENDLY) \
-		--build-property compiler.cpp.extra_flags="-D_VERSION_FRIENDLY_CLI=$(ESP32WROOM_FRIENDLY) \
+		--build-property compiler.cpp.extra_flags="-D_VERSION_FRIENDLY_CLI=$(ESP32WROOM_FRIENDLY)" \
 		--libraries ./libraries ESP8266-Light-Switch	
 	mv ./build/$(ESP32WROOM_FRIENDLY)/ESP8266-Light-Switch.ino.bin ./build/$(ESP32WROOM_FRIENDLY)/$(ESP32WROOM_FRIENDLY).bin
 
