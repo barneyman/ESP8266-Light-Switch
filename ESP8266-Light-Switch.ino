@@ -3063,7 +3063,9 @@ void InstallWebServerHandlers(bool enableCORS)
 		if (file.length() > 1 && file[1] == '_')
 		{
 			if(Details.dblog) Details.dblog->printf(debug::dbInfo, "Hiding %s\r\n", file.c_str());
+#ifdef ESP32
 			dir.close();
+#endif			
 			continue;
 		}
 #endif
