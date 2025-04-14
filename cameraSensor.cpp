@@ -124,7 +124,7 @@ int esp32Cam::requestFrame()
         return 0;
     }
 
-    if(m_dblog) m_dblog->printf(debug::dbInfo,"framebuffer size=%u (%u x %u) @ 0x%x\r", m_frameBuffer->len,m_frameBuffer->width,m_frameBuffer->height,m_frameBuffer->buf);
+    if(m_dblog) m_dblog->printf(debug::dbInfo,"framebuffer size=%u (%u x %u) @ 0x%x\r\n", m_frameBuffer->len,m_frameBuffer->width,m_frameBuffer->height,m_frameBuffer->buf);
 
 
     return m_frameBuffer->len;
@@ -152,6 +152,8 @@ bool esp32Cam::fetchFrame(uint8_t **toHere, size_t *len)
 
     *toHere=m_frameBuffer->buf;
     *len=m_frameBuffer->len;
+
+    if(m_dblog) m_dblog->println(debug::dbInfo,"framebuffer data returned");
 
 
     return true;
